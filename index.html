@@ -881,7 +881,21 @@ function ServicoReginaldo(){
           React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data"),React.createElement("input",{type:"date",style:base.inp,value:f.prazo,onChange:upd("prazo")})),
           React.createElement("div",null,React.createElement("label",{style:base.lbl},"Status"),React.createElement("select",{style:base.sel,value:f.status,onChange:upd("status")},Object.keys(STATUS_REG).map(s=>React.createElement("option",{key:s},s))))
         ),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Observações / Valores"),React.createElement("textarea",{style:{...base.inp,height:60},value:f.obs,onChange:upd("obs"),placeholder:"ex: Vl.Reginaldo: R$200 | Vl.Servis: R$350"}))
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
+          React.createElement("div",null,React.createElement("label",{style:base.lbl},"📦 Nº Pedido"),React.createElement("input",{style:base.inp,value:f.pedido||"",onChange:upd("pedido"),placeholder:"ex: 12345"})),
+          React.createElement("div",null,React.createElement("label",{style:base.lbl},"➗ Parcelas"),React.createElement("input",{style:base.inp,value:f.parcelas||"",onChange:upd("parcelas"),placeholder:"ex: 3x"}))
+        ),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}},
+          React.createElement("div",null,React.createElement("label",{style:base.lbl},"💲 Valor Servis (R$)"),React.createElement("input",{type:"number",style:base.inp,value:f.vl_servis||"",onChange:upd("vl_servis"),placeholder:"0.00"})),
+          React.createElement("div",null,React.createElement("label",{style:base.lbl},"💲 Valor Reginaldo (R$)"),React.createElement("input",{type:"number",style:base.inp,value:f.vl_reginaldo||"",onChange:upd("vl_reginaldo"),placeholder:"0.00"})),
+          React.createElement("div",null,
+            React.createElement("label",{style:base.lbl},"💲 Total (R$)"),
+            React.createElement("div",{style:{...base.inp,background:C.bg,display:"flex",alignItems:"center",color:C.green,fontWeight:700}},
+              `R$ ${((parseFloat(f.vl_servis||0)+parseFloat(f.vl_reginaldo||0))).toFixed(2)}`
+            )
+          )
+        ),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Observações"),React.createElement("textarea",{style:{...base.inp,height:50},value:f.obs||"",onChange:upd("obs")}))
       ),
       React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
         React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
@@ -931,20 +945,42 @@ function ServicoReginaldo(){
       loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
       React.createElement(Card,null,
         filtrado.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhum serviço encontrado"):
-        React.createElement(Table,{
-          cols:["Data","Condomínio","Descrição","Status","Obs","Ações"],
-          rows:filtrado.map(d=>[
-            fmt(d.prazo),
-            d.local_dem||"—",
-            React.createElement("span",{style:{maxWidth:200,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},d.descricao),
-            React.createElement(Pill,{c:STATUS_REG[d.status]?.c||C.dim},d.status),
-            d.obs?React.createElement("span",{style:{fontSize:11,color:C.muted}},d.obs.slice(0,40)):React.createElement("span",{style:{color:C.dim}},"-"),
-            React.createElement("div",{style:{display:"flex",gap:4}},
-              React.createElement("button",{style:iBtn(C.blue),onClick:()=>setModal(d)},"✏️"),
-              React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id)},"🗑")
+(()=>{
+          const totalServis=filtrado.reduce((s,d)=>s+parseFloat(d.vl_servis||0),0);
+          const totalReg=filtrado.reduce((s,d)=>s+parseFloat(d.vl_reginaldo||0),0);
+          const totalGeral=totalServis+totalReg;
+          return React.createElement("div",null,
+            React.createElement(Table,{
+              cols:["🏦 Condomínio","🛠️ Serviço","🗓️ Data","📦 Pedido","➗ Parcelas","💲 Vl.Servis","💲 Vl.Reginaldo","💲 Total","Status","Ações"],
+              rows:filtrado.map(d=>{
+                const tot=(parseFloat(d.vl_servis||0)+parseFloat(d.vl_reginaldo||0));
+                return [
+                  React.createElement("span",{style:{fontWeight:600,fontSize:12}},d.local_dem||"—"),
+                  React.createElement("span",{style:{maxWidth:160,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:12}},d.descricao),
+                  fmt(d.prazo),
+                  d.pedido?React.createElement("span",{style:{color:C.cyan,fontSize:12}},d.pedido):React.createElement("span",{style:{color:C.dim}},"—"),
+                  d.parcelas?React.createElement("span",{style:{color:C.purple,fontSize:12}},d.parcelas):React.createElement("span",{style:{color:C.dim}},"—"),
+                  parseFloat(d.vl_servis||0)>0?React.createElement("span",{style:{color:C.green,fontSize:12,fontWeight:600}},`R$ ${parseFloat(d.vl_servis).toFixed(2)}`):React.createElement("span",{style:{color:C.dim}},"—"),
+                  parseFloat(d.vl_reginaldo||0)>0?React.createElement("span",{style:{color:C.orange,fontSize:12,fontWeight:600}},`R$ ${parseFloat(d.vl_reginaldo).toFixed(2)}`):React.createElement("span",{style:{color:C.dim}},"—"),
+                  tot>0?React.createElement("span",{style:{color:C.yellow,fontSize:12,fontWeight:700}},`R$ ${tot.toFixed(2)}`):React.createElement("span",{style:{color:C.dim}},"—"),
+                  React.createElement(Pill,{c:STATUS_REG[d.status]?.c||C.dim},d.status),
+                  React.createElement("div",{style:{display:"flex",gap:4}},
+                    React.createElement("button",{style:iBtn(C.blue),onClick:()=>setModal(d)},"✏️"),
+                    React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id)},"🗑")
+                  )
+                ];
+              })
+            }),
+            React.createElement("div",{style:{display:"flex",gap:12,marginTop:12,padding:"10px 14px",background:C.bg,borderRadius:8,borderTop:`1px solid ${C.border}`}},
+              React.createElement("span",{style:{fontSize:12,color:C.dim,flex:1}},`${filtrado.length} registro(s)`),
+              React.createElement("div",{style:{display:"flex",gap:16,fontSize:12}},
+                React.createElement("span",null,"💲 Servis: ",React.createElement("strong",{style:{color:C.green}},`R$ ${totalServis.toFixed(2)}`)),
+                React.createElement("span",null,"💲 Reginaldo: ",React.createElement("strong",{style:{color:C.orange}},`R$ ${totalReg.toFixed(2)}`)),
+                React.createElement("span",null,"💲 Total: ",React.createElement("strong",{style:{color:C.yellow}},`R$ ${totalGeral.toFixed(2)}`))
+              )
             )
-          ])
-        })
+          );
+        })()
       )
     ),
     modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
