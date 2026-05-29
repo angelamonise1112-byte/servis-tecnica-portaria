@@ -364,9 +364,56 @@ function HorasExtras(){
           )
         )
       ),
-      subPage==="relatorios"&&React.createElement(Card,null,
-        React.createElement(CardHeader,{title:"Status das Horas Extras"}),
-        React.createElement(Donut,{data:Object.keys(STATUS_HE).map(s=>({l:s,v:data.filter(d=>d.status===s).length,c:STATUS_HE[s].c}))})
+      subPage==="relatorios"&&React.createElement("div",null,
+        React.createElement(Card,{style:{marginBottom:16}},
+          React.createElement(CardHeader,{title:"Horas Extras por Técnico"}),
+          React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
+            React.createElement("select",{style:{...base.sel,width:160},value:filtTec,onChange:e=>setFiltTec(e.target.value)},
+              React.createElement("option",{value:""},"Todos técnicos"),TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
+            ),
+            React.createElement("select",{style:{...base.sel,width:140},value:filtStatus,onChange:e=>setFiltStatus(e.target.value)},
+              React.createElement("option",{value:""},"Todos status"),...Object.keys(STATUS_HE).map(s=>React.createElement("option",{key:s,value:s},s))
+            ),
+            (filtTec||filtStatus)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setFiltTec("");setFiltStatus("");}},"✕ Limpar")
+          ),
+          (()=>{
+            const tecData=TECNICOS.map(t=>({
+              nome:t.nome,
+              total:filtered.filter(d=>d.tec===t.nome).reduce((s,d)=>s+(d.total_h||0),0),
+              qtd:filtered.filter(d=>d.tec===t.nome).length
+            })).filter(t=>t.total>0).sort((a,b)=>b.total-a.total);
+            if(tecData.length===0)return React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Sem dados para o filtro selecionado");
+            const maxV=Math.max(...tecData.map(t=>t.total),1);
+            return React.createElement("div",null,
+              React.createElement("svg",{width:"100%",viewBox:`0 0 ${Math.max(tecData.length*70,400)} 180`,preserveAspectRatio:"xMidYMid meet"},
+                React.createElement("defs",null,
+                  React.createElement("linearGradient",{id:"ghe",x1:0,y1:0,x2:0,y2:1},
+                    React.createElement("stop",{offset:"0%",stopColor:C.cyan,stopOpacity:0.9}),
+                    React.createElement("stop",{offset:"100%",stopColor:C.cyan,stopOpacity:0.3})
+                  )
+                ),
+                [0.25,0.5,0.75,1].map(v=>React.createElement("line",{key:v,x1:0,y1:130*(1-v)+10,x2:"100%",y2:130*(1-v)+10,stroke:C.border,strokeWidth:0.5,strokeDasharray:"3,3"})),
+                tecData.map((t,i)=>{
+                  const W=Math.max(tecData.length*70,400);
+                  const bw=36;const gap=W/tecData.length;const x=i*gap+gap/2-bw/2;
+                  const bh=(t.total/maxV)*120;
+                  const nomeAbrev=t.nome.split(" ")[0];
+                  return React.createElement("g",{key:i},
+                    React.createElement("rect",{x,y:130-bh+10,width:bw,height:bh,fill:"url(#ghe)",rx:3}),
+                    React.createElement("text",{x:x+bw/2,y:130-bh+6,textAnchor:"middle",fontSize:9,fill:C.text,fontWeight:600},fmtH(t.total)),
+                    React.createElement("text",{x:x+bw/2,y:156,textAnchor:"middle",fontSize:8,fill:C.muted},nomeAbrev),
+                    React.createElement("text",{x:x+bw/2,y:167,textAnchor:"middle",fontSize:7,fill:C.dim},`${t.qtd}x`)
+                  );
+                })
+              ),
+              React.createElement("div",{style:{fontSize:11,color:C.dim,marginTop:4}},"Valores em horas — número abaixo da barra = quantidade de registros")
+            );
+          })()
+        ),
+        React.createElement(Card,null,
+          React.createElement(CardHeader,{title:"Status das Horas Extras"}),
+          React.createElement(Donut,{data:Object.keys(STATUS_HE).map(s=>({l:s,v:data.filter(d=>d.status===s).length,c:STATUS_HE[s].c}))})
+        )
       )
     ),
     modal!==null&&React.createElement(ModalHE,{item:modal.id?modal:null,onSave:save,onClose:()=>setModal(null)}),
@@ -388,6 +435,7 @@ function ModalAtestado({item,onSave,onClose}){
   return React.createElement(Modal,{title:item?"Editar Atestado":"Novo Atestado",onClose},
     React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
       React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Técnico"),React.createElement("select",{style:base.sel,value:f.tec,onChange:selTec},TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome)))),
+      React.createElement("div",null,React.createElement("label",{style:base.lbl},"Matrícula"),React.createElement("input",{style:{...base.inp,background:C.bg},value:f.mat||"",readOnly:true,placeholder:"Preenchido automaticamente"})),
       React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data"),React.createElement("input",{type:"date",style:base.inp,value:f.data,onChange:upd("data")})),
       React.createElement("div",null,React.createElement("label",{style:base.lbl},"Dias afastado"),React.createElement("input",{type:"number",style:base.inp,value:f.dias,min:1,onChange:upd("dias")}))
     ),
@@ -778,6 +826,17 @@ function ServicoReginaldo(){
       )
     );
   };
+  const [filtCond,setFiltCond]=useState("");
+  const [filtMes,setFiltMes]=useState("");
+  const [filtAno,setFiltAno]=useState("");
+  const anos=useMemo(()=>[...new Set(data.map(d=>d.prazo?.slice(0,4)).filter(Boolean))].sort().reverse(),[data]);
+  const filtrado=useMemo(()=>data.filter(d=>
+    (!filtCond||( d.local_dem||"").toLowerCase().includes(filtCond.toLowerCase()))&&
+    (!filtMes||d.prazo?.slice(5,7)===filtMes)&&
+    (!filtAno||d.prazo?.slice(0,4)===filtAno)
+  ),[data,filtCond,filtMes,filtAno]);
+  const MESES=["01","02","03","04","05","06","07","08","09","10","11","12"];
+  const NOMES_MES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   return React.createElement("div",null,
     React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
       React.createElement("div",null,
@@ -793,12 +852,25 @@ function ServicoReginaldo(){
         React.createElement(KPI,{label:"Concluídos",value:data.filter(d=>d.status==="Concluído").length,color:C.green}),
         React.createElement(KPI,{label:"Aguardando",value:data.filter(d=>d.status==="Aguardando").length,color:C.yellow})
       ),
+      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
+        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Filtrar por condomínio...",value:filtCond,onChange:e=>setFiltCond(e.target.value)}),
+        React.createElement("select",{style:{...base.sel,width:140},value:filtMes,onChange:e=>setFiltMes(e.target.value)},
+          React.createElement("option",{value:""},"Todos os meses"),
+          MESES.map((m,i)=>React.createElement("option",{key:m,value:m},NOMES_MES[i]))
+        ),
+        React.createElement("select",{style:{...base.sel,width:100},value:filtAno,onChange:e=>setFiltAno(e.target.value)},
+          React.createElement("option",{value:""},"Todos anos"),
+          anos.map(a=>React.createElement("option",{key:a,value:a},a))
+        ),
+        (filtCond||filtMes||filtAno)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setFiltCond("");setFiltMes("");setFiltAno("");}},"✕ Limpar"),
+        React.createElement("span",{style:{fontSize:12,color:C.muted,alignSelf:"center"}},`${filtrado.length} registro(s)`)
+      ),
       loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
       React.createElement(Card,null,
-        data.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhum serviço cadastrado"):
+        filtrado.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhum serviço encontrado"):
         React.createElement(Table,{
           cols:["Data","Condomínio","Descrição","Status","Obs","Ações"],
-          rows:data.map(d=>[
+          rows:filtrado.map(d=>[
             fmt(d.prazo),
             d.local_dem||"—",
             React.createElement("span",{style:{maxWidth:200,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},d.descricao),
