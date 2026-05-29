@@ -918,4 +918,42 @@ function App(){
     React.createElement("div",{style:{width:212,background:C.surface,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",flexShrink:0}},
       React.createElement("div",{style:{padding:"16px 14px 10px",borderBottom:`1px solid ${C.border}`}},
         React.createElement("div",{style:{fontSize:20,fontWeight:800,letterSpacing:2,color:C.text,textAlign:"center"}},"SERVIS"),
-        React.createElement("div",{style:{fontSize:10,color:C.dim,
+        
+        React.createElement("div",{style:{fontSize:10,color:C.dim,textAlign:"center",letterSpacing:1}},"TECNICA ANALYTICS")
+      ),
+      React.createElement("div",{style:{flex:1,overflowY:"auto",padding:"8px 0"}},
+        TABS.map(t=>{
+          const active=tab===t.id;
+          const badgeVal=t.badge==="at"?atCount:t.badge==="he"?heCount:null;
+          return React.createElement("div",{key:t.id,onClick:()=>setTab(t.id),style:{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",cursor:"pointer",background:active?C.blue+"18":"transparent",borderLeft:`3px solid ${active?C.blue:"transparent"}`,color:active?C.blue:C.muted,fontSize:13,userSelect:"none"}},
+            React.createElement("span",{style:{fontSize:14}},t.icon),
+            React.createElement("span",{style:{flex:1,fontSize:12}},t.label),
+            t.badge==="new"&&React.createElement("span",{style:{background:C.blue,color:"#fff",fontSize:9,padding:"1px 5px",borderRadius:10}},"NEW"),
+            t.badge==="he"&&React.createElement("span",null,React.createElement("span",{style:{background:C.orange,color:"#fff",fontSize:9,padding:"1px 5px",borderRadius:10,marginRight:3}},"NEW"),badgeVal>0&&React.createElement("span",{style:{background:C.yellow,color:"#000",fontSize:9,padding:"1px 5px",borderRadius:10}},badgeVal)),
+            t.badge==="at"&&badgeVal>0&&React.createElement("span",{style:{background:C.yellow,color:"#000",fontSize:9,padding:"1px 5px",borderRadius:10}},badgeVal)
+          );
+        })
+      ),
+      React.createElement("div",{style:{padding:"10px 14px",borderTop:`1px solid ${C.border}`}},
+        React.createElement("div",{style:{background:C.card,borderRadius:10,padding:"10px 12px",marginBottom:8}},
+          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:8}},
+            React.createElement("div",{style:{width:32,height:32,borderRadius:"50%",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:14}},usuario.nome[0].toUpperCase()),
+            React.createElement("div",null,React.createElement("div",{style:{fontSize:12,fontWeight:600}},usuario.nome),React.createElement("div",{style:{fontSize:10,color:C.dim}},usuario.nivel))
+          ),
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:10,textAlign:"center"}},
+            React.createElement("div",{style:{background:C.red+"18",borderRadius:4,padding:"3px 0"}},React.createElement("div",{style:{color:C.red,fontWeight:700}},osCount),React.createElement("div",{style:{color:C.dim}},"OS")),
+            React.createElement("div",{style:{background:C.yellow+"18",borderRadius:4,padding:"3px 0"}},React.createElement("div",{style:{color:C.yellow,fontWeight:700}},atCount),React.createElement("div",{style:{color:C.dim}},"Atest.")),
+            React.createElement("div",{style:{background:C.orange+"18",borderRadius:4,padding:"3px 0"}},React.createElement("div",{style:{color:C.orange,fontWeight:700}},heCount),React.createElement("div",{style:{color:C.dim}},"HE"))
+          )
+        ),
+        React.createElement("button",{onClick:()=>setUsuario(null),style:{...btnStyle(C.red,true),width:"100%",fontSize:12}},"Sair")
+      )
+    ),
+    React.createElement("div",{style:{flex:1,overflowY:"auto"}},renderTab())
+  );
+}
+
+ReactDOM.render(React.createElement(App,null),document.getElementById("root"));
+</script>
+</body>
+</html>
