@@ -738,6 +738,85 @@ function Usuarios({usuarioAtual}){
   );
 }
 
+// ── SERVIÇO REGINALDO ─────────────────────────────────────────
+function ServicoReginaldo(){
+  const [data,setData]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modal,setModal]=useState(null);
+  const [confirmDel,setConfirmDel]=useState(null);
+  const STATUS_REG={"Aguardando":{c:C.yellow},"Em andamento":{c:C.blue},"Concluído":{c:C.green},"Cancelado":{c:C.red}};
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const{data:rows}=await sb.from("demandas").select("*").eq("resp","Reginaldo").order("prazo",{ascending:false});
+    setData(rows||[]);setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load]);
+  const totalServis=data.reduce((s,d)=>s+parseFloat(d.obs?.match(/Vl\.Servis:R\$([\d.]+)/)?.[1]||0),0);
+  const save=async item=>{
+    const row={...item,resp:"Reginaldo"};
+    if(row.id&&data.find(x=>x.id===row.id)){await sb.from("demandas").update(row).eq("id",row.id);}
+    else{await sb.from("demandas").insert(row);}
+    setModal(null);load();
+  };
+  const del=async id=>{await sb.from("demandas").delete().eq("id",id);setConfirmDel(null);load();};
+  const EditModal=({item,onClose})=>{
+    const [f,setF]=useState(item||{descricao:"",local_dem:"",prazo:todayStr(),pri:"Média",status:"Aguardando",obs:""});
+    const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+    return React.createElement(Modal,{title:item?"Editar Serviço":"Novo Serviço Reginaldo",onClose,width:520},
+      React.createElement("div",{style:{display:"grid",gap:12}},
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement("select",{style:base.sel,value:f.local_dem||CONDS[0],onChange:upd("local_dem")},CONDS.map(c=>React.createElement("option",{key:c},c)))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Descrição do serviço *"),React.createElement("textarea",{style:{...base.inp,height:70},value:f.descricao,onChange:upd("descricao")})),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
+          React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data"),React.createElement("input",{type:"date",style:base.inp,value:f.prazo,onChange:upd("prazo")})),
+          React.createElement("div",null,React.createElement("label",{style:base.lbl},"Status"),React.createElement("select",{style:base.sel,value:f.status,onChange:upd("status")},Object.keys(STATUS_REG).map(s=>React.createElement("option",{key:s},s))))
+        ),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Observações / Valores"),React.createElement("textarea",{style:{...base.inp,height:60},value:f.obs,onChange:upd("obs"),placeholder:"ex: Vl.Reginaldo: R$200 | Vl.Servis: R$350"}))
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"Salvar")
+      )
+    );
+  };
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🔧 Serviço Reginaldo"),
+        React.createElement("div",{style:{fontSize:12,color:C.muted}},"Serviços terceirizados")
+      ),
+      React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Novo")
+    ),
+    React.createElement("div",{style:{padding:"20px 24px"}},
+      React.createElement(Grid,{cols:4,mb:16},
+        React.createElement(KPI,{label:"Total",value:data.length,color:C.blue}),
+        React.createElement(KPI,{label:"Em Andamento",value:data.filter(d=>d.status==="Em andamento").length,color:C.orange}),
+        React.createElement(KPI,{label:"Concluídos",value:data.filter(d=>d.status==="Concluído").length,color:C.green}),
+        React.createElement(KPI,{label:"Aguardando",value:data.filter(d=>d.status==="Aguardando").length,color:C.yellow})
+      ),
+      loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+      React.createElement(Card,null,
+        data.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhum serviço cadastrado"):
+        React.createElement(Table,{
+          cols:["Data","Condomínio","Descrição","Status","Obs","Ações"],
+          rows:data.map(d=>[
+            fmt(d.prazo),
+            d.local_dem||"—",
+            React.createElement("span",{style:{maxWidth:200,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},d.descricao),
+            React.createElement(Pill,{c:STATUS_REG[d.status]?.c||C.dim},d.status),
+            d.obs?React.createElement("span",{style:{fontSize:11,color:C.muted}},d.obs.slice(0,40)):React.createElement("span",{style:{color:C.dim}},"-"),
+            React.createElement("div",{style:{display:"flex",gap:4}},
+              React.createElement("button",{style:iBtn(C.blue),onClick:()=>setModal(d)},"✏️"),
+              React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id)},"🗑")
+            )
+          ])
+        })
+      )
+    ),
+    modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
+    confirmDel&&React.createElement(Confirm,{msg:"Excluir este serviço?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
+  );
+}
+
 // ── DEMANDAS ──────────────────────────────────────────────────
 function Demandas(){
   const PESSOAS=[{nome:"Pablo",cor:C.cyan},{nome:"Diogo",cor:C.purple},{nome:"Jessica",cor:"#EC4899"}];
@@ -1037,13 +1116,7 @@ function Login({onLogin}){
       React.createElement("button",{style:{...btnStyle(C.blue),width:"100%",padding:"10px",fontSize:15,fontWeight:600},onClick:submit,disabled:loading},
         loading?React.createElement("span",{className:"spin"},"⟳"):"Entrar"
       ),
-      React.createElement("div",{style:{background:C.card,borderRadius:8,padding:"10px 12px",marginTop:18,fontSize:11,color:C.dim}},
-        React.createElement("div",{style:{fontWeight:600,color:C.muted,marginBottom:6}},"Credenciais:"),
-        [["admin","servis123","Admin"],["marcos","123456","Gestor"],["tecnico","tec2026","Técnico"]].map(([u,p,n])=>
-          React.createElement("div",{key:u,style:{display:"flex",gap:8}},React.createElement("span",{style:{color:C.cyan}},u)," / ",React.createElement("span",null,p),React.createElement("span",{style:{color:C.purple,marginLeft:"auto"}},n))
-        )
-      ),
-      React.createElement("div",{style:{textAlign:"center",marginTop:20,fontSize:11,color:C.dim}},"© 2026 Servis Técnica · Todos os direitos reservados")
+      React.createElement("div",{style:{textAlign:"center",marginTop:24,fontSize:11,color:C.dim}},"© 2026 Servis Técnica · Todos os direitos reservados")
     )
   );
 }
@@ -1090,6 +1163,7 @@ function App(){
       case"os":return React.createElement(OSModule,null);
       case"atestados":return React.createElement(Atestados,null);
       case"horas-extras":return React.createElement(HorasExtras,null);
+      case"reginaldo":return React.createElement(ServicoReginaldo,null);
       case"demandas":return React.createElement(Demandas,null);
       case"usuarios":return React.createElement(Usuarios,{usuarioAtual:usuario});
       default:return React.createElement(ModuloEmBreve,{nome:TABS.find(t=>t.id===tab)?.label||tab});
