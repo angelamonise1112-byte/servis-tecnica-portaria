@@ -1062,6 +1062,173 @@ function Dashboard({setTab}){
   );
 }
 
+// ── PREVENTIVAS ───────────────────────────────────────────────
+function Preventivas(){
+  const [data,setData]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modal,setModal]=useState(null);
+  const [confirmDel,setConfirmDel]=useState(null);
+  const [busca,setBusca]=useState("");
+  const [filtStatus,setFiltStatus]=useState("Todos");
+  const STATUS_PREV={"Pendente":{c:C.yellow},"Em andamento":{c:C.blue},"Concluída":{c:C.green},"Cancelada":{c:C.dim}};
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const{data:rows}=await sb.from("preventivas").select("*").order("cond",{ascending:true});
+    setData(rows||[]);setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load]);
+  const filtered=useMemo(()=>data.filter(d=>
+    (!busca||d.cond.toLowerCase().includes(busca.toLowerCase()))&&
+    (filtStatus==="Todos"||d.status===filtStatus)
+  ),[data,busca,filtStatus]);
+  const save=async item=>{
+    if(item.id&&data.find(x=>x.id===item.id)){await sb.from("preventivas").update(item).eq("id",item.id);}
+    else{await sb.from("preventivas").insert(item);}
+    setModal(null);load();
+  };
+  const del=async id=>{await sb.from("preventivas").delete().eq("id",id);setConfirmDel(null);load();};
+  const concluidas=data.filter(d=>d.status==="Concluída").length;
+  const pendentes=data.filter(d=>d.status==="Pendente").length;
+  const andamento=data.filter(d=>d.status==="Em andamento").length;
+  const canceladas=data.filter(d=>d.status==="Cancelada").length;
+
+  const EditModal=({item,onClose})=>{
+    const [f,setF]=useState(item||{cond:CONDS[0],primeira_visita:"",num_pedido:"",equipamentos:"",finalizado:"",retorno:"",laudo_enviado:"",devolucao:"",regua_ip:"",regua_ok:"",status:"Pendente",laudo_url:"",foto_url:"",obs:""});
+    const [uploading,setUploading]=useState(false);
+    const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+    const handleFile=async(e,tipo)=>{
+      const file=e.target.files[0];
+      if(!file)return;
+      setUploading(true);
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        const b64=ev.target.result;
+        if(tipo==="laudo")setF(p=>({...p,laudo_url:b64,laudo_nome:file.name}));
+        else setF(p=>({...p,foto_url:b64,foto_nome:file.name}));
+        setUploading(false);
+      };
+      reader.readAsDataURL(file);
+    };
+    return React.createElement(Modal,{title:item?"Editar Preventiva":"Nova Preventiva",onClose,width:580},
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},CONDS.map(c=>React.createElement("option",{key:c},c)))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"1ª Visita"),React.createElement("input",{type:"date",style:base.inp,value:f.primeira_visita,onChange:upd("primeira_visita")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Nº Pedido"),React.createElement("input",{style:base.inp,value:f.num_pedido,onChange:upd("num_pedido")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Retorno"),React.createElement("input",{type:"date",style:base.inp,value:f.retorno,onChange:upd("retorno")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Devolução"),React.createElement("input",{type:"date",style:base.inp,value:f.devolucao,onChange:upd("devolucao")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Equipamentos"),React.createElement("input",{style:base.inp,value:f.equipamentos,onChange:upd("equipamentos")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Finalizado"),React.createElement("input",{style:base.inp,value:f.finalizado,onChange:upd("finalizado")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Laudo Enviado"),React.createElement("select",{style:base.sel,value:f.laudo_enviado,onChange:upd("laudo_enviado")},["","ENVIADO (OK)","PENDENTE","NAO ENVIADO"].map(s=>React.createElement("option",{key:s},s)))),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Régua Smart IP"),React.createElement("input",{style:base.inp,value:f.regua_ip,onChange:upd("regua_ip"),placeholder:"ex: 10.20.30.40 admin/Servis01"})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Régua Smart OK"),React.createElement("select",{style:base.sel,value:f.regua_ok,onChange:upd("regua_ok")},["","OK","REPROGRAMAR","SOLICITAR","CANCELADO"].map(s=>React.createElement("option",{key:s},s)))),
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Status"),
+          React.createElement("select",{style:base.sel,value:f.status,onChange:upd("status")},Object.keys(STATUS_PREV).map(s=>React.createElement("option",{key:s},s)))
+        ),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Observações"),React.createElement("textarea",{style:{...base.inp,height:50},value:f.obs,onChange:upd("obs")})),
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"📄 Laudo PDF"),
+          React.createElement("div",{style:{background:C.bg,border:`1px dashed ${C.borderL}`,borderRadius:8,padding:"10px 12px"}},
+            React.createElement("input",{type:"file",accept:".pdf",style:{display:"none"},id:"file-laudo",onChange:e=>handleFile(e,"laudo")}),
+            React.createElement("label",{htmlFor:"file-laudo",style:{cursor:"pointer",fontSize:12,color:C.blue}},
+              f.laudo_url?"✅ "+( f.laudo_nome||"PDF anexado"):"📎 Clique para anexar PDF"
+            ),
+            f.laudo_url&&React.createElement("button",{style:{...iBtn(C.dim),marginLeft:8,fontSize:11},onClick:()=>setF(p=>({...p,laudo_url:"",laudo_nome:""}))
+},"✕ Remover")
+          )
+        ),
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"📸 Foto"),
+          React.createElement("div",{style:{background:C.bg,border:`1px dashed ${C.borderL}`,borderRadius:8,padding:"10px 12px"}},
+            React.createElement("input",{type:"file",accept:"image/*",style:{display:"none"},id:"file-foto",onChange:e=>handleFile(e,"foto")}),
+            React.createElement("label",{htmlFor:"file-foto",style:{cursor:"pointer",fontSize:12,color:C.cyan}},
+              f.foto_url?"✅ "+(f.foto_nome||"Foto anexada"):"📷 Clique para anexar foto"
+            ),
+            f.foto_url&&React.createElement("button",{style:{...iBtn(C.dim),marginLeft:8,fontSize:11},onClick:()=>setF(p=>({...p,foto_url:"",foto_nome:""}))
+},"✕ Remover")
+          )
+        )
+      ),
+      uploading&&React.createElement("div",{style:{textAlign:"center",color:C.muted,fontSize:12,marginTop:8}},"Carregando arquivo..."),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"Salvar")
+      )
+    );
+  };
+
+  const DetalheModal=({item,onClose})=>{
+    return React.createElement(Modal,{title:`Preventiva — ${item.cond}`,onClose,width:560},
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}},
+        [{l:"1ª Visita",v:fmt(item.primeira_visita)},{l:"Nº Pedido",v:item.num_pedido||"—"},{l:"Retorno",v:fmt(item.retorno)},{l:"Devolução",v:fmt(item.devolucao)},{l:"Equipamentos",v:item.equipamentos||"—"},{l:"Finalizado",v:item.finalizado||"—"},{l:"Laudo Enviado",v:item.laudo_enviado||"—"},{l:"Régua IP",v:item.regua_ip||"—"},{l:"Régua OK",v:item.regua_ok||"—"}].map(k=>
+          React.createElement("div",{key:k.l},React.createElement("label",{style:base.lbl},k.l),React.createElement("div",{style:{color:C.text,fontSize:13}},k.v))
+        )
+      ),
+      item.obs&&React.createElement("div",{style:{marginBottom:12}},React.createElement("label",{style:base.lbl},"Obs"),React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:10,fontSize:13,color:C.muted}},item.obs)),
+      React.createElement("div",{style:{display:"flex",gap:10,marginBottom:16}},
+        item.laudo_url&&React.createElement("a",{href:item.laudo_url,download:item.laudo_nome||"laudo.pdf",style:{...btnStyle(C.red),textDecoration:"none",fontSize:12}},"📄 Baixar Laudo PDF"),
+        item.foto_url&&React.createElement("button",{style:btnStyle(C.cyan,true),onClick:()=>window.open(item.foto_url,"_blank")},"📸 Ver Foto")
+      ),
+      item.foto_url&&React.createElement("img",{src:item.foto_url,style:{width:"100%",borderRadius:8,marginBottom:12},alt:"foto"}),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end"}},
+        React.createElement("button",{style:btnStyle(C.blue),onClick:onClose},"Fechar")
+      )
+    );
+  };
+
+  const [detalhe,setDetalhe]=useState(null);
+
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"◈ Preventivas"),
+        React.createElement("div",{style:{fontSize:12,color:C.muted}},`${data.length} condomínios`)
+      ),
+      React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Nova")
+    ),
+    React.createElement("div",{style:{padding:"20px 24px"}},
+      React.createElement(Grid,{cols:4,mb:16},
+        React.createElement(KPI,{label:"Concluídas",value:concluidas,color:C.green}),
+        React.createElement(KPI,{label:"Em Andamento",value:andamento,color:C.blue}),
+        React.createElement(KPI,{label:"Pendentes",value:pendentes,color:C.yellow}),
+        React.createElement(KPI,{label:"Canceladas",value:canceladas,color:C.dim})
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
+        React.createElement("input",{style:{...base.inp,width:220},placeholder:"Buscar condomínio...",value:busca,onChange:e=>setBusca(e.target.value)}),
+        ["Todos",...Object.keys(STATUS_PREV)].map(s=>React.createElement("button",{key:s,style:btnStyle(STATUS_PREV[s]?.c||C.blue,filtStatus!==s),onClick:()=>setFiltStatus(s)},s)),
+        (busca||filtStatus!=="Todos")&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setBusca("");setFiltStatus("Todos");}},"✕ Limpar")
+      ),
+      loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+      React.createElement(Card,null,
+        React.createElement(Table,{
+          cols:["Condomínio","1ª Visita","Nº Pedido","Retorno","Laudo","Régua","Status","Arquivos","Ações"],
+          rows:filtered.map(d=>[
+            React.createElement("span",{style:{fontWeight:600}},d.cond),
+            fmt(d.primeira_visita)||React.createElement("span",{style:{color:C.dim}},"—"),
+            d.num_pedido||React.createElement("span",{style:{color:C.dim}},"—"),
+            fmt(d.retorno)||React.createElement("span",{style:{color:C.dim}},"—"),
+            d.laudo_enviado?React.createElement(Pill,{c:C.green},"✓ Enviado"):React.createElement("span",{style:{color:C.dim}},"—"),
+            d.regua_ok?React.createElement(Pill,{c:d.regua_ok==="OK"?C.green:d.regua_ok==="REPROGRAMAR"?C.yellow:C.dim},d.regua_ok):React.createElement("span",{style:{color:C.dim}},"—"),
+            React.createElement(Pill,{c:STATUS_PREV[d.status]?.c||C.dim},d.status),
+            React.createElement("div",{style:{display:"flex",gap:4}},
+              d.laudo_url&&React.createElement("a",{href:d.laudo_url,download:d.laudo_nome||"laudo.pdf",style:{...iBtn(C.red),textDecoration:"none",fontSize:11}},"📄"),
+              d.foto_url&&React.createElement("button",{style:iBtn(C.cyan),onClick:()=>setDetalhe(d)},"📸")
+            ),
+            React.createElement("div",{style:{display:"flex",gap:4}},
+              React.createElement("button",{style:iBtn(C.purple),onClick:()=>setDetalhe(d)},"👁"),
+              React.createElement("button",{style:iBtn(C.blue),onClick:()=>setModal(d)},"✏️"),
+              React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id)},"🗑")
+            )
+          ])
+        })
+      )
+    ),
+    modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
+    detalhe&&React.createElement(DetalheModal,{item:detalhe,onClose:()=>setDetalhe(null)}),
+    confirmDel&&React.createElement(Confirm,{msg:"Excluir esta preventiva?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
+  );
+}
+
 function ModuloEmBreve({nome}){
   return React.createElement("div",{style:{padding:60,textAlign:"center",color:C.muted}},
     React.createElement("div",{style:{fontSize:40,marginBottom:12}},"🔧"),
@@ -1163,6 +1330,7 @@ function App(){
       case"os":return React.createElement(OSModule,null);
       case"atestados":return React.createElement(Atestados,null);
       case"horas-extras":return React.createElement(HorasExtras,null);
+      case"preventivas":return React.createElement(Preventivas,null);
       case"reginaldo":return React.createElement(ServicoReginaldo,null);
       case"demandas":return React.createElement(Demandas,null);
       case"usuarios":return React.createElement(Usuarios,{usuarioAtual:usuario});
