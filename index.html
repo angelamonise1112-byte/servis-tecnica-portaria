@@ -835,14 +835,20 @@ function ServicoReginaldo(){
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
+  const [condsBanco,setCondsBanco]=useState([]);
   const STATUS_REG={"Aguardando":{c:C.yellow},"Em andamento":{c:C.blue},"Concluído":{c:C.green},"Cancelado":{c:C.red}};
   const load=useCallback(async()=>{
     setLoading(true);
-    const{data:rows}=await sb.from("demandas").select("*").eq("resp","Reginaldo").order("prazo",{ascending:false});
-    setData(rows||[]);setLoading(false);
+    const[{data:rows},{data:conds}]=await Promise.all([
+      sb.from("demandas").select("*").eq("resp","Reginaldo").order("prazo",{ascending:false}),
+      sb.from("condominios").select("id,nome,endereco,tecnico").order("nome",{ascending:true})
+    ]);
+    setData(rows||[]);
+    setCondsBanco(conds||[]);
+    setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
-  const totalServis=data.reduce((s,d)=>s+parseFloat(d.obs?.match(/Vl\.Servis:R\$([\d.]+)/)?.[1]||0),0);
+  const listaConds=condsBanco.length>0?condsBanco.map(c=>c.nome):CONDS;
   const save=async item=>{
     const row={...item,resp:"Reginaldo"};
     if(row.id&&data.find(x=>x.id===row.id)){await sb.from("demandas").update(row).eq("id",row.id);}
@@ -851,11 +857,25 @@ function ServicoReginaldo(){
   };
   const del=async id=>{await sb.from("demandas").delete().eq("id",id);setConfirmDel(null);load();};
   const EditModal=({item,onClose})=>{
+    const [busca,setBusca]=useState("");
     const [f,setF]=useState(item||{descricao:"",local_dem:"",prazo:todayStr(),pri:"Média",status:"Aguardando",obs:""});
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-    return React.createElement(Modal,{title:item?"Editar Serviço":"Novo Serviço Reginaldo",onClose,width:520},
+    const condFiltrada=listaConds.filter(c=>!busca||c.toLowerCase().includes(busca.toLowerCase()));
+    const condSel=condsBanco.find(c=>c.nome===f.local_dem);
+    return React.createElement(Modal,{title:item?"Editar Serviço":"Novo Serviço Reginaldo",onClose,width:540},
       React.createElement("div",{style:{display:"grid",gap:12}},
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement("select",{style:base.sel,value:f.local_dem||CONDS[0],onChange:upd("local_dem")},CONDS.map(c=>React.createElement("option",{key:c},c)))),
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Condomínio *"),
+          React.createElement("input",{style:{...base.inp,marginBottom:6},placeholder:"Buscar condomínio...",value:busca,onChange:e=>setBusca(e.target.value)}),
+          React.createElement("select",{style:{...base.sel,height:120},size:6,value:f.local_dem,onChange:upd("local_dem")},
+            condFiltrada.map(c=>React.createElement("option",{key:c,value:c},c))
+          ),
+          f.local_dem&&React.createElement("div",{style:{fontSize:12,color:C.cyan,marginTop:4}},
+            "✓ Selecionado: ",React.createElement("strong",null,f.local_dem),
+            condSel?.endereco&&React.createElement("span",{style:{color:C.muted,marginLeft:6}},condSel.endereco),
+            condSel?.tecnico&&React.createElement("span",{style:{color:C.blue,marginLeft:6}},"Téc: "+condSel.tecnico)
+          )
+        ),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Descrição do serviço *"),React.createElement("textarea",{style:{...base.inp,height:70},value:f.descricao,onChange:upd("descricao")})),
         React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
           React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data"),React.createElement("input",{type:"date",style:base.inp,value:f.prazo,onChange:upd("prazo")})),
