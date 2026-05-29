@@ -1229,6 +1229,121 @@ function Preventivas(){
   );
 }
 
+// ── CONDOMÍNIOS ───────────────────────────────────────────────
+function Condominios(){
+  const [data,setData]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modal,setModal]=useState(null);
+  const [confirmDel,setConfirmDel]=useState(null);
+  const [busca,setBusca]=useState("");
+  const [filtTec,setFiltTec]=useState("");
+  const [verObs,setVerObs]=useState(null);
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const{data:rows}=await sb.from("condominios").select("*").order("nome",{ascending:true});
+    setData(rows||[]);setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load]);
+  const filtered=useMemo(()=>data.filter(d=>
+    (!busca||d.nome.toLowerCase().includes(busca.toLowerCase())||( d.endereco||"").toLowerCase().includes(busca.toLowerCase()))&&
+    (!filtTec||d.tecnico===filtTec)
+  ),[data,busca,filtTec]);
+  const save=async item=>{
+    if(item.id&&data.find(x=>x.id===item.id)){await sb.from("condominios").update(item).eq("id",item.id);}
+    else{await sb.from("condominios").insert(item);}
+    setModal(null);load();
+  };
+  const del=async id=>{await sb.from("condominios").delete().eq("id",id);setConfirmDel(null);load();};
+  const comEndereco=data.filter(d=>d.endereco).length;
+  const comTec=data.filter(d=>d.tecnico).length;
+  const EditModal=({item,onClose})=>{
+    const [f,setF]=useState(item||{nome:"",endereco:"",tecnico:"",obs:""});
+    const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+    return React.createElement(Modal,{title:item?.id?"Editar Condomínio":"Novo Condomínio",onClose,width:520},
+      React.createElement("div",{style:{display:"grid",gap:12}},
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Nome *"),React.createElement("input",{style:base.inp,value:f.nome,onChange:upd("nome")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Endereço"),React.createElement("input",{style:base.inp,value:f.endereco||"",onChange:upd("endereco"),placeholder:"Rua, número, bairro"})),
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Técnico Responsável"),
+          React.createElement("select",{style:base.sel,value:f.tecnico||"",onChange:upd("tecnico")},
+            React.createElement("option",{value:""},"Selecionar técnico..."),
+            TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
+          )
+        ),
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Obs / IPs / Senhas"),
+          React.createElement("textarea",{style:{...base.inp,height:90,fontFamily:"monospace",fontSize:12},value:f.obs||"",onChange:upd("obs"),maxLength:2000,placeholder:"Informações técnicas, IPs, senhas..."}),
+          React.createElement("div",{style:{fontSize:11,color:(f.obs?.length||0)>=1800?C.yellow:C.dim,textAlign:"right",marginTop:2}},`${f.obs?.length||0}/2000`)
+        )
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"Salvar")
+      )
+    );
+  };
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"▣ Condomínios"),
+        React.createElement("div",{style:{fontSize:12,color:C.muted}},`${data.length} condomínios cadastrados`)
+      ),
+      React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Novo")
+    ),
+    React.createElement("div",{style:{padding:"20px 24px"}},
+      React.createElement(Grid,{cols:4,mb:16},
+        React.createElement(KPI,{label:"Total",value:data.length,color:C.blue}),
+        React.createElement(KPI,{label:"Com Endereço",value:comEndereco,color:C.green}),
+        React.createElement(KPI,{label:"Sem Endereço",value:data.length-comEndereco,color:C.yellow}),
+        React.createElement(KPI,{label:"Com Técnico",value:comTec,color:C.cyan})
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
+        React.createElement("input",{style:{...base.inp,width:240},placeholder:"Buscar nome ou endereço...",value:busca,onChange:e=>setBusca(e.target.value)}),
+        React.createElement("select",{style:{...base.sel,width:180},value:filtTec,onChange:e=>setFiltTec(e.target.value)},
+          React.createElement("option",{value:""},"Todos técnicos"),...TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
+        ),
+        (busca||filtTec)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setBusca("");setFiltTec("");}},"✕ Limpar")
+      ),
+      loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+      React.createElement(Card,null,
+        React.createElement("div",{style:{fontSize:12,color:C.dim,marginBottom:8}},`${filtered.length} registros`),
+        React.createElement(Table,{
+          cols:["#","Nome","Endereço","Técnico Resp.","Obs/IPs","Ações"],
+          rows:filtered.map((d,i)=>[
+            React.createElement("span",{style:{color:C.dim,fontSize:11}},i+1),
+            React.createElement("span",{style:{fontWeight:600}},d.nome),
+            d.endereco
+              ?React.createElement("span",{style:{fontSize:12,color:C.muted}},d.endereco.length>40?d.endereco.slice(0,40)+"...":d.endereco)
+              :React.createElement("span",{style:{color:C.dim,fontStyle:"italic",fontSize:12}},"Não informado"),
+            d.tecnico
+              ?React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
+                  React.createElement("div",{style:{width:22,height:22,borderRadius:"50%",background:C.cyan+"22",border:`1px solid ${C.cyan}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:C.cyan}},d.tecnico[0]),
+                  React.createElement("span",{style:{fontSize:12}},d.tecnico)
+                )
+              :React.createElement("span",{style:{color:C.dim,fontSize:12}},"—"),
+            d.obs
+              ?React.createElement("button",{style:iBtn(C.cyan),onClick:()=>setVerObs(d)},"📋 Ver")
+              :React.createElement("span",{style:{color:C.dim}},"—"),
+            React.createElement("div",{style:{display:"flex",gap:4}},
+              React.createElement("button",{style:iBtn(C.blue),onClick:()=>setModal(d)},"✏️"),
+              React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id)},"🗑")
+            )
+          ])
+        })
+      )
+    ),
+    modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
+    verObs&&React.createElement(Modal,{title:`Obs — ${verObs.nome}`,onClose:()=>setVerObs(null)},
+      React.createElement("pre",{style:{fontFamily:"monospace",fontSize:12,background:C.bg,padding:12,borderRadius:8,whiteSpace:"pre-wrap",maxHeight:300,overflow:"auto",color:C.muted}},verObs.obs||"(vazio)"),
+      React.createElement("div",{style:{display:"flex",gap:8,marginTop:12}},
+        React.createElement("button",{style:{...btnStyle(C.cyan,true),flex:1},onClick:()=>navigator.clipboard?.writeText(verObs.obs)},"📋 Copiar"),
+        React.createElement("button",{style:{...btnStyle(C.blue),flex:1},onClick:()=>{setVerObs(null);setModal(verObs);}},"✏️ Editar")
+      )
+    ),
+    confirmDel&&React.createElement(Confirm,{msg:"Excluir este condomínio?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
+  );
+}
+
 function ModuloEmBreve({nome}){
   return React.createElement("div",{style:{padding:60,textAlign:"center",color:C.muted}},
     React.createElement("div",{style:{fontSize:40,marginBottom:12}},"🔧"),
@@ -1330,6 +1445,7 @@ function App(){
       case"os":return React.createElement(OSModule,null);
       case"atestados":return React.createElement(Atestados,null);
       case"horas-extras":return React.createElement(HorasExtras,null);
+      case"condominios":return React.createElement(Condominios,null);
       case"preventivas":return React.createElement(Preventivas,null);
       case"reginaldo":return React.createElement(ServicoReginaldo,null);
       case"demandas":return React.createElement(Demandas,null);
