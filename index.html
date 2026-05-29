@@ -546,12 +546,13 @@ function OSModule(){
       loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
       React.createElement(Card,null,
         React.createElement(Table,{
-          cols:["Nº OS","Data","Condomínio","Técnico","Problema","Prioridade","Status"],
+          cols:["Nº OS","Data","Condomínio","Técnico","Problema","Prioridade","Status","Relato"],
           rows:filtered.map(d=>[
             React.createElement("span",{style:{color:C.cyan,fontWeight:600}},d.num),
             fmt(d.data),d.cond,d.tec,d.prob,
             React.createElement(Pill,{c:d.pri==="Alta"?C.red:d.pri==="Média"?C.yellow:C.green},d.pri),
-            React.createElement(Pill,{c:d.status==="Aberto"?C.red:C.green},d.status)
+            React.createElement(Pill,{c:d.status==="Aberto"?C.red:C.green},d.status),
+            d.relato?React.createElement("span",{style:{color:C.muted,fontSize:11,maxWidth:200,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},d.relato):React.createElement("span",{style:{color:C.dim}},"-")
           ])
         })
       )
