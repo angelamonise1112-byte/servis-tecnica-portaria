@@ -709,33 +709,61 @@ function OSModule(){
 function Usuarios({usuarioAtual}){
   const NIVEIS=["admin","gestor","tecnico","visualizador"];
   const niveisColor={admin:C.red,gestor:C.blue,tecnico:C.cyan,visualizador:C.dim};
-  const initUsers=[
-    {id:"u1",nome:"admin",senha:"servis123",nivel:"admin",ativo:true},
-    {id:"u2",nome:"marcos",senha:"123456",nivel:"gestor",ativo:true},
-    {id:"u3",nome:"tecnico",senha:"tec2026",nivel:"tecnico",ativo:true},
-  ];
-  const [users,setUsers]=useState(initUsers);
+  const [users,setUsers]=useState([]);
+  const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
   const [mostrarSenha,setMostrarSenha]=useState({});
-  const saveUser=item=>{
-    setUsers(p=>item.id&&p.find(x=>x.id===item.id)?p.map(x=>x.id===item.id?item:x):[item,...p]);
-    setModal(null);
+  const [savingMsg,setSavingMsg]=useState("");
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const{data:rows}=await sb.from("usuarios").select("*").order("nome",{ascending:true});
+    setUsers(rows||[]);setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load]);
+  const saveUser=async item=>{
+    setSavingMsg("Salvando...");
+    if(item.id&&users.find(x=>x.id===item.id)){
+      await sb.from("usuarios").update(item).eq("id",item.id);
+    }else{
+      await sb.from("usuarios").insert(item);
+    }
+    setSavingMsg("Salvo!");
+    setTimeout(()=>setSavingMsg(""),2000);
+    setModal(null);load();
   };
-  const delUser=id=>{setUsers(p=>p.filter(x=>x.id!==id));setConfirmDel(null);};
+  const delUser=async id=>{
+    await sb.from("usuarios").delete().eq("id",id);
+    setConfirmDel(null);load();
+  };
+  const resetSenha=async u=>{
+    await sb.from("usuarios").update({primeiro_acesso:true,senha:"trocar"}).eq("id",u.id);
+    setSavingMsg("Senha resetada! Usuario devera criar nova senha no proximo acesso.");
+    setTimeout(()=>setSavingMsg(""),4000);
+    load();
+  };
   const EditModal=({item,onClose})=>{
-    const [f,setF]=useState(item||{nome:"",senha:"",nivel:"tecnico",ativo:true});
+    const ehNovo=!item?.id;
+    const [f,setF]=useState(item||{nome:"",senha:"",nivel:"tecnico",ativo:true,primeiro_acesso:true});
     const [err,setErr]=useState("");
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-    const submit=()=>{
+    const submit=async()=>{
       if(!f.nome.trim()){setErr("Nome e obrigatorio");return;}
-      if(!f.senha.trim()||f.senha.length<4){setErr("Senha deve ter no minimo 4 caracteres");return;}
-      saveUser({...f,id:f.id||uid()});
+      if(ehNovo&&(!f.senha.trim()||f.senha.length<4)){setErr("Senha deve ter no minimo 4 caracteres");return;}
+      if(!ehNovo&&f.senha&&f.senha.length>0&&f.senha.length<4){setErr("Senha deve ter no minimo 4 caracteres");return;}
+      await saveUser({...f,id:f.id||uid()});
     };
     return React.createElement(Modal,{title:item?"Editar Usuario":"Novo Usuario",onClose},
       React.createElement("div",{style:{display:"grid",gap:14}},
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Nome de usuario *"),React.createElement("input",{style:base.inp,value:f.nome,onChange:upd("nome"),placeholder:"ex: joao.silva",disabled:!!item?.id})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Senha *"),React.createElement("input",{type:"text",style:base.inp,value:f.senha,onChange:upd("senha"),placeholder:"minimo 4 caracteres"})),
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Nome de usuario *"),
+          React.createElement("input",{style:base.inp,value:f.nome,onChange:upd("nome"),placeholder:"ex: joao.silva",disabled:!!item?.id})
+        ),
+        ehNovo&&React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Senha inicial *"),
+          React.createElement("input",{type:"text",style:base.inp,value:f.senha,onChange:upd("senha"),placeholder:"minimo 4 caracteres"}),
+          React.createElement("div",{style:{fontSize:11,color:C.dim,marginTop:4}},"O usuario devera criar uma nova senha no primeiro acesso.")
+        ),
         React.createElement("div",null,
           React.createElement("label",{style:base.lbl},"Nivel de acesso"),
           React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},NIVEIS.map(n=>React.createElement("button",{key:n,style:{...btnStyle(niveisColor[n]||C.blue,f.nivel!==n),flex:1,fontSize:11,textTransform:"capitalize"},onClick:()=>setF(p=>({...p,nivel:n}))},n)))
@@ -757,33 +785,40 @@ function Usuarios({usuarioAtual}){
   };
   return React.createElement("div",null,
     React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
-      React.createElement("div",null,React.createElement("div",{style:{fontSize:18,fontWeight:700}},"👤 Usuarios"),React.createElement("div",{style:{fontSize:12,color:C.muted}},"Gerencie os acessos ao sistema")),
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"👤 Usuarios"),
+        React.createElement("div",{style:{fontSize:12,color:C.muted}},"Gerencie os acessos ao sistema")
+      ),
       usuarioAtual?.nivel==="admin"&&React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Novo Usuario")
     ),
     React.createElement("div",{style:{padding:"20px 24px"}},
+      savingMsg&&React.createElement("div",{style:{background:C.green+"22",border:`1px solid ${C.green}44`,borderRadius:8,padding:"10px 16px",marginBottom:16,fontSize:13,color:C.green}},savingMsg),
       React.createElement(Grid,{cols:4,mb:16},
         React.createElement(KPI,{label:"Total",value:users.length,color:C.blue}),
         React.createElement(KPI,{label:"Ativos",value:users.filter(u=>u.ativo).length,color:C.green}),
         React.createElement(KPI,{label:"Admins",value:users.filter(u=>u.nivel==="admin").length,color:C.red}),
         React.createElement(KPI,{label:"Tecnicos",value:users.filter(u=>u.nivel==="tecnico").length,color:C.cyan})
       ),
-      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}},
+      loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))",gap:12}},
         users.map(u=>React.createElement(Card,{key:u.id,style:{borderLeft:`4px solid ${niveisColor[u.nivel]||C.blue}`,opacity:u.ativo?1:0.6}},
           React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:12}},
             React.createElement("div",{style:{width:40,height:40,borderRadius:"50%",background:(niveisColor[u.nivel]||C.blue)+"22",border:`2px solid ${niveisColor[u.nivel]||C.blue}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:700,color:niveisColor[u.nivel]||C.blue}},u.nome[0].toUpperCase()),
             React.createElement("div",null,
               React.createElement("div",{style:{fontWeight:600,fontSize:14}},u.nome),
               React.createElement(Pill,{c:niveisColor[u.nivel]||C.blue},u.nivel),
-              React.createElement("div",{style:{fontSize:11,color:u.ativo?C.green:C.dim,marginTop:4}},u.ativo?"Ativo":"Inativo")
+              React.createElement("div",{style:{fontSize:11,color:u.ativo?C.green:C.dim,marginTop:4}},u.ativo?"● Ativo":"● Inativo"),
+              u.primeiro_acesso&&React.createElement("div",{style:{fontSize:10,color:C.yellow,marginTop:2}},"⚠ Aguardando 1º acesso")
             )
           ),
           React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"8px 12px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between"}},
             React.createElement("span",{style:{fontSize:12,color:C.dim,fontFamily:"monospace"}},mostrarSenha[u.id]?u.senha:"••••••••"),
             React.createElement("button",{style:{...iBtn(C.dim),fontSize:11},onClick:()=>setMostrarSenha(p=>({...p,[u.id]:!p[u.id]}))},mostrarSenha[u.id]?"Ocultar":"Ver")
           ),
-          usuarioAtual?.nivel==="admin"&&React.createElement("div",{style:{display:"flex",gap:6}},
-            React.createElement("button",{style:{...iBtn(C.blue),flex:1},onClick:()=>setModal(u)},"Editar"),
-            u.nome!==usuarioAtual?.nome&&React.createElement("button",{style:{...iBtn(C.red),flex:1},onClick:()=>setConfirmDel(u.id)},"Excluir")
+          usuarioAtual?.nivel==="admin"&&React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
+            React.createElement("button",{style:{...iBtn(C.blue),flex:1},onClick:()=>setModal(u)},"✏️ Editar"),
+            !u.primeiro_acesso&&u.nome!==usuarioAtual?.nome&&React.createElement("button",{style:{...iBtn(C.orange),flex:1},onClick:()=>resetSenha(u)},"🔑 Resetar"),
+            u.nome!==usuarioAtual?.nome&&React.createElement("button",{style:{...iBtn(C.red),flex:1},onClick:()=>setConfirmDel(u.id)},"🗑 Excluir")
           )
         ))
       ),
@@ -1787,15 +1822,51 @@ function Login({onLogin}){
   const [showPass,setShowPass]=useState(false);
   const [err,setErr]=useState("");
   const [loading,setLoading]=useState(false);
-  const submit=()=>{
+  const [primeiroAcesso,setPrimeiroAcesso]=useState(null);
+  const [novaSenha,setNovaSenha]=useState("");
+  const [novaSenha2,setNovaSenha2]=useState("");
+  const submit=async()=>{
+    if(!user.trim()||!pass.trim()){setErr("Preencha usuario e senha");return;}
     setLoading(true);setErr("");
-    setTimeout(()=>{
-      setLoading(false);
-      const u=USERS[user];
-      if(u&&u.pass===pass)onLogin({nome:user,nivel:u.nivel});
-      else setErr("Credenciais inválidas");
-    },900);
+    try{
+      const{data:rows}=await sb.from("usuarios").select("*").eq("nome",user.trim()).eq("ativo",true);
+      if(!rows||rows.length===0){setErr("Usuario nao encontrado");setLoading(false);return;}
+      const u=rows[0];
+      if(u.senha!==pass){setErr("Senha incorreta");setLoading(false);return;}
+      if(u.primeiro_acesso){setPrimeiroAcesso(u);setLoading(false);return;}
+      onLogin({nome:u.nome,nivel:u.nivel,id:u.id});
+    }catch(e){setErr("Erro ao conectar. Tente novamente.");}
+    setLoading(false);
   };
+  const definirSenha=async()=>{
+    if(novaSenha.length<4){setErr("Senha deve ter no minimo 4 caracteres");return;}
+    if(novaSenha!==novaSenha2){setErr("As senhas nao conferem");return;}
+    setLoading(true);setErr("");
+    await sb.from("usuarios").update({senha:novaSenha,primeiro_acesso:false}).eq("id",primeiroAcesso.id);
+    onLogin({nome:primeiroAcesso.nome,nivel:primeiroAcesso.nivel,id:primeiroAcesso.id});
+    setLoading(false);
+  };
+  if(primeiroAcesso)return React.createElement("div",{style:{height:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}},
+    React.createElement("div",{style:{background:C.surface,border:`1px solid ${C.borderL}`,borderRadius:16,padding:36,width:380,zIndex:1}},
+      React.createElement("div",{style:{textAlign:"center",marginBottom:24}},
+        React.createElement("div",{style:{fontSize:28,fontWeight:800,letterSpacing:2,color:C.text}},"SERVIS"),
+        React.createElement("div",{style:{fontSize:12,color:C.muted,marginTop:4}},"TECNICA ANALYTICS"),
+        React.createElement("div",{style:{marginTop:16,background:C.blue+"22",border:`1px solid ${C.blue}44`,borderRadius:8,padding:"10px 14px",fontSize:13,color:C.blue}},"Primeiro acesso! Defina sua senha pessoal.")
+      ),
+      React.createElement("div",{style:{marginBottom:12}},
+        React.createElement("label",{style:base.lbl},"Nova senha *"),
+        React.createElement("input",{type:"password",style:base.inp,value:novaSenha,onChange:e=>setNovaSenha(e.target.value),placeholder:"Minimo 4 caracteres"})
+      ),
+      React.createElement("div",{style:{marginBottom:16}},
+        React.createElement("label",{style:base.lbl},"Confirmar senha *"),
+        React.createElement("input",{type:"password",style:base.inp,value:novaSenha2,onChange:e=>setNovaSenha2(e.target.value),onKeyDown:e=>e.key==="Enter"&&definirSenha(),placeholder:"Repita a senha"})
+      ),
+      err&&React.createElement("div",{style:{color:C.red,fontSize:12,marginBottom:12,textAlign:"center"}},err),
+      React.createElement("button",{style:{...btnStyle(C.blue),width:"100%",padding:"10px",fontSize:15,fontWeight:600},onClick:definirSenha,disabled:loading},
+        loading?React.createElement("span",{className:"spin"},"⟳"):"Definir senha e entrar"
+      )
+    )
+  );
   return React.createElement("div",{style:{height:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}},
     React.createElement("svg",{style:{position:"absolute",inset:0,opacity:0.03},width:"100%",height:"100%"},
       React.createElement("defs",null,React.createElement("pattern",{id:"grid",width:40,height:40,patternUnits:"userSpaceOnUse"},React.createElement("path",{d:"M 40 0 L 0 0 0 40",fill:"none",stroke:C.blue,strokeWidth:1}))),
