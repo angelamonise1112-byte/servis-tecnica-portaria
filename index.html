@@ -1344,6 +1344,346 @@ function Condominios(){
   );
 }
 
+// ── TÉCNICOS ──────────────────────────────────────────────────
+function Tecnicos(){
+  const [data,setData]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modal,setModal]=useState(null);
+  const [confirmDel,setConfirmDel]=useState(null);
+  const [filtStatus,setFiltStatus]=useState("Todos");
+  const [busca,setBusca]=useState("");
+  const stColors={"Online":C.green,"Campo":C.yellow,"Offline":C.dim};
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const{data:rows}=await sb.from("tecnicos").select("*").order("nome",{ascending:true});
+    setData(rows||[]);setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load]);
+  const filtered=data.filter(t=>(filtStatus==="Todos"||t.status===filtStatus)&&(!busca||t.nome.toLowerCase().includes(busca.toLowerCase())));
+  const save=async item=>{
+    if(item.id&&data.find(x=>x.id===item.id)){await sb.from("tecnicos").update(item).eq("id",item.id);}
+    else{await sb.from("tecnicos").insert(item);}
+    setModal(null);load();
+  };
+  const del=async id=>{await sb.from("tecnicos").delete().eq("id",id);setConfirmDel(null);load();};
+  const EditModal=({item,onClose})=>{
+    const [f,setF]=useState(item||{nome:"",mat:"",escala:"Comercial",tipo:"Tecnico Manutencao",status:"Online",telefone:"",obs:""});
+    const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+    return React.createElement(Modal,{title:item?.id?"Editar Técnico":"Novo Técnico",onClose},
+      React.createElement("div",{style:{textAlign:"center",marginBottom:12}},
+        React.createElement("div",{style:{width:56,height:56,borderRadius:"50%",background:C.blue,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:700}},f.nome?f.nome[0].toUpperCase():"?")
+      ),
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Nome *"),React.createElement("input",{style:base.inp,value:f.nome,onChange:upd("nome")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Matrícula"),React.createElement("input",{style:base.inp,value:f.mat||"",onChange:upd("mat")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Telefone"),React.createElement("input",{style:base.inp,value:f.telefone||"",onChange:upd("telefone")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Tipo"),React.createElement("select",{style:base.sel,value:f.tipo||"",onChange:upd("tipo")},["Tecnico Manutencao","Tecnico Instalacao","Tecnico Senior","Supervisor","Coordenador"].map(s=>React.createElement("option",{key:s},s)))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Escala"),React.createElement("select",{style:base.sel,value:f.escala||"",onChange:upd("escala")},["Comercial","Plantonista Dia","Plantonista Noite","Sobreaviso","Folga"].map(s=>React.createElement("option",{key:s},s)))),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"Status"),
+          React.createElement("div",{style:{display:"flex",gap:8}},
+            ["Online","Campo","Offline"].map(s=>React.createElement("button",{key:s,style:{...btnStyle(stColors[s],f.status!==s),flex:1},onClick:()=>setF(p=>({...p,status:s}))},s))
+          )
+        ),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Obs"),React.createElement("textarea",{style:{...base.inp,height:60},value:f.obs||"",onChange:upd("obs")}))
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"Salvar")
+      )
+    );
+  };
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",{style:{fontSize:18,fontWeight:700}},"◎ Técnicos"),
+      React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Novo")
+    ),
+    React.createElement("div",{style:{padding:"20px 24px"}},
+      React.createElement(Grid,{cols:3,mb:16},
+        React.createElement(KPI,{label:"Total",value:data.length,color:C.blue}),
+        React.createElement(KPI,{label:"Online",value:data.filter(t=>t.status==="Online").length,color:C.green}),
+        React.createElement(KPI,{label:"Campo",value:data.filter(t=>t.status==="Campo").length,color:C.yellow})
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},
+        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar...",value:busca,onChange:e=>setBusca(e.target.value)}),
+        ["Todos","Online","Campo","Offline"].map(s=>React.createElement("button",{key:s,style:btnStyle(s==="Online"?C.green:s==="Campo"?C.yellow:s==="Offline"?C.dim:C.blue,filtStatus!==s),onClick:()=>setFiltStatus(s)},s))
+      ),
+      loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:12}},
+        filtered.map(t=>React.createElement(Card,{key:t.id},
+          React.createElement("div",{style:{display:"flex",gap:12,alignItems:"flex-start"}},
+            React.createElement("div",{style:{width:44,height:44,borderRadius:"50%",background:(stColors[t.status]||C.dim)+"33",border:`2px solid ${stColors[t.status]||C.dim}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:700,color:stColors[t.status]||C.dim}},t.nome?t.nome[0]:"?"),
+            React.createElement("div",{style:{flex:1}},
+              React.createElement("div",{style:{fontWeight:600}},t.nome),
+              React.createElement("div",{style:{fontSize:11,color:C.muted}},t.tipo),
+              React.createElement("div",{style:{fontSize:11,color:C.dim}},t.escala),
+              t.telefone&&React.createElement("div",{style:{fontSize:11,color:C.dim}},t.telefone),
+              React.createElement(Pill,{c:stColors[t.status]||C.dim},t.status)
+            )
+          ),
+          React.createElement("div",{style:{display:"flex",gap:6,marginTop:10}},
+            React.createElement("button",{style:{...iBtn(C.blue),flex:1},onClick:()=>setModal(t)},"✏️ Editar"),
+            React.createElement("button",{style:{...iBtn(C.red),flex:1},onClick:()=>setConfirmDel(t.id)},"🗑 Excluir")
+          )
+        ))
+      )
+    ),
+    modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
+    confirmDel&&React.createElement(Confirm,{msg:"Excluir este técnico?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
+  );
+}
+
+// ── PARTICULARIDADES ──────────────────────────────────────────
+function Particularidades(){
+  const [data,setData]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modal,setModal]=useState(null);
+  const [confirmDel,setConfirmDel]=useState(null);
+  const [busca,setBusca]=useState("");
+  const CORES=[C.blue,C.cyan,C.green,C.yellow,C.orange,C.red,C.purple];
+  const TAGS=["Acesso","Seguranca","Contato","Equipamento","Procedimento","Observacao","Contrato"];
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const{data:rows}=await sb.from("particularidades").select("*").order("fixado",{ascending:false});
+    setData(rows||[]);setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load]);
+  const filtered=[...data].filter(d=>!busca||d.cond.toLowerCase().includes(busca.toLowerCase())||d.tag.toLowerCase().includes(busca.toLowerCase()));
+  const save=async item=>{
+    if(item.id&&data.find(x=>x.id===item.id)){await sb.from("particularidades").update(item).eq("id",item.id);}
+    else{await sb.from("particularidades").insert(item);}
+    setModal(null);load();
+  };
+  const del=async id=>{await sb.from("particularidades").delete().eq("id",id);setConfirmDel(null);load();};
+  const toggleFixado=async item=>{
+    await sb.from("particularidades").update({fixado:!item.fixado}).eq("id",item.id);
+    load();
+  };
+  const EditModal=({item,onClose})=>{
+    const [f,setF]=useState(item||{cond:CONDS[0],tag:TAGS[0],info:"",data:todayStr(),cor:C.blue,fixado:false});
+    const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+    return React.createElement(Modal,{title:item?.id?"Editar":"Nova Particularidade",onClose},
+      React.createElement("div",{style:{display:"grid",gap:12}},
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},CONDS.map(c=>React.createElement("option",{key:c},c)))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Tag"),React.createElement("select",{style:base.sel,value:f.tag,onChange:upd("tag")},TAGS.map(t=>React.createElement("option",{key:t},t)))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Informação *"),React.createElement("textarea",{style:{...base.inp,height:80},value:f.info,onChange:upd("info")})),
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Cor"),
+          React.createElement("div",{style:{display:"flex",gap:8}},CORES.map(cor=>React.createElement("div",{key:cor,style:{width:28,height:28,borderRadius:"50%",background:cor,cursor:"pointer",border:f.cor===cor?"3px solid white":"3px solid transparent"},onClick:()=>setF(p=>({...p,cor}))})))
+        )
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"Salvar")
+      )
+    );
+  };
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🏷 Particularidades"),
+      React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Nova")
+    ),
+    React.createElement("div",{style:{padding:"20px 24px"}},
+      React.createElement("input",{style:{...base.inp,width:220,marginBottom:16},placeholder:"Buscar...",value:busca,onChange:e=>setBusca(e.target.value)}),
+      loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}},
+        filtered.map(d=>React.createElement(Card,{key:d.id,style:{borderLeft:`4px solid ${d.cor||C.blue}`}},
+          React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:8}},
+            React.createElement("div",null,
+              React.createElement("div",{style:{fontWeight:600}},d.cond),
+              React.createElement(Pill,{c:d.cor||C.blue},d.tag)
+            ),
+            React.createElement("div",{style:{fontSize:16,color:d.fixado?C.yellow:C.dim}},d.fixado?"📌":"📍")
+          ),
+          React.createElement("div",{style:{fontSize:13,color:C.muted,marginBottom:10}},d.info),
+          React.createElement("div",{style:{display:"flex",gap:6}},
+            React.createElement("button",{style:iBtn(d.fixado?C.yellow:C.dim),onClick:()=>toggleFixado(d)},d.fixado?"📌":"📍"),
+            React.createElement("button",{style:{...iBtn(C.blue),flex:1},onClick:()=>setModal(d)},"✏️"),
+            React.createElement("button",{style:{...iBtn(C.red),flex:1},onClick:()=>setConfirmDel(d.id)},"🗑")
+          )
+        ))
+      )
+    ),
+    modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
+    confirmDel&&React.createElement(Confirm,{msg:"Excluir esta particularidade?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
+  );
+}
+
+// ── OS PENDÊNCIA ──────────────────────────────────────────────
+function OSPendencia(){
+  const [data,setData]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modal,setModal]=useState(null);
+  const [confirmDel,setConfirmDel]=useState(null);
+  const MOTIVO_PEND=["Aguardando peca","Aguardando aprovacao do sindico","Aguardando tecnico especialista","Aguardando material","Acesso negado","Problema nao reproduzido","Aguardando fornecedor","Cliente ausente","Outros"];
+  const STATUS_PEND={Pendente:{c:C.red,i:"⚠"},"Em acompanhamento":{c:C.yellow,i:"👁"},Resolvida:{c:C.green,i:"✓"},Cancelada:{c:C.dim,i:"✕"}};
+  const priOrd={Alta:0,Media:1,Baixa:2};
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const{data:rows}=await sb.from("os_pendencia").select("*").order("prazo",{ascending:true});
+    setData(rows||[]);setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load]);
+  const sorted=[...data].sort((a,b)=>(priOrd[a.pri]||1)-(priOrd[b.pri]||1));
+  const vencidas=data.filter(d=>prazoVencido(d)).length;
+  const save=async item=>{
+    if(item.id&&data.find(x=>x.id===item.id)){await sb.from("os_pendencia").update(item).eq("id",item.id);}
+    else{await sb.from("os_pendencia").insert(item);}
+    setModal(null);load();
+  };
+  const del=async id=>{await sb.from("os_pendencia").delete().eq("id",id);setConfirmDel(null);load();};
+  const EditModal=({item,onClose})=>{
+    const [f,setF]=useState(item||{num:"",cond:CONDS[0],tec:TECNICOS[0].nome,prob:PROBS[0],motivo:MOTIVO_PEND[0],descricao:"",data:todayStr(),prazo:"",pri:"Media",status:"Pendente",obs:""});
+    const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+    return React.createElement(Modal,{title:item?.id?"Editar Pendência":"Nova Pendência",onClose,width:540},
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Nº OS *"),React.createElement("input",{style:base.inp,value:f.num||"",onChange:upd("num")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data"),React.createElement("input",{type:"date",style:base.inp,value:f.data||"",onChange:upd("data")})),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},CONDS.map(c=>React.createElement("option",{key:c},c)))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Técnico"),React.createElement("select",{style:base.sel,value:f.tec,onChange:upd("tec")},TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome)))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Previsão"),React.createElement("input",{type:"date",style:base.inp,value:f.prazo||"",onChange:upd("prazo")})),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Motivo *"),React.createElement("select",{style:base.sel,value:f.motivo,onChange:upd("motivo")},MOTIVO_PEND.map(m=>React.createElement("option",{key:m},m)))),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"Prioridade"),
+          React.createElement("div",{style:{display:"flex",gap:8}},["Alta","Media","Baixa"].map(p=>React.createElement("button",{key:p,style:{...btnStyle(p==="Alta"?C.red:p==="Media"?C.yellow:C.green,f.pri!==p),flex:1},onClick:()=>setF(x=>({...x,pri:p}))},p)))
+        ),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"Status"),
+          React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},Object.keys(STATUS_PEND).map(s=>React.createElement("button",{key:s,style:{...btnStyle(STATUS_PEND[s].c,f.status!==s),fontSize:11},onClick:()=>setF(x=>({...x,status:s}))},`${STATUS_PEND[s].i} ${s}`)))
+        ),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Observações"),React.createElement("textarea",{style:{...base.inp,height:60},value:f.obs||"",onChange:upd("obs")}))
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"Salvar")
+      )
+    );
+  };
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+          React.createElement("span",{style:{fontSize:18,fontWeight:700}},"⚠ OS em Pendência"),
+          vencidas>0&&React.createElement(Pill,{c:C.red},`${vencidas} atrasadas`)
+        )
+      ),
+      React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Nova")
+    ),
+    React.createElement("div",{style:{padding:"20px 24px"}},
+      React.createElement(Grid,{cols:4,mb:16},
+        React.createElement(KPI,{label:"Total",value:data.length,color:C.blue}),
+        React.createElement(KPI,{label:"Pendentes",value:data.filter(d=>d.status==="Pendente").length,color:C.red}),
+        React.createElement(KPI,{label:"Em Acompanhamento",value:data.filter(d=>d.status==="Em acompanhamento").length,color:C.yellow}),
+        React.createElement(KPI,{label:"Resolvidas",value:data.filter(d=>d.status==="Resolvida").length,color:C.green})
+      ),
+      loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+      React.createElement(Card,null,
+        data.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma pendência cadastrada"):
+        React.createElement(Table,{
+          cols:["Nº OS","Condomínio","Técnico","Motivo","Previsão","Prioridade","Status","Ações"],
+          rows:sorted.map(d=>[
+            React.createElement("span",{style:{color:C.cyan}},d.num),
+            d.cond,d.tec,d.motivo,
+            React.createElement("span",{style:{color:prazoVencido(d)?C.red:C.text}},prazoVencido(d)?"⚠ ":"",fmt(d.prazo)),
+            React.createElement(Pill,{c:d.pri==="Alta"?C.red:d.pri==="Media"?C.yellow:C.green},d.pri),
+            React.createElement(Pill,{c:STATUS_PEND[d.status]?.c||C.dim},`${STATUS_PEND[d.status]?.i||""} ${d.status}`),
+            React.createElement("div",{style:{display:"flex",gap:4}},
+              React.createElement("button",{style:iBtn(C.blue),onClick:()=>setModal(d)},"✏️"),
+              React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id)},"🗑")
+            )
+          ])
+        })
+      )
+    ),
+    modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
+    confirmDel&&React.createElement(Confirm,{msg:"Excluir esta pendência?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
+  );
+}
+
+// ── PEDIDOS ───────────────────────────────────────────────────
+function Pedidos(){
+  const STATUS_PED={Pendente:{c:C.yellow},Aprovado:{c:C.blue},Retirado:{c:C.orange},Devolvido:{c:C.green},Cancelado:{c:C.red}};
+  const [data,setData]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modal,setModal]=useState(null);
+  const [confirmDel,setConfirmDel]=useState(null);
+  const [filtStatus,setFiltStatus]=useState("");
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const{data:rows}=await sb.from("pedidos").select("*").order("data",{ascending:false});
+    setData(rows||[]);setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load]);
+  const filtered=data.filter(d=>!filtStatus||d.status===filtStatus);
+  const save=async item=>{
+    if(item.id&&data.find(x=>x.id===item.id)){await sb.from("pedidos").update(item).eq("id",item.id);}
+    else{await sb.from("pedidos").insert(item);}
+    setModal(null);load();
+  };
+  const del=async id=>{await sb.from("pedidos").delete().eq("id",id);setConfirmDel(null);load();};
+  const EditModal=({item,onClose})=>{
+    const [f,setF]=useState(item||{cond:CONDS[0],data:todayStr(),cod:"",quant:1,descricao:"",os:"",pedido:"",requisicao:"",retirada:"",devolucao:"",obs:"",status:"Pendente"});
+    const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+    return React.createElement(Modal,{title:item?.id?"Editar Pedido":"Novo Pedido",onClose,width:560},
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},CONDS.map(c=>React.createElement("option",{key:c},c)))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data *"),React.createElement("input",{type:"date",style:base.inp,value:f.data||"",onChange:upd("data")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Código"),React.createElement("input",{style:base.inp,value:f.cod||"",onChange:upd("cod")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Quantidade"),React.createElement("input",{type:"number",style:base.inp,value:f.quant||1,onChange:upd("quant")})),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Descrição *"),React.createElement("input",{style:base.inp,value:f.descricao||"",onChange:upd("descricao")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"OS"),React.createElement("input",{style:base.inp,value:f.os||"",onChange:upd("os")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Pedido"),React.createElement("input",{style:base.inp,value:f.pedido||"",onChange:upd("pedido")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Requisição"),React.createElement("input",{style:base.inp,value:f.requisicao||"",onChange:upd("requisicao")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Retirada"),React.createElement("input",{type:"date",style:base.inp,value:f.retirada||"",onChange:upd("retirada")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Devolução"),React.createElement("input",{type:"date",style:base.inp,value:f.devolucao||"",onChange:upd("devolucao")})),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Status"),React.createElement("select",{style:base.sel,value:f.status,onChange:upd("status")},Object.keys(STATUS_PED).map(s=>React.createElement("option",{key:s},s))))
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"Salvar")
+      )
+    );
+  };
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🛒 Pedidos"),
+      React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Novo")
+    ),
+    React.createElement("div",{style:{padding:"20px 24px"}},
+      React.createElement(Grid,{cols:5,mb:16},
+        React.createElement(KPI,{label:"Total",value:data.length,color:C.blue}),
+        React.createElement(KPI,{label:"Pendentes",value:data.filter(d=>d.status==="Pendente").length,color:C.yellow}),
+        React.createElement(KPI,{label:"Aprovados",value:data.filter(d=>d.status==="Aprovado").length,color:C.blue}),
+        React.createElement(KPI,{label:"Retirados",value:data.filter(d=>d.status==="Retirado").length,color:C.orange}),
+        React.createElement(KPI,{label:"Devolvidos",value:data.filter(d=>d.status==="Devolvido").length,color:C.green})
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12}},
+        React.createElement("select",{style:{...base.sel,width:160},value:filtStatus,onChange:e=>setFiltStatus(e.target.value)},
+          React.createElement("option",{value:""},"Todos status"),...Object.keys(STATUS_PED).map(s=>React.createElement("option",{key:s,value:s},s))
+        ),
+        filtStatus&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>setFiltStatus("")},"✕ Limpar")
+      ),
+      loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+      React.createElement(Card,null,
+        data.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhum pedido cadastrado"):
+        React.createElement(Table,{
+          cols:["Condomínio","Data","Cód.","Qtd","Descrição","OS","Status","Ações"],
+          rows:filtered.map(d=>[
+            d.cond,fmt(d.data),d.cod||"—",d.quant,d.descricao,d.os||"—",
+            React.createElement(Pill,{c:STATUS_PED[d.status]?.c||C.dim},d.status),
+            React.createElement("div",{style:{display:"flex",gap:4}},
+              React.createElement("button",{style:iBtn(C.blue),onClick:()=>setModal(d)},"✏️"),
+              React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id)},"🗑")
+            )
+          ])
+        })
+      )
+    ),
+    modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
+    confirmDel&&React.createElement(Confirm,{msg:"Excluir este pedido?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
+  );
+}
+
 function ModuloEmBreve({nome}){
   return React.createElement("div",{style:{padding:60,textAlign:"center",color:C.muted}},
     React.createElement("div",{style:{fontSize:40,marginBottom:12}},"🔧"),
@@ -1445,6 +1785,10 @@ function App(){
       case"os":return React.createElement(OSModule,null);
       case"atestados":return React.createElement(Atestados,null);
       case"horas-extras":return React.createElement(HorasExtras,null);
+      case"tecnicos":return React.createElement(Tecnicos,null);
+      case"particularidades":return React.createElement(Particularidades,null);
+      case"os-pendencia":return React.createElement(OSPendencia,null);
+      case"pedidos":return React.createElement(Pedidos,null);
       case"condominios":return React.createElement(Condominios,null);
       case"preventivas":return React.createElement(Preventivas,null);
       case"reginaldo":return React.createElement(ServicoReginaldo,null);
