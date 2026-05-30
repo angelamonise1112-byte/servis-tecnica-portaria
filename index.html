@@ -560,7 +560,7 @@ function NovaOS({setTab,onSave}){
   );
 }
 
-function OSModule({tecsBanco=TECNICOS}){
+function OSModule({tecsBanco=TECNICOS,onSave}){
   const [data,setData]=useState([]);
   const [loading,setLoading]=useState(true);
   const [busca,setBusca]=useState("");
@@ -571,6 +571,8 @@ function OSModule({tecsBanco=TECNICOS}){
   const [filtAno,setFiltAno]=useState("");
   const [subPage,setSubPage]=useState("abertas");
   const [detalheOS,setDetalheOS]=useState(null);
+  const [editOS,setEditOS]=useState(null);
+  const [confirmDel,setConfirmDel]=useState(null);
   const [pagina,setPagina]=useState(1);
   const POR_PAG=50;
   const MESES=["01","02","03","04","05","06","07","08","09","10","11","12"];
@@ -586,30 +588,19 @@ function OSModule({tecsBanco=TECNICOS}){
 
   const anos=useMemo(()=>[...new Set(data.map(d=>d.data?.slice(0,4)).filter(Boolean))].sort().reverse(),[data]);
   const conds=useMemo(()=>[...new Set(data.map(d=>d.cond).filter(Boolean))].sort(),[data]);
-
   const osAbertas=useMemo(()=>data.filter(d=>d.status==="Aberto"),[data]);
   const osFechadas=useMemo(()=>data.filter(d=>d.status==="Fechado"),[data]);
 
-  // Alertas de reincidência do mês atual
   const hoje=new Date();
   const mesAtual=String(hoje.getMonth()+1).padStart(2,"0");
   const anoAtual=String(hoje.getFullYear());
   const alertasReincidencia=useMemo(()=>{
-    const osMes=data.filter(d=>{
-      if(!d.data)return false;
-      const[ano,mes]=d.data.split("-");
-      return mes===mesAtual&&ano===anoAtual;
-    });
+    const osMes=data.filter(d=>{if(!d.data)return false;const[ano,mes]=d.data.split("-");return mes===mesAtual&&ano===anoAtual;});
     const map={};
-    osMes.forEach(os=>{
-      const key=`${os.cond}||${os.prob}`;
-      if(!map[key])map[key]={cond:os.cond,prob:os.prob,count:0};
-      map[key].count++;
-    });
+    osMes.forEach(os=>{const key=`${os.cond}||${os.prob}`;if(!map[key])map[key]={cond:os.cond,prob:os.prob,count:0};map[key].count++;});
     return Object.values(map).filter(g=>g.count>=3).sort((a,b)=>b.count-a.count);
   },[data,mesAtual,anoAtual]);
 
-  // OS por mês para gráfico
   const osPorMes=useMemo(()=>{
     const map={};
     data.forEach(d=>{
@@ -619,14 +610,12 @@ function OSModule({tecsBanco=TECNICOS}){
       const meses=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
       if(!map[key])map[key]={key,label:`${meses[parseInt(mes)-1]}/${ano.slice(2)}`,total:0,abertas:0,fechadas:0};
       map[key].total++;
-      if(d.status==="Aberto")map[key].abertas++;
-      else map[key].fechadas++;
+      if(d.status==="Aberto")map[key].abertas++;else map[key].fechadas++;
     });
     return Object.values(map).sort((a,b)=>a.key.localeCompare(b.key)).slice(-18);
   },[data]);
   const maxOsMes=Math.max(...osPorMes.map(d=>d.total),1);
 
-  // Filtro para tabela
   const baseList=subPage==="abertas"?osAbertas:subPage==="fechadas"?osFechadas:data;
   const filtered=useMemo(()=>baseList.filter(d=>{
     const matchBusca=!busca||(d.num||"").includes(busca)||(d.cond||"").toLowerCase().includes(busca.toLowerCase());
@@ -634,45 +623,103 @@ function OSModule({tecsBanco=TECNICOS}){
     const matchTec=!filtTec||d.tec===filtTec;
     const matchStatus=filtStatus==="Todos"||d.status===filtStatus;
     const[ano,mes]=(d.data||"--").split("-");
-    const matchMes=!filtMes||mes===filtMes;
-    const matchAno=!filtAno||ano===filtAno;
-    return matchBusca&&matchCond&&matchTec&&matchStatus&&matchMes&&matchAno;
+    return matchBusca&&matchCond&&matchTec&&matchStatus&&(!filtMes||mes===filtMes)&&(!filtAno||ano===filtAno);
   }),[baseList,busca,filtCond,filtTec,filtStatus,filtMes,filtAno]);
 
   const totalPags=Math.ceil(filtered.length/POR_PAG);
   const paginado=filtered.slice((pagina-1)*POR_PAG,pagina*POR_PAG);
-
   const limparFiltros=()=>{setBusca("");setFiltCond("");setFiltTec("");setFiltStatus("Todos");setFiltMes("");setFiltAno("");};
   const temFiltro=busca||filtCond||filtTec||filtStatus!=="Todos"||filtMes||filtAno;
 
+  const saveOS=async item=>{
+    if(item.id&&data.find(x=>x.id===item.id)){await sb.from("os").update(item).eq("id",item.id);}
+    else{await sb.from("os").insert(item);}
+    setEditOS(null);load();if(onSave)onSave();
+  };
+  const delOS=async id=>{await sb.from("os").delete().eq("id",id);setConfirmDel(null);load();if(onSave)onSave();};
+
+  // Modal de edição de OS
+  const EditOSModal=({item,onClose})=>{
+    const [f,setF]=useState({...item});
+    const [uploading,setUploading]=useState(false);
+    const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+    const handleFile=async(e,tipo)=>{
+      const file=e.target.files[0];if(!file)return;
+      setUploading(true);
+      const r=new FileReader();
+      r.onload=ev=>{
+        if(tipo==="foto")setF(p=>({...p,foto_url:ev.target.result,foto_nome:file.name}));
+        else setF(p=>({...p,laudo_url:ev.target.result,laudo_nome:file.name}));
+        setUploading(false);
+      };
+      r.readAsDataURL(file);
+    };
+    return React.createElement(Modal,{title:`✏️ Editar OS ${item.num}`,onClose,width:580},
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Condomínio"),React.createElement("select",{style:base.sel,value:f.cond||"",onChange:upd("cond")},conds.map(c=>React.createElement("option",{key:c},c)))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Técnico"),React.createElement("select",{style:base.sel,value:f.tec||"",onChange:upd("tec")},tecsBanco.map(t=>React.createElement("option",{key:t.mat||t.nome,value:t.nome},t.nome)))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data"),React.createElement("input",{type:"date",style:base.inp,value:f.data||"",onChange:upd("data")})),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Problema"),React.createElement("input",{style:base.inp,value:f.prob||"",onChange:upd("prob")})),
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Prioridade"),
+          React.createElement("div",{style:{display:"flex",gap:6}},["Alta","Média","Baixa"].map(p=>React.createElement("button",{key:p,style:{...btnStyle(p==="Alta"?C.red:p==="Média"?C.yellow:C.green,f.pri!==p),flex:1,fontSize:11},onClick:()=>setF(x=>({...x,pri:p}))},p)))
+        ),
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Status"),
+          React.createElement("div",{style:{display:"flex",gap:6}},["Aberto","Fechado"].map(s=>React.createElement("button",{key:s,style:{...btnStyle(s==="Aberto"?C.red:C.green,f.status!==s),flex:1,fontSize:11},onClick:()=>setF(x=>({...x,status:s}))},s)))
+        ),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"📝 Relato Técnico"),
+          React.createElement("textarea",{style:{...base.inp,height:80},value:f.relato||"",onChange:upd("relato"),placeholder:"Descreva o que foi feito..."})
+        ),
+        // Foto
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"📸 Foto"),
+          React.createElement("div",{style:{background:C.bg,border:`1px dashed ${C.borderL}`,borderRadius:8,padding:"10px 12px"}},
+            React.createElement("input",{type:"file",accept:"image/*",id:"os-foto",style:{display:"none"},onChange:e=>handleFile(e,"foto")}),
+            React.createElement("label",{htmlFor:"os-foto",style:{cursor:"pointer",fontSize:12,color:f.foto_url?C.green:C.cyan}},f.foto_url?"✅ "+(f.foto_nome||"Foto anexada"):"📷 Anexar foto"),
+            f.foto_url&&React.createElement("button",{style:{...iBtn(C.dim),marginLeft:8,fontSize:10},onClick:()=>setF(p=>({...p,foto_url:"",foto_nome:""}))
+},"✕")
+          )
+        ),
+        // PDF
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"📄 Laudo PDF"),
+          React.createElement("div",{style:{background:C.bg,border:`1px dashed ${C.borderL}`,borderRadius:8,padding:"10px 12px"}},
+            React.createElement("input",{type:"file",accept:".pdf",id:"os-pdf",style:{display:"none"},onChange:e=>handleFile(e,"pdf")}),
+            React.createElement("label",{htmlFor:"os-pdf",style:{cursor:"pointer",fontSize:12,color:f.laudo_url?C.green:C.red}},f.laudo_url?"✅ "+(f.laudo_nome||"PDF anexado"):"📎 Anexar PDF"),
+            f.laudo_url&&React.createElement("button",{style:{...iBtn(C.dim),marginLeft:8,fontSize:10},onClick:()=>setF(p=>({...p,laudo_url:"",laudo_nome:""}))
+},"✕")
+          )
+        )
+      ),
+      uploading&&React.createElement("div",{style:{textAlign:"center",color:C.muted,fontSize:12,marginTop:8}},"Carregando arquivo..."),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>saveOS(f)},"💾 Salvar")
+      )
+    );
+  };
+
   return React.createElement("div",null,
-    // Header com abas
     React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`}},
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
         React.createElement("div",{style:{fontSize:18,fontWeight:700}},"◉ Ordens de Serviço"),
         React.createElement("div",{style:{fontSize:12,color:C.muted}},`Total: ${data.length} OS`)
       ),
       React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
-        [
-          {id:"abertas",label:`🔴 Abertas (${osAbertas.length})`},
-          {id:"fechadas",label:`✅ Fechadas (${osFechadas.length})`},
-          {id:"todas",label:`📋 Todas (${data.length})`},
-          {id:"grafico",label:"📊 Gráfico por Mês"},
-        ].map(t=>React.createElement("button",{key:t.id,style:btnStyle(t.id==="abertas"?C.red:t.id==="fechadas"?C.green:t.id==="grafico"?C.purple:C.blue,subPage!==t.id),onClick:()=>setSubPage(t.id)},t.label))
+        [{id:"abertas",label:`🔴 Abertas (${osAbertas.length})`},{id:"fechadas",label:`✅ Fechadas (${osFechadas.length})`},{id:"todas",label:`📋 Todas (${data.length})`},{id:"grafico",label:"📊 Gráfico"}].map(t=>
+          React.createElement("button",{key:t.id,style:btnStyle(t.id==="abertas"?C.red:t.id==="fechadas"?C.green:t.id==="grafico"?C.purple:C.blue,subPage!==t.id),onClick:()=>setSubPage(t.id)},t.label)
+        )
       )
     ),
-
     React.createElement("div",{style:{padding:"20px 24px"}},
-
-      // KPIs cruzados com dashboard
       React.createElement(Grid,{cols:4,mb:16},
         React.createElement(KPI,{label:"🔴 OS Abertas",value:osAbertas.length,color:C.red}),
         React.createElement(KPI,{label:"✅ OS Fechadas",value:osFechadas.length,color:C.green}),
-        React.createElement(KPI,{label:"📋 Total Histórico",value:data.length,color:C.blue}),
+        React.createElement(KPI,{label:"📋 Total",value:data.length,color:C.blue}),
         React.createElement(KPI,{label:"↺ Reincidências",value:alertasReincidencia.length,color:alertasReincidencia.length>0?C.orange:C.dim})
       ),
-
-      // Alerta reincidências
       alertasReincidencia.length>0&&React.createElement("div",{style:{background:C.red+"11",border:`1px solid ${C.red}33`,borderRadius:10,padding:"12px 16px",marginBottom:16}},
         React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:8}},
           React.createElement("span",{style:{fontSize:18}},"🔴"),
@@ -681,16 +728,11 @@ function OSModule({tecsBanco=TECNICOS}){
         ),
         React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:6}},
           alertasReincidencia.map((r,i)=>React.createElement("div",{key:i,style:{background:C.surface,border:`1px solid ${C.red}33`,borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
-            React.createElement("div",null,
-              React.createElement("div",{style:{fontWeight:600,fontSize:12}},r.cond),
-              React.createElement("div",{style:{fontSize:11,color:C.muted}},r.prob)
-            ),
+            React.createElement("div",null,React.createElement("div",{style:{fontWeight:600,fontSize:12}},r.cond),React.createElement("div",{style:{fontSize:11,color:C.muted}},r.prob)),
             React.createElement(Pill,{c:r.count>=6?C.red:r.count>=4?C.orange:C.yellow},`${r.count} OS`)
           ))
         )
       ),
-
-      // Gráfico
       subPage==="grafico"&&React.createElement("div",null,
         React.createElement(Card,{style:{marginBottom:16}},
           React.createElement(CardHeader,{title:"OS por Mês"}),
@@ -712,95 +754,62 @@ function OSModule({tecsBanco=TECNICOS}){
                 );
               })
             )
-          ),
-          React.createElement("div",{style:{display:"flex",gap:16,marginTop:8,fontSize:11}},
-            React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},React.createElement("span",{style:{width:12,height:12,background:C.blue,borderRadius:2,display:"inline-block"}}),React.createElement("span",{style:{color:C.muted}},"Total OS")),
-            React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},React.createElement("span",{style:{width:12,height:12,background:C.red,borderRadius:2,display:"inline-block"}}),React.createElement("span",{style:{color:C.muted}},"Abertas"))
           )
-        ),
-        React.createElement(Card,null,
-          React.createElement(CardHeader,{title:"Detalhamento por Mês"}),
-          React.createElement(Table,{
-            cols:["Mês/Ano","Total","Abertas","Fechadas","% Fechadas"],
-            rows:osPorMes.slice().reverse().map(d=>[
-              React.createElement("span",{style:{color:C.cyan,fontWeight:600}},d.label),
-              React.createElement("span",{style:{color:C.blue,fontWeight:700}},d.total),
-              React.createElement("span",{style:{color:C.red}},d.abertas),
-              React.createElement("span",{style:{color:C.green}},d.fechadas),
-              React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
-                React.createElement("div",{style:{width:60,height:6,background:C.border,borderRadius:3}},React.createElement("div",{style:{width:`${Math.round((d.fechadas/d.total)*100)}%`,height:"100%",background:C.green,borderRadius:3}})),
-                React.createElement("span",{style:{color:C.muted,fontSize:11}},`${Math.round((d.fechadas/d.total)*100)}%`)
-              )
-            ])
-          })
         )
       ),
-
-      // Tabela (abertas / fechadas / todas)
       subPage!=="grafico"&&React.createElement("div",null,
-        // Filtros
         React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}},
           React.createElement("input",{style:{...base.inp,width:170},placeholder:"Buscar OS ou cond...",value:busca,onChange:e=>setBusca(e.target.value)}),
-          React.createElement("select",{style:{...base.sel,width:200},value:filtCond,onChange:e=>setFiltCond(e.target.value)},
-            React.createElement("option",{value:""},"Todos condomínios"),
-            ...conds.map(c=>React.createElement("option",{key:c,value:c},c))
-          ),
-          React.createElement("select",{style:{...base.sel,width:160},value:filtTec,onChange:e=>setFiltTec(e.target.value)},
-            React.createElement("option",{value:""},"Todos técnicos"),
-            ...tecsBanco.map(t=>React.createElement("option",{key:t.mat||t.nome,value:t.nome},t.nome))
-          ),
-          React.createElement("select",{style:{...base.sel,width:120},value:filtMes,onChange:e=>setFiltMes(e.target.value)},
-            React.createElement("option",{value:""},"Todos meses"),
-            ...MESES.map((m,i)=>React.createElement("option",{key:m,value:m},NOMES_MES[i]))
-          ),
-          React.createElement("select",{style:{...base.sel,width:90},value:filtAno,onChange:e=>setFiltAno(e.target.value)},
-            React.createElement("option",{value:""},"Todos anos"),
-            ...anos.map(a=>React.createElement("option",{key:a,value:a},a))
-          ),
-          subPage==="todas"&&React.createElement("select",{style:{...base.sel,width:120},value:filtStatus,onChange:e=>setFiltStatus(e.target.value)},
-            React.createElement("option",{value:"Todos"},"Todos status"),
-            React.createElement("option",{value:"Aberto"},"Aberto"),
-            React.createElement("option",{value:"Fechado"},"Fechado")
-          ),
+          React.createElement("select",{style:{...base.sel,width:200},value:filtCond,onChange:e=>setFiltCond(e.target.value)},React.createElement("option",{value:""},"Todos condomínios"),...conds.map(c=>React.createElement("option",{key:c,value:c},c))),
+          React.createElement("select",{style:{...base.sel,width:160},value:filtTec,onChange:e=>setFiltTec(e.target.value)},React.createElement("option",{value:""},"Todos técnicos"),...tecsBanco.map(t=>React.createElement("option",{key:t.mat||t.nome,value:t.nome},t.nome))),
+          React.createElement("select",{style:{...base.sel,width:120},value:filtMes,onChange:e=>setFiltMes(e.target.value)},React.createElement("option",{value:""},"Todos meses"),...MESES.map((m,i)=>React.createElement("option",{key:m,value:m},NOMES_MES[i]))),
+          React.createElement("select",{style:{...base.sel,width:90},value:filtAno,onChange:e=>setFiltAno(e.target.value)},React.createElement("option",{value:""},"Todos anos"),...anos.map(a=>React.createElement("option",{key:a,value:a},a))),
+          subPage==="todas"&&React.createElement("select",{style:{...base.sel,width:120},value:filtStatus,onChange:e=>setFiltStatus(e.target.value)},React.createElement("option",{value:"Todos"},"Todos status"),React.createElement("option",{value:"Aberto"},"Aberto"),React.createElement("option",{value:"Fechado"},"Fechado")),
           temFiltro&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:limparFiltros},"✕ Limpar"),
           React.createElement("span",{style:{fontSize:12,color:C.dim}},`${filtered.length} registros`)
         ),
-        loading
-          ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando...")
-          :React.createElement("div",null,
-              React.createElement(Card,null,
-                filtered.length===0
-                  ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma OS encontrada")
-                  :React.createElement(Table,{
-                      cols:["Nº OS","Data","Condomínio","Técnico","Problema","Prioridade","Status","Relato"],
-                      rows:paginado.map(d=>[
-                        React.createElement("span",{style:{color:C.cyan,fontWeight:600,cursor:"pointer"},onClick:()=>setDetalheOS(d)},d.num),
-                        fmt(d.data),
-                        React.createElement("span",{style:{fontSize:12}},d.cond),
-                        React.createElement("span",{style:{fontSize:12}},d.tec),
-                        React.createElement("span",{style:{fontSize:12}},d.prob),
-                        React.createElement(Pill,{c:d.pri==="Alta"?C.red:d.pri==="Média"?C.yellow:C.green},d.pri||"Média"),
-                        React.createElement(Pill,{c:d.status==="Aberto"?C.red:C.green},d.status),
-                        d.relato
-                          ?React.createElement("div",{style:{cursor:"pointer"},onClick:()=>setDetalheOS(d)},
-                              React.createElement("span",{style:{fontSize:11,color:C.muted,maxWidth:150,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"},title:d.relato},d.relato),
-                              React.createElement("span",{style:{color:C.blue,fontSize:10,marginLeft:4}},"ver +")
-                            )
-                          :React.createElement("span",{style:{color:C.dim}},"-")
-                      ])
-                    })
-              ),
-              totalPags>1&&React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:12,flexWrap:"wrap"}},
-                React.createElement("button",{style:{...iBtn(C.blue),opacity:pagina===1?0.3:1},disabled:pagina===1,onClick:()=>setPagina(p=>p-1)},"← Anterior"),
-                React.createElement("span",{style:{fontSize:12,color:C.muted}},`Pág ${pagina}/${totalPags} — ${(pagina-1)*POR_PAG+1}–${Math.min(pagina*POR_PAG,filtered.length)} de ${filtered.length}`),
-                React.createElement("button",{style:{...iBtn(C.blue),opacity:pagina===totalPags?0.3:1},disabled:pagina===totalPags,onClick:()=>setPagina(p=>p+1)},"Próxima →")
-              )
+        loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+        React.createElement("div",null,
+          React.createElement(Card,null,
+            filtered.length===0
+              ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma OS encontrada")
+              :React.createElement(Table,{
+                  cols:["Nº OS","Data","Condomínio","Técnico","Problema","Prioridade","Status","Relato Técnico","Arquivos","Ações"],
+                  rows:paginado.map(d=>[
+                    React.createElement("span",{style:{color:C.cyan,fontWeight:600,cursor:"pointer"},onClick:()=>setDetalheOS(d)},d.num),
+                    React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},fmt(d.data)),
+                    React.createElement("span",{style:{fontSize:11}},d.cond),
+                    React.createElement("span",{style:{fontSize:11}},d.tec),
+                    React.createElement("span",{style:{fontSize:11}},d.prob),
+                    React.createElement(Pill,{c:d.pri==="Alta"?C.red:d.pri==="Média"?C.yellow:C.green},d.pri||"Média"),
+                    React.createElement(Pill,{c:d.status==="Aberto"?C.red:C.green},d.status),
+                    d.relato
+                      ?React.createElement("div",{style:{cursor:"pointer",maxWidth:180},onClick:()=>setDetalheOS(d)},
+                          React.createElement("span",{style:{fontSize:11,color:C.muted,display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"},title:d.relato},d.relato),
+                          React.createElement("span",{style:{color:C.blue,fontSize:9}},"ver +")
+                        )
+                      :React.createElement("span",{style:{color:C.dim,fontSize:11}},"—"),
+                    React.createElement("div",{style:{display:"flex",gap:4}},
+                      d.foto_url&&React.createElement("button",{style:iBtn(C.cyan),onClick:()=>window.open(d.foto_url,"_blank"),title:"Ver foto"},"📸"),
+                      d.laudo_url&&React.createElement("a",{href:d.laudo_url,download:d.laudo_nome||"laudo.pdf",style:{...iBtn(C.red),textDecoration:"none"},title:"Baixar PDF"},"📄")
+                    ),
+                    React.createElement("div",{style:{display:"flex",gap:4}},
+                      React.createElement("button",{style:iBtn(C.blue),onClick:()=>setDetalheOS(d),title:"Ver detalhes"},"👁"),
+                      React.createElement("button",{style:iBtn(C.green),onClick:()=>setEditOS(d),title:"Editar"},"✏️"),
+                      React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id),title:"Excluir"},"🗑")
+                    )
+                  ])
+                })
+          ),
+          totalPags>1&&React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:12}},
+            React.createElement("button",{style:{...iBtn(C.blue),opacity:pagina===1?0.3:1},disabled:pagina===1,onClick:()=>setPagina(p=>p-1)},"← Anterior"),
+            React.createElement("span",{style:{fontSize:12,color:C.muted}},`Pág ${pagina}/${totalPags} — ${(pagina-1)*POR_PAG+1}–${Math.min(pagina*POR_PAG,filtered.length)} de ${filtered.length}`),
+            React.createElement("button",{style:{...iBtn(C.blue),opacity:pagina===totalPags?0.3:1},disabled:pagina===totalPags,onClick:()=>setPagina(p=>p+1)},"Próxima →")
           )
+        )
       )
     ),
-
-    // Modal detalhe
-    detalheOS&&React.createElement(Modal,{title:`OS ${detalheOS.num} — ${detalheOS.cond}`,onClose:()=>setDetalheOS(null),width:560},
+    detalheOS&&React.createElement(Modal,{title:`OS ${detalheOS.num} — ${detalheOS.cond}`,onClose:()=>setDetalheOS(null),width:580},
       React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"10px 14px",display:"flex",gap:16,flexWrap:"wrap",marginBottom:12}},
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Técnico"),React.createElement("div",{style:{color:C.cyan,fontWeight:600}},detalheOS.tec)),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data"),React.createElement("div",null,fmt(detalheOS.data))),
@@ -808,15 +817,23 @@ function OSModule({tecsBanco=TECNICOS}){
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Prioridade"),React.createElement(Pill,{c:detalheOS.pri==="Alta"?C.red:detalheOS.pri==="Média"?C.yellow:C.green},detalheOS.pri||"Média")),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Status"),React.createElement(Pill,{c:detalheOS.status==="Aberto"?C.red:C.green},detalheOS.status))
       ),
-      React.createElement("label",{style:{...base.lbl,display:"flex",alignItems:"center",gap:6,marginBottom:6}},React.createElement("span",{style:{color:C.blue}},"📝"),"Relato Técnico"),
+      React.createElement("label",{style:{...base.lbl,marginBottom:6,display:"block"}},"📝 Relato Técnico"),
       detalheOS.relato
-        ?React.createElement("div",{style:{background:C.bg,border:`1px solid ${C.blue}33`,borderRadius:8,padding:"14px 16px",fontSize:13,color:C.text,lineHeight:1.8,whiteSpace:"pre-wrap",maxHeight:300,overflowY:"auto"}},detalheOS.relato)
-        :React.createElement("div",{style:{background:C.bg,border:`1px dashed ${C.border}`,borderRadius:8,padding:"20px 16px",textAlign:"center",color:C.dim,fontSize:13}},"Nenhum relato registrado."),
+        ?React.createElement("div",{style:{background:C.bg,border:`1px solid ${C.blue}33`,borderRadius:8,padding:"14px 16px",fontSize:13,color:C.text,lineHeight:1.8,whiteSpace:"pre-wrap",maxHeight:250,overflowY:"auto"}},detalheOS.relato)
+        :React.createElement("div",{style:{background:C.bg,border:`1px dashed ${C.border}`,borderRadius:8,padding:"20px",textAlign:"center",color:C.dim,fontSize:13}},"Nenhum relato registrado."),
+      detalheOS.foto_url&&React.createElement("div",{style:{marginTop:12}},
+        React.createElement("label",{style:base.lbl},"📸 Foto"),
+        React.createElement("img",{src:detalheOS.foto_url,style:{width:"100%",borderRadius:8,marginTop:4,maxHeight:200,objectFit:"cover"}})
+      ),
       React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
         detalheOS.relato&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>navigator.clipboard?.writeText(detalheOS.relato)},"📋 Copiar"),
+        detalheOS.laudo_url&&React.createElement("a",{href:detalheOS.laudo_url,download:detalheOS.laudo_nome||"laudo.pdf",style:{...btnStyle(C.red),textDecoration:"none"}},"📄 Baixar PDF"),
+        React.createElement("button",{style:btnStyle(C.green),onClick:()=>{setDetalheOS(null);setEditOS(detalheOS);}},"✏️ Editar"),
         React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setDetalheOS(null)},"Fechar")
       )
-    )
+    ),
+    editOS&&React.createElement(EditOSModal,{item:editOS,onClose:()=>setEditOS(null)}),
+    confirmDel&&React.createElement(Confirm,{msg:"Excluir esta OS? Esta ação não pode ser desfeita.",onYes:()=>delOS(confirmDel),onNo:()=>setConfirmDel(null)})
   );
 }
 
@@ -1260,7 +1277,7 @@ function Dashboard({setTab}){
         else mapMes[k].fechadas++;
       });
       // Override com totais reais da RISEG por mês 2026
-      var overrides={"2026-01":535,"2026-02":563,"2026-03":473,"2026-04":374,"2026-05":390};
+      var overrides={"2026-01":535,"2026-02":563,"2026-03":473,"2026-04":374,"2026-05":394};
       var osPorMes=Object.values(mapMes).sort(function(a,b){return a.key.localeCompare(b.key);}).map(function(d){
         if(overrides[d.key]!==undefined){d.total=overrides[d.key];}
         return d;
