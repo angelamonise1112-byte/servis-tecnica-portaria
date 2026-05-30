@@ -1179,6 +1179,7 @@ function Dashboard({setTab}){
 
   useEffect(()=>{
     async function loadAll(){
+      try{
       setLoading(true);
       const[
         {data:osData},{data:tecData},{data:condData},
@@ -1261,7 +1262,7 @@ function Dashboard({setTab}){
       // Override com totais reais da RISEG por mês 2026
       var overrides={"2026-01":535,"2026-02":563,"2026-03":473,"2026-04":374,"2026-05":390};
       var osPorMes=Object.values(mapMes).sort(function(a,b){return a.key.localeCompare(b.key);}).map(function(d){
-        if(overrides[d.key]!==undefined)return Object.assign({},d,{total:overrides[d.key]});
+        if(overrides[d.key]!==undefined){d.total=overrides[d.key];}
         return d;
       });
 
@@ -1282,6 +1283,7 @@ function Dashboard({setTab}){
         osPorMes,osAbertas16:osAb.slice(0,6)
       });
       setLoading(false);
+      }catch(err){console.error("Dashboard erro:",err);setLoading(false);}
     }
     loadAll();
   },[anoFiltro,mesFiltro,tick]);
