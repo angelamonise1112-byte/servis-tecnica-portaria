@@ -1986,7 +1986,7 @@ function Pedidos({usuarioAtual}){
     </tr></thead><tbody>
     ${rows.map((d,i)=>`<tr><td>${i+1}</td><td>${d.cond||""}</td><td>${fmt(d.data)||""}</td><td>${d.cod||""}</td><td>${d.quant||""}</td><td>${d.descricao||""}</td><td>${d.os||""}</td><td>${d.pedido||""}</td><td>${d.requisicao||""}</td><td>${fmt(d.retirada)||""}</td><td>${fmt(d.devolucao)||""}</td><td>${d.obs||""}</td><td><span class="st ${d.status}">${d.status}</span></td></tr>`).join("")}
     </tbody></table>
-    <script>window.onload=()=>window.print();</script></body></html>`;
+    <scr"+"ipt>window.onload=()=>window.print();</scr"+"ipt></body></html>`;
     w.document.write(html);w.document.close();
   };
 
