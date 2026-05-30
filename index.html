@@ -658,7 +658,23 @@ function OSModule({tecsBanco=TECNICOS,onSave}){
 
   const load=useCallback(async()=>{
     setLoading(true);
-    const{data:rows}=await sb.from("os").select("*").order("data",{ascending:false});
+    // Cruzar OS com endereços dos condomínios
+    const [{data:rows},{data:conds}]=await Promise.all([
+      sb.from("os").select("*").order("data",{ascending:false}),
+      sb.from("condominios").select("nome,endereco,tecnico")
+    ]);
+    // Montar mapa de endereços
+    const mapEnd={};
+    (conds||[]).forEach(c=>{if(c.nome)mapEnd[c.nome.toLowerCase()]={endereco:c.endereco||"",tecnico:c.tecnico||""};});
+    function buscarEnd(nomeCond){
+      if(!nomeCond)return{endereco:"",tecnico:""};
+      const exato=mapEnd[nomeCond.toLowerCase()];
+      if(exato)return exato;
+      const key=Object.keys(mapEnd).find(k=>k.includes((nomeCond||"").toLowerCase().slice(0,12))||(nomeCond||"").toLowerCase().includes(k.slice(0,12)));
+      return key?mapEnd[key]:{endereco:"",tecnico:""};
+    }
+    // Adicionar endereço em cada OS
+    if(rows){rows.forEach(r=>{const info=buscarEnd(r.cond);r._endereco=info.endereco;r._tecCond=info.tecnico;});}
     // Ordenar: abertas primeiro por data desc, depois fechadas por data_fechamento desc
     if(rows){rows.sort((a,b)=>{
       if(a.status==="Aberto"&&b.status!=="Aberto")return -1;
@@ -874,14 +890,23 @@ function OSModule({tecsBanco=TECNICOS,onSave}){
             filtered.length===0
               ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma OS encontrada")
               :React.createElement(Table,{
-                  cols:["Nº OS","📅 Abertura","📅 Fechamento","Condomínio","Técnico","Problema","Prioridade","Status","Relato","Arquivos","Ações"],
+                  cols:["Nº OS","📅 Abertura","📅 Fechamento","Condomínio","📍 Endereço","Técnico","Problema","Prioridade","Status","Relato","Arquivos","Ações"],
                   rows:paginado.map(d=>[
                     React.createElement("span",{style:{color:C.cyan,fontWeight:600,cursor:"pointer"},onClick:()=>setDetalheOS(d)},d.num),
                     React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},fmt(d.data)),
                     d.data_fechamento
                       ?React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap",color:C.green}},fmt(d.data_fechamento))
                       :React.createElement("span",{style:{color:C.dim,fontSize:11}},"—"),
-                    React.createElement("div",{style:{fontSize:11,maxWidth:140,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d.cond),
+                    React.createElement("div",{style:{fontSize:11,maxWidth:130,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d.cond),
+                    d._endereco
+                      ?React.createElement("div",{style:{fontSize:10,maxWidth:130,lineHeight:1.4}},
+                          React.createElement("div",{style:{color:C.blue,wordBreak:"break-word"}},d._endereco),
+                          React.createElement("div",{style:{display:"flex",gap:4,marginTop:3}},
+                            React.createElement("a",{href:"https://maps.google.com/?q="+encodeURIComponent(d._endereco),target:"_blank",style:{color:C.blue,fontSize:9,textDecoration:"none"}},"🗺 Maps"),
+                            React.createElement("a",{href:"https://waze.com/ul?q="+encodeURIComponent(d._endereco),target:"_blank",style:{color:C.cyan,fontSize:9,textDecoration:"none"}},"🔵 Waze")
+                          )
+                        )
+                      :React.createElement("span",{style:{color:C.dim,fontSize:11}},"—"),
                     React.createElement("div",{style:{fontSize:11,maxWidth:100,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d.tec),
                     React.createElement("div",{style:{fontSize:11,maxWidth:140,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d.prob),
                     React.createElement(Pill,{c:d.pri==="Alta"?C.red:d.pri==="Média"?C.yellow:C.green},d.pri||"Média"),
@@ -917,6 +942,14 @@ function OSModule({tecsBanco=TECNICOS,onSave}){
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Técnico"),React.createElement("div",{style:{color:C.cyan,fontWeight:600}},detalheOS.tec)),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data"),React.createElement("div",null,fmt(detalheOS.data))),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Problema"),React.createElement("div",null,detalheOS.prob)),
+        detalheOS._endereco&&React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"📍 Endereço"),
+          React.createElement("div",{style:{color:C.blue,fontSize:13}},detalheOS._endereco),
+          React.createElement("div",{style:{display:"flex",gap:8,marginTop:6}},
+            React.createElement("a",{href:"https://maps.google.com/?q="+encodeURIComponent(detalheOS._endereco),target:"_blank",style:{background:C.blue+"22",border:"1px solid "+C.blue+"44",color:C.blue,borderRadius:8,padding:"4px 12px",fontSize:11,textDecoration:"none",fontWeight:600}},"🗺 Google Maps"),
+            React.createElement("a",{href:"https://waze.com/ul?q="+encodeURIComponent(detalheOS._endereco),target:"_blank",style:{background:C.cyan+"22",border:"1px solid "+C.cyan+"44",color:C.cyan,borderRadius:8,padding:"4px 12px",fontSize:11,textDecoration:"none",fontWeight:600}},"🔵 Waze")
+          )
+        ),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Prioridade"),React.createElement(Pill,{c:detalheOS.pri==="Alta"?C.red:detalheOS.pri==="Média"?C.yellow:C.green},detalheOS.pri||"Média")),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Status"),React.createElement(Pill,{c:detalheOS.status==="Aberto"?C.red:C.green},detalheOS.status))
       ),

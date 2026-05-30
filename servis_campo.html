@@ -140,18 +140,40 @@ function ListaOS({usuario,onSelect,onLogout}){
 
   const load=useCallback(async()=>{
     setLoading(true);
-    const{data:os}=await sb.from("os").select("*").eq("status","Aberto").order("data",{ascending:false});
-    const{data:campo}=await sb.from("os_campo").select("*");
+    const[{data:os},{data:campo},{data:conds}]=await Promise.all([
+      sb.from("os").select("*").eq("status","Aberto").order("data",{ascending:false}),
+      sb.from("os_campo").select("*"),
+      sb.from("condominios").select("nome,endereco")
+    ]);
+    // Cruzar OS com endereços dos condomínios
+    const mapConds={};
+    (conds||[]).forEach(c=>{if(c.nome)mapConds[c.nome.toLowerCase()]=c.endereco||"";});
+    function buscarEndereco(nomeCond){
+      if(!nomeCond)return "";
+      // Match exato
+      const exato=mapConds[nomeCond.toLowerCase()];
+      if(exato)return exato;
+      // Match parcial
+      const key=Object.keys(mapConds).find(k=>k.includes(nomeCond.toLowerCase().slice(0,12))||nomeCond.toLowerCase().includes(k.slice(0,12)));
+      return key?mapConds[key]:"";
+    }
     const merged=(os||[]).map(o=>{
       const c=(campo||[]).find(x=>x.num===o.num&&x.tec===usuario.nome);
-      return {...o,campo:c||null};
+      return {...o,campo:c||null,endereco:buscarEndereco(o.cond)};
     });
     setOsList(merged);
     setLoading(false);
   },[usuario]);
 
   useEffect(()=>{load();},[load]);
-  useEffect(()=>{const t=setInterval(load,60000);return()=>clearInterval(t);},[load]);
+  useEffect(()=>{
+    const t=setInterval(load,30000);
+    // Recarregar quando a aba/janela ganhar foco
+    const onFocus=()=>load();
+    window.addEventListener("focus",onFocus);
+    document.addEventListener("visibilitychange",()=>{if(!document.hidden)load();});
+    return()=>{clearInterval(t);window.removeEventListener("focus",onFocus);};
+  },[load]);
 
   const filtered=filtro==="Minhas"?osList.filter(o=>o.tec===usuario.nome):
     filtro==="Todas"?osList:
@@ -222,7 +244,11 @@ function ListaOS({usuario,onSelect,onLogout}){
               :React.createElement("span",{style:{background:C.dim+"22",color:C.dim,fontSize:10,padding:"2px 8px",borderRadius:10}},"Aguardando")
           ),
           React.createElement("div",{style:{fontSize:14,fontWeight:600,marginBottom:4}},os.cond),
-          React.createElement("div",{style:{fontSize:12,color:C.muted,marginBottom:6}},os.prob),
+          React.createElement("div",{style:{fontSize:12,color:C.muted,marginBottom:4}},os.prob),
+          os.endereco&&React.createElement("div",{style:{display:"flex",alignItems:"center",gap:4,marginBottom:6}},
+            React.createElement("span",{style:{fontSize:11}},"📍"),
+            React.createElement("span",{style:{fontSize:11,color:C.cyan}},os.endereco)
+          ),
           React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
             React.createElement("span",{style:{fontSize:11,color:C.dim}},"📅 "+os.data),
             React.createElement("span",{style:{fontSize:11,color:C.blue}},"Ver detalhes →")
@@ -242,14 +268,26 @@ function DetalheOS({os,usuario,onBack}){
   const [historicoOS,setHistoricoOS]=useState([]);
 
   useEffect(()=>{
-    // Busca endereço: tenta exato, depois parcial com primeiras palavras
+    // Busca endereço com múltiplas estratégias de match
     (async()=>{
+      // 1. Match exato
       let res=await sb.from("condominios").select("nome,endereco").eq("nome",os.cond).limit(1);
-      if(!res.data||res.data.length===0){
-        const palavras=os.cond.split(" ").filter(p=>p.length>3).slice(0,3).join(" ");
-        res=await sb.from("condominios").select("nome,endereco").ilike("nome","%"+palavras+"%").limit(1);
+      // 2. Match parcial com nome completo
+      if(!res.data||res.data.length===0||!res.data[0].endereco){
+        res=await sb.from("condominios").select("nome,endereco").ilike("nome","%"+os.cond+"%").limit(1);
       }
-      if(res.data&&res.data[0]&&res.data[0].endereco)setEnderecoCond(res.data[0].endereco);
+      // 3. Match com palavras principais (ignora artigos)
+      if(!res.data||res.data.length===0||!res.data[0].endereco){
+        const stop=["do","da","de","dos","das","e","o","a","os","as"];
+        const palavras=os.cond.split(" ").filter(p=>p.length>3&&!stop.includes(p.toLowerCase())).slice(0,4);
+        for(const p of palavras){
+          res=await sb.from("condominios").select("nome,endereco").ilike("nome","%"+p+"%").limit(1);
+          if(res.data&&res.data[0]&&res.data[0].endereco)break;
+        }
+      }
+      if(res.data&&res.data[0]&&res.data[0].endereco){
+        setEnderecoCond(res.data[0].endereco);
+      }
     })();
     sb.from("os").select("num,data,prob,status,relato").eq("cond",os.cond).eq("status","Fechado")
       .order("data",{ascending:false}).limit(2)
