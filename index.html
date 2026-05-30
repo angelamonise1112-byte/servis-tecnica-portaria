@@ -347,7 +347,49 @@ function HorasExtras({tecsBanco=TECNICOS,onSave}){
           ),
           (busca||filtTec||filtStatus)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setBusca("");setFiltTec("");setFiltStatus("");setPage(1);}},"✕ Limpar")
         ),
-        loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+        // Visão por área
+      verArea&&!loading&&React.createElement("div",{style:{marginBottom:16}},
+        areas.length===0
+          ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma área cadastrada. Edite os condomínios e preencha o campo Divisão de Área.")
+          :React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14}},
+            areas.map(area=>{
+              const condArea=filtered.filter(d=>d.area_tecnico===area);
+              const tecArea=condArea[0]?.tecnico||"";
+              return React.createElement("div",{key:area,style:{background:C.card,border:`1px solid ${C.blue}44`,borderRadius:12,overflow:"hidden"}},
+                // Header da área
+                React.createElement("div",{style:{background:C.blue+"22",padding:"10px 14px",borderBottom:`1px solid ${C.blue}33`}},
+                  React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.blue}},area),
+                  tecArea&&React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"👷 "+tecArea),
+                  React.createElement("div",{style:{fontSize:11,color:C.dim,marginTop:1}},condArea.length+" condomínio(s)")
+                ),
+                // Lista de condomínios da área
+                React.createElement("div",{style:{padding:"8px 0",maxHeight:300,overflowY:"auto"}},
+                  condArea.map((c,i)=>React.createElement("div",{key:i,style:{padding:"8px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
+                    React.createElement("div",null,
+                      React.createElement("div",{style:{fontSize:12,fontWeight:600}},c.nome),
+                      c.endereco&&React.createElement("div",{style:{fontSize:10,color:C.muted,marginTop:2}},c.endereco)
+                    )
+                  ))
+                )
+              );
+            }),
+            // Condomínios sem área
+            filtered.filter(d=>!d.area_tecnico).length>0&&React.createElement("div",{style:{background:C.card,border:`1px solid ${C.dim}44`,borderRadius:12,overflow:"hidden"}},
+              React.createElement("div",{style:{background:C.dim+"22",padding:"10px 14px",borderBottom:`1px solid ${C.dim}33`}},
+                React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.dim}},"Sem área definida"),
+                React.createElement("div",{style:{fontSize:11,color:C.dim,marginTop:1}},filtered.filter(d=>!d.area_tecnico).length+" condomínio(s)")
+              ),
+              React.createElement("div",{style:{padding:"8px 0",maxHeight:300,overflowY:"auto"}},
+                filtered.filter(d=>!d.area_tecnico).map((c,i)=>React.createElement("div",{key:i,style:{padding:"8px 14px",borderBottom:`1px solid ${C.border}`}},
+                  React.createElement("div",{style:{fontSize:12,fontWeight:600}},c.nome),
+                  c.endereco&&React.createElement("div",{style:{fontSize:10,color:C.muted,marginTop:2}},c.endereco)
+                ))
+              )
+            )
+          )
+      ),
+      !verArea&&loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+      !verArea&&
         React.createElement(Card,null,
           React.createElement(Table,{
             cols:["Técnico","Mat","Data","Tipo","H. Brutas","H. Total","Status","Ações"],
@@ -1900,6 +1942,8 @@ function Condominios({onSave}){
   const [confirmDel,setConfirmDel]=useState(null);
   const [busca,setBusca]=useState("");
   const [filtTec,setFiltTec]=useState("");
+  const [filtArea,setFiltArea]=useState("");
+  const [verArea,setVerArea]=useState(false);
   const [verObs,setVerObs]=useState(null);
   const load=useCallback(async()=>{
     setLoading(true);
@@ -1907,10 +1951,12 @@ function Condominios({onSave}){
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
+  const areas=useMemo(()=>[...new Set(data.map(d=>d.area_tecnico).filter(Boolean))].sort(),[data]);
   const filtered=useMemo(()=>data.filter(d=>
-    (!busca||d.nome.toLowerCase().includes(busca.toLowerCase())||( d.endereco||"").toLowerCase().includes(busca.toLowerCase()))&&
-    (!filtTec||d.tecnico===filtTec)
-  ),[data,busca,filtTec]);
+    (!busca||d.nome.toLowerCase().includes(busca.toLowerCase())||(d.endereco||"").toLowerCase().includes(busca.toLowerCase()))&&
+    (!filtTec||d.tecnico===filtTec)&&
+    (!filtArea||d.area_tecnico===filtArea)
+  ),[data,busca,filtTec,filtArea]);
   const exportarPDF=()=>{
     const w=window.open("","_blank");
     var html="<!DOCTYPE html><html><head><meta charset=\"UTF-8\">";
@@ -1924,9 +1970,9 @@ function Condominios({onSave}){
     html+="@media print{body{margin:0}}</style></head><body>";
     html+="<h2>🏢 Relatório de Condomínios — Servis Técnica</h2>";
     html+="<div class=\"sub\">Gerado em: "+new Date().toLocaleString("pt-BR")+" | Filtros: "+(filtTec||"Todos técnicos")+" | "+(busca||"Sem busca")+" | "+filtered.length+" registros</div>";
-    html+="<table><thead><tr><th>#</th><th>Nome</th><th>Endereço</th><th>Técnico Responsável</th><th>Obs/IPs</th></tr></thead><tbody>";
+    html+="<table><thead><tr><th>#</th><th>Nome</th><th>Área/Técnico</th><th>Endereço</th><th>Técnico Responsável</th><th>Obs/IPs</th></tr></thead><tbody>";
     filtered.forEach(function(d,i){
-      html+="<tr><td>"+(i+1)+"</td><td>"+(d.nome||"")+"</td><td>"+(d.endereco||"—")+"</td><td>"+(d.tecnico||"—")+"</td><td>"+(d.obs?d.obs.slice(0,60)+"...":"—")+"</td></tr>";
+      html+="<tr><td>"+(i+1)+"</td><td>"+(d.nome||"")+"</td><td>"+(d.area_tecnico||"—")+"</td><td>"+(d.endereco||"—")+"</td><td>"+(d.tecnico||"—")+"</td><td>"+(d.obs?d.obs.slice(0,60)+"...":"—")+"</td></tr>";
     });
     html+="</tbody></table><scr"+"ipt>window.onload=function(){window.print()};</scr"+"ipt></body></html>";
     w.document.write(html);w.document.close();
@@ -1940,7 +1986,7 @@ function Condominios({onSave}){
   const comEndereco=data.filter(d=>d.endereco).length;
   const comTec=data.filter(d=>d.tecnico).length;
   const EditModal=({item,onClose})=>{
-    const [f,setF]=useState(item||{nome:"",endereco:"",tecnico:"",obs:""});
+    const [f,setF]=useState(item||{nome:"",endereco:"",tecnico:"",area_tecnico:"",obs:""});
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
     return React.createElement(Modal,{title:item?.id?"Editar Condomínio":"Novo Condomínio",onClose,width:520},
       React.createElement("div",{style:{display:"grid",gap:12}},
@@ -1952,6 +1998,11 @@ function Condominios({onSave}){
             React.createElement("option",{value:""},"Selecionar técnico..."),
             TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
           )
+        ),
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"🗂 Divisão de Área"),
+          React.createElement("input",{style:base.inp,value:f.area_tecnico||"",onChange:upd("area_tecnico"),placeholder:"Ex: Área A - João Silva"}),
+          React.createElement("div",{style:{fontSize:11,color:C.dim,marginTop:4}},"Identifica a qual área/técnico este condomínio pertence")
         ),
         React.createElement("div",null,
           React.createElement("label",{style:base.lbl},"Obs / IPs / Senhas"),
@@ -1988,16 +2039,26 @@ function Condominios({onSave}){
         React.createElement("select",{style:{...base.sel,width:180},value:filtTec,onChange:e=>setFiltTec(e.target.value)},
           React.createElement("option",{value:""},"Todos técnicos"),...TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
         ),
+        React.createElement("select",{style:{...base.sel,width:170},value:filtArea,onChange:e=>setFiltArea(e.target.value)},
+          React.createElement("option",{value:""},"Todas as áreas"),
+          ...areas.map(a=>React.createElement("option",{key:a,value:a},a))
+        ),
+        React.createElement("button",{style:{...btnStyle(verArea?C.purple:C.dim,!verArea),fontSize:12},onClick:()=>setVerArea(v=>!v)},
+          verArea?"📋 Ver tabela":"🗂 Ver por área"
+        ),
         (busca||filtTec)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setBusca("");setFiltTec("");}},"✕ Limpar")
       ),
       loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
       React.createElement(Card,null,
         React.createElement("div",{style:{fontSize:12,color:C.dim,marginBottom:8}},`${filtered.length} registros`),
         React.createElement(Table,{
-          cols:["#","Nome","Endereço","Técnico Resp.","Obs/IPs","Ações"],
+          cols:["#","Nome","🗂 Área","Endereço","Técnico Resp.","Obs/IPs","Ações"],
           rows:filtered.map((d,i)=>[
             React.createElement("span",{style:{color:C.dim,fontSize:11}},i+1),
             React.createElement("span",{style:{fontWeight:600}},d.nome),
+            d.area_tecnico
+              ?React.createElement("div",{style:{display:"inline-block",background:C.blue+"22",border:"1px solid "+C.blue+"33",borderRadius:8,padding:"3px 10px",fontSize:11,color:C.blue,fontWeight:600}},d.area_tecnico)
+              :React.createElement("span",{style:{color:C.dim,fontSize:11}},"—"),
             d.endereco
               ?React.createElement("span",{style:{fontSize:12,color:C.muted}},d.endereco.length>40?d.endereco.slice(0,40)+"...":d.endereco)
               :React.createElement("span",{style:{color:C.dim,fontStyle:"italic",fontSize:12}},"Não informado"),
