@@ -1474,6 +1474,26 @@ function Condominios(){
     (!busca||d.nome.toLowerCase().includes(busca.toLowerCase())||( d.endereco||"").toLowerCase().includes(busca.toLowerCase()))&&
     (!filtTec||d.tecnico===filtTec)
   ),[data,busca,filtTec]);
+  const exportarPDF=()=>{
+    const w=window.open("","_blank");
+    var html="<!DOCTYPE html><html><head><meta charset=\"UTF-8\">";
+    html+="<style>body{font-family:Arial,sans-serif;font-size:10px;margin:20px}";
+    html+="h2{font-size:14px;margin-bottom:4px}";
+    html+=".sub{font-size:11px;color:#666;margin-bottom:12px}";
+    html+="table{width:100%;border-collapse:collapse}";
+    html+="th{background:#1a56db;color:#fff;padding:5px 6px;text-align:left;font-size:9px}";
+    html+="td{padding:4px 6px;border-bottom:1px solid #eee;font-size:9px}";
+    html+="tr:nth-child(even) td{background:#f8f9fa}";
+    html+="@media print{body{margin:0}}</style></head><body>";
+    html+="<h2>🏢 Relatório de Condomínios — Servis Técnica</h2>";
+    html+="<div class=\"sub\">Gerado em: "+new Date().toLocaleString("pt-BR")+" | Filtros: "+(filtTec||"Todos técnicos")+" | "+(busca||"Sem busca")+" | "+filtered.length+" registros</div>";
+    html+="<table><thead><tr><th>#</th><th>Nome</th><th>Endereço</th><th>Técnico Responsável</th><th>Obs/IPs</th></tr></thead><tbody>";
+    filtered.forEach(function(d,i){
+      html+="<tr><td>"+(i+1)+"</td><td>"+(d.nome||"")+"</td><td>"+(d.endereco||"—")+"</td><td>"+(d.tecnico||"—")+"</td><td>"+(d.obs?d.obs.slice(0,60)+"...":"—")+"</td></tr>";
+    });
+    html+="</tbody></table><scr"+"ipt>window.onload=function(){window.print()};</scr"+"ipt></body></html>";
+    w.document.write(html);w.document.close();
+  };
   const save=async item=>{
     if(item.id&&data.find(x=>x.id===item.id)){await sb.from("condominios").update(item).eq("id",item.id);}
     else{await sb.from("condominios").insert(item);}
@@ -1514,7 +1534,10 @@ function Condominios(){
         React.createElement("div",{style:{fontSize:18,fontWeight:700}},"▣ Condomínios"),
         React.createElement("div",{style:{fontSize:12,color:C.muted}},`${data.length} condomínios cadastrados`)
       ),
-      React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Novo")
+      React.createElement("div",{style:{display:"flex",gap:8}},
+        React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:12},onClick:exportarPDF},"📄 Exportar PDF"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Novo")
+      )
     ),
     React.createElement("div",{style:{padding:"20px 24px"}},
       React.createElement(Grid,{cols:4,mb:16},
