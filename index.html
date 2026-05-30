@@ -289,189 +289,109 @@ function HorasExtras({tecsBanco=TECNICOS,onSave}){
   const [busca,setBusca]=useState("");
   const [filtTec,setFiltTec]=useState("");
   const [filtStatus,setFiltStatus]=useState("");
-  const [page,setPage]=useState(1);
-  const [subPage,setSubPage]=useState("tabela");
-  const PER=9;
+
   const load=useCallback(async()=>{
     setLoading(true);
     const{data:rows}=await sb.from("horas_extras").select("*").order("data",{ascending:false});
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
-  const filtered=useMemo(()=>data.filter(d=>
-    (!busca||d.tec.toLowerCase().includes(busca.toLowerCase())||d.tipo.toLowerCase().includes(busca.toLowerCase()))&&
-    (!filtTec||d.tec===filtTec)&&(!filtStatus||d.status===filtStatus)
-  ),[data,busca,filtTec,filtStatus]);
-  const pages=Math.ceil(filtered.length/PER)||1;
-  const shown=filtered.slice((page-1)*PER,page*PER);
-  const pendentes=data.filter(d=>d.status==="Pendente").length;
-  const totalH=data.reduce((s,d)=>s+(d.total_h||0),0);
+
   const save=async item=>{
     if(item.id&&data.find(x=>x.id===item.id)){await sb.from("horas_extras").update(item).eq("id",item.id);}
     else{await sb.from("horas_extras").insert(item);}
     setModal(null);load();if(onSave)onSave();
   };
   const del=async id=>{await sb.from("horas_extras").delete().eq("id",id);setConfirmDel(null);load();if(onSave)onSave();};
-  const exportCSV=()=>{
-    const h=["ID","Técnico","Mat","Data","Tipo","H.Brutas","Mult","H.Total","Status"];
-    const rows=filtered.map(d=>[d.id,d.tec,d.mat,d.data,d.tipo,d.h_brutas,d.mult,d.total_h,d.status]);
-    const csv=[h,...rows].map(r=>r.join(";")).join("\n");
-    const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download="horas_extras.csv";a.click();
-  };
+
+  const filtered=useMemo(()=>data.filter(d=>
+    (!busca||(d.tec||"").toLowerCase().includes(busca.toLowerCase()))&&
+    (!filtTec||d.tec===filtTec)&&
+    (!filtStatus||d.status===filtStatus)
+  ),[data,busca,filtTec,filtStatus]);
+
+  const totalH=filtered.reduce((s,d)=>s+(d.total_h||0),0);
+  const pendentes=filtered.filter(d=>d.status==="Pendente").length;
+  const aprovadas=filtered.filter(d=>d.status==="Aprovado").length;
+
+  const tecData=useMemo(()=>TECNICOS.map(t=>({
+    nome:t.nome,
+    total:filtered.filter(d=>d.tec===t.nome).reduce((s,d)=>s+(d.total_h||0),0),
+    qtd:filtered.filter(d=>d.tec===t.nome).length
+  })).filter(t=>t.total>0).sort((a,b)=>b.total-a.total),[filtered]);
+
+  const maxT=Math.max(...tecData.map(t=>t.total),1);
+
   return React.createElement("div",null,
     React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
-      React.createElement("div",null,React.createElement("div",{style:{fontSize:18,fontWeight:700}},"⏱ Horas Extras"),React.createElement("div",{style:{fontSize:12,color:C.muted}},`${pendentes} pendentes`)),
-      React.createElement("div",{style:{display:"flex",gap:8}},
-        React.createElement("button",{style:btnStyle(C.dim,true),onClick:exportCSV},"📥 CSV"),
-        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Nova HE")
-      )
+      React.createElement("div",{style:{fontSize:18,fontWeight:700}},"⏱ Horas Extras"),
+      React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Novo")
     ),
     React.createElement("div",{style:{padding:"20px 24px"}},
       React.createElement(Grid,{cols:4,mb:16},
-        React.createElement(KPI,{label:"Registros",value:data.length,color:C.blue}),
+        React.createElement(KPI,{label:"Registros",value:filtered.length,color:C.blue}),
         React.createElement(KPI,{label:"Total HE",value:fmtH(totalH),color:C.cyan}),
-        React.createElement(KPI,{label:"Aprovadas",value:data.filter(d=>d.status==="Aprovado").length,color:C.green}),
-        React.createElement(KPI,{label:"Pendentes",value:pendentes,color:C.yellow})
+        React.createElement(KPI,{label:"✅ Aprovadas",value:aprovadas,color:C.green}),
+        React.createElement(KPI,{label:"⏳ Pendentes",value:pendentes,color:C.yellow})
       ),
-      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14}},
-        ["tabela","relatorios"].map(s=>React.createElement("button",{key:s,style:btnStyle(C.blue,subPage!==s),onClick:()=>setSubPage(s)},s==="tabela"?"📋 Tabela":"📊 Relatórios"))
-      ),
-      subPage==="tabela"&&React.createElement("div",null,
-        React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
-          React.createElement("input",{style:{...base.inp,width:180},placeholder:"Buscar...",value:busca,onChange:e=>{setBusca(e.target.value);setPage(1)}}),
-          React.createElement("select",{style:{...base.sel,width:180},value:filtTec,onChange:e=>{setFiltTec(e.target.value);setPage(1)}},
-            React.createElement("option",{value:""},"Todos técnicos"),TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
-          ),
-          React.createElement("select",{style:{...base.sel,width:140},value:filtStatus,onChange:e=>{setFiltStatus(e.target.value);setPage(1)}},
-            React.createElement("option",{value:""},"Todos status"),...Object.keys(STATUS_HE).map(s=>React.createElement("option",{key:s,value:s},s))
-          ),
-          (busca||filtTec||filtStatus)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setBusca("");setFiltTec("");setFiltStatus("");setPage(1);}},"✕ Limpar")
+      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
+        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar técnico...",value:busca,onChange:e=>setBusca(e.target.value)}),
+        React.createElement("select",{style:{...base.sel,width:160},value:filtTec,onChange:e=>setFiltTec(e.target.value)},
+          React.createElement("option",{value:""},"Todos técnicos"),
+          ...TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
         ),
-        // Visão por área
-      verArea&&!loading&&React.createElement("div",{style:{marginBottom:16}},
-        areas.length===0
-          ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma área cadastrada. Edite os condomínios e preencha o campo Divisão de Área.")
-          :React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14}},
-            areas.map(area=>{
-              const condArea=filtered.filter(d=>d.area_tecnico===area);
-              const tecArea=condArea[0]?.tecnico||"";
-              return React.createElement("div",{key:area,style:{background:C.card,border:`1px solid ${C.blue}44`,borderRadius:12,overflow:"hidden"}},
-                // Header da área
-                React.createElement("div",{style:{background:C.blue+"22",padding:"10px 14px",borderBottom:`1px solid ${C.blue}33`}},
-                  React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.blue}},area),
-                  tecArea&&React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"👷 "+tecArea),
-                  React.createElement("div",{style:{fontSize:11,color:C.dim,marginTop:1}},condArea.length+" condomínio(s)")
-                ),
-                // Lista de condomínios da área
-                React.createElement("div",{style:{padding:"8px 0",maxHeight:300,overflowY:"auto"}},
-                  condArea.map((c,i)=>React.createElement("div",{key:i,style:{padding:"8px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
-                    React.createElement("div",null,
-                      React.createElement("div",{style:{fontSize:12,fontWeight:600}},c.nome),
-                      c.endereco&&React.createElement("div",{style:{fontSize:10,color:C.muted,marginTop:2}},c.endereco)
-                    )
-                  ))
+        React.createElement("select",{style:{...base.sel,width:140},value:filtStatus,onChange:e=>setFiltStatus(e.target.value)},
+          React.createElement("option",{value:""},"Todos status"),
+          React.createElement("option",{value:"Pendente"},"Pendente"),
+          React.createElement("option",{value:"Aprovado"},"Aprovado"),
+          React.createElement("option",{value:"Rejeitado"},"Rejeitado")
+        ),
+        (busca||filtTec||filtStatus)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setBusca("");setFiltTec("");setFiltStatus("");}
+},"✕ Limpar")
+      ),
+      // Gráfico por técnico
+      tecData.length>0&&React.createElement(Card,{style:{marginBottom:14}},
+        React.createElement(CardHeader,{title:"📊 HE por Técnico"}),
+        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+          tecData.map((t,i)=>React.createElement("div",{key:i},
+            React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:3,fontSize:12}},
+              React.createElement("span",null,t.nome),
+              React.createElement("span",{style:{color:C.cyan,fontWeight:700}},fmtH(t.total)+" ("+t.qtd+" reg.)")
+            ),
+            React.createElement("div",{style:{width:"100%",height:8,background:C.border,borderRadius:4,overflow:"hidden"}},
+              React.createElement("div",{style:{width:(t.total/maxT*100)+"%",height:"100%",background:`linear-gradient(90deg,${C.blue},${C.cyan})`,borderRadius:4}})
+            )
+          ))
+        )
+      ),
+      loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+      React.createElement(Card,null,
+        filtered.length===0
+          ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhum registro encontrado")
+          :React.createElement(Table,{
+              cols:["Técnico","Matrícula","Data","H. Brutas","Mult.","Total HE","Status","Ações"],
+              rows:filtered.map(d=>[
+                React.createElement("span",{style:{fontWeight:600}},d.tec),
+                React.createElement("span",{style:{fontSize:11,color:C.dim}},d.mat||"—"),
+                React.createElement("span",{style:{fontSize:11}},fmt(d.data)),
+                React.createElement("span",{style:{color:C.cyan}},fmtH(d.h_brutas||0)),
+                React.createElement("span",null,`${d.mult||1}x`),
+                React.createElement("span",{style:{color:C.green,fontWeight:600}},fmtH(d.total_h||0)),
+                React.createElement(Pill,{c:d.status==="Aprovado"?C.green:d.status==="Rejeitado"?C.red:C.yellow},d.status||"Pendente"),
+                React.createElement("div",{style:{display:"flex",gap:4}},
+                  React.createElement("button",{style:iBtn(C.blue),onClick:()=>setModal(d)},"✏️"),
+                  React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id)},"🗑")
                 )
-              );
-            }),
-            // Condomínios sem área
-            filtered.filter(d=>!d.area_tecnico).length>0&&React.createElement("div",{style:{background:C.card,border:`1px solid ${C.dim}44`,borderRadius:12,overflow:"hidden"}},
-              React.createElement("div",{style:{background:C.dim+"22",padding:"10px 14px",borderBottom:`1px solid ${C.dim}33`}},
-                React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.dim}},"Sem área definida"),
-                React.createElement("div",{style:{fontSize:11,color:C.dim,marginTop:1}},filtered.filter(d=>!d.area_tecnico).length+" condomínio(s)")
-              ),
-              React.createElement("div",{style:{padding:"8px 0",maxHeight:300,overflowY:"auto"}},
-                filtered.filter(d=>!d.area_tecnico).map((c,i)=>React.createElement("div",{key:i,style:{padding:"8px 14px",borderBottom:`1px solid ${C.border}`}},
-                  React.createElement("div",{style:{fontSize:12,fontWeight:600}},c.nome),
-                  c.endereco&&React.createElement("div",{style:{fontSize:10,color:C.muted,marginTop:2}},c.endereco)
-                ))
-              )
-            )
-          )
-      ),
-      !verArea&&loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
-      !verArea&&
-        React.createElement(Card,null,
-          React.createElement(Table,{
-            cols:["Técnico","Mat","Data","Tipo","H. Brutas","H. Total","Status","Ações"],
-            rows:shown.map(d=>[
-              d.tec,d.mat,fmt(d.data),d.tipo,
-              React.createElement("span",{style:{color:C.cyan}},fmtH(d.h_brutas||0)),
-              React.createElement("span",{style:{color:C.green,fontWeight:600}},fmtH(d.total_h||0)),
-              React.createElement(Pill,{c:STATUS_HE[d.status]?.c||C.dim},`${STATUS_HE[d.status]?.i} ${d.status}`),
-              React.createElement("div",{style:{display:"flex",gap:4}},
-                React.createElement("button",{style:iBtn(C.blue),onClick:()=>setModal(d)},"✏️"),
-                React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id)},"🗑")
-              )
-            ])
-          }),
-          React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:12,fontSize:12,color:C.muted}},
-            React.createElement("span",null,`${filtered.length} registros`),
-            React.createElement("div",{style:{display:"flex",gap:6}},
-              ["«","‹"].map(b=>React.createElement("button",{key:b,style:iBtn(C.dim),onClick:()=>setPage(p=>b==="«"?1:Math.max(1,p-1))},b)),
-              React.createElement("span",{style:{padding:"2px 8px"}},`${page}/${pages}`),
-              ["›","»"].map(b=>React.createElement("button",{key:b,style:iBtn(C.dim),onClick:()=>setPage(p=>b==="»"?pages:Math.min(pages,p+1))},b))
-            )
-          )
-        )
-      ),
-      subPage==="relatorios"&&React.createElement("div",null,
-        React.createElement(Card,{style:{marginBottom:16}},
-          React.createElement(CardHeader,{title:"Horas Extras por Técnico"}),
-          React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
-            React.createElement("select",{style:{...base.sel,width:160},value:filtTec,onChange:e=>setFiltTec(e.target.value)},
-              React.createElement("option",{value:""},"Todos técnicos"),TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
-            ),
-            React.createElement("select",{style:{...base.sel,width:140},value:filtStatus,onChange:e=>setFiltStatus(e.target.value)},
-              React.createElement("option",{value:""},"Todos status"),...Object.keys(STATUS_HE).map(s=>React.createElement("option",{key:s,value:s},s))
-            ),
-            (filtTec||filtStatus)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setFiltTec("");setFiltStatus("");}},"✕ Limpar")
-          ),
-          (()=>{
-            const tecData=TECNICOS.map(t=>({
-              nome:t.nome,
-              total:filtered.filter(d=>d.tec===t.nome).reduce((s,d)=>s+(d.total_h||0),0),
-              qtd:filtered.filter(d=>d.tec===t.nome).length
-            })).filter(t=>t.total>0).sort((a,b)=>b.total-a.total);
-            if(tecData.length===0)return React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Sem dados para o filtro selecionado");
-            const maxV=Math.max(...tecData.map(t=>t.total),1);
-            return React.createElement("div",null,
-              React.createElement("svg",{width:"100%",viewBox:`0 0 ${Math.max(tecData.length*70,400)} 180`,preserveAspectRatio:"xMidYMid meet"},
-                React.createElement("defs",null,
-                  React.createElement("linearGradient",{id:"ghe",x1:0,y1:0,x2:0,y2:1},
-                    React.createElement("stop",{offset:"0%",stopColor:C.cyan,stopOpacity:0.9}),
-                    React.createElement("stop",{offset:"100%",stopColor:C.cyan,stopOpacity:0.3})
-                  )
-                ),
-                [0.25,0.5,0.75,1].map(v=>React.createElement("line",{key:v,x1:0,y1:130*(1-v)+10,x2:"100%",y2:130*(1-v)+10,stroke:C.border,strokeWidth:0.5,strokeDasharray:"3,3"})),
-                tecData.map((t,i)=>{
-                  const W=Math.max(tecData.length*70,400);
-                  const bw=36;const gap=W/tecData.length;const x=i*gap+gap/2-bw/2;
-                  const bh=(t.total/maxV)*120;
-                  const nomeAbrev=t.nome.split(" ")[0];
-                  return React.createElement("g",{key:i},
-                    React.createElement("rect",{x,y:130-bh+10,width:bw,height:bh,fill:"url(#ghe)",rx:3}),
-                    React.createElement("text",{x:x+bw/2,y:130-bh+6,textAnchor:"middle",fontSize:9,fill:C.text,fontWeight:600},fmtH(t.total)),
-                    React.createElement("text",{x:x+bw/2,y:156,textAnchor:"middle",fontSize:8,fill:C.muted},nomeAbrev),
-                    React.createElement("text",{x:x+bw/2,y:167,textAnchor:"middle",fontSize:7,fill:C.dim},`${t.qtd}x`)
-                  );
-                })
-              ),
-              React.createElement("div",{style:{fontSize:11,color:C.dim,marginTop:4}},"Valores em horas — número abaixo da barra = quantidade de registros")
-            );
-          })()
-        ),
-        React.createElement(Card,null,
-          React.createElement(CardHeader,{title:"Status das Horas Extras"}),
-          React.createElement(Donut,{data:Object.keys(STATUS_HE).map(s=>({l:s,v:data.filter(d=>d.status===s).length,c:STATUS_HE[s].c}))})
-        )
+              ])
+            })
       )
     ),
-    modal!==null&&React.createElement(ModalHE,{item:modal.id?modal:null,onSave:save,onClose:()=>setModal(null),tecsBanco}),
+    modal!==null&&React.createElement(ModalHE,{item:modal?.id?modal:null,onSave:save,onClose:()=>setModal(null),tecsBanco}),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir este registro?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
   );
 }
 
-// ── ATESTADOS ─────────────────────────────────────────────────
+
 function ModalAtestado({item,onSave,onClose,tecsBanco=TECNICOS}){
   const [f,setF]=useState(item||{tec:tecsBanco[0]?.nome||TECNICOS[0].nome,mat:tecsBanco[0]?.mat||TECNICOS[0].mat,data:todayStr(),dias:1,retorno:"",motivo:MOTIVOS[0],status:"Em análise",resp:"Marcos Silva",obs:""});
   const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
@@ -2001,8 +1921,18 @@ function Condominios({onSave}){
         ),
         React.createElement("div",null,
           React.createElement("label",{style:base.lbl},"🗂 Divisão de Área"),
-          React.createElement("input",{style:base.inp,value:f.area_tecnico||"",onChange:upd("area_tecnico"),placeholder:"Ex: Área A - João Silva"}),
-          React.createElement("div",{style:{fontSize:11,color:C.dim,marginTop:4}},"Identifica a qual área/técnico este condomínio pertence")
+          React.createElement("select",{style:base.sel,value:f.area_tecnico||"",onChange:upd("area_tecnico")},
+            React.createElement("option",{value:""},"Selecionar área..."),
+            React.createElement("optgroup",{label:"── Supervisor 1 (Áreas A e B) ──"},
+              React.createElement("option",{value:"Área A"},"Área A"),
+              React.createElement("option",{value:"Área B"},"Área B")
+            ),
+            React.createElement("optgroup",{label:"── Supervisor 2 (Áreas C e D) ──"},
+              React.createElement("option",{value:"Área C"},"Área C"),
+              React.createElement("option",{value:"Área D"},"Área D")
+            )
+          ),
+          React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:4}},"Supervisor 1 → Áreas A e B  |  Supervisor 2 → Áreas C e D")
         ),
         React.createElement("div",null,
           React.createElement("label",{style:base.lbl},"Obs / IPs / Senhas"),
@@ -2049,6 +1979,78 @@ function Condominios({onSave}){
         (busca||filtTec)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setBusca("");setFiltTec("");}},"✕ Limpar")
       ),
       loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+      verArea?React.createElement("div",null,
+        React.createElement("div",{style:{background:C.card,borderRadius:10,padding:"12px 16px",marginBottom:14,border:`1px solid ${C.blue}33`}},
+          React.createElement("div",{style:{fontSize:12,fontWeight:700,color:C.blue,marginBottom:8}},"📋 Estrutura — 4 Áreas / 2 Supervisores"),
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
+            React.createElement("div",{style:{background:C.blue+"11",borderRadius:8,padding:"8px 12px"}},
+              React.createElement("div",{style:{fontSize:11,fontWeight:700,color:C.blue,marginBottom:3}},"👷 Supervisor 1 → Áreas A e B"),
+              React.createElement("div",{style:{fontSize:10,color:C.muted}},"Área A: 1 Técn. Manutenção + 1 Técn. Preventiva"),
+              React.createElement("div",{style:{fontSize:10,color:C.muted}},"Área B: 1 Técn. Manutenção + 1 Técn. Preventiva")
+            ),
+            React.createElement("div",{style:{background:C.green+"11",borderRadius:8,padding:"8px 12px"}},
+              React.createElement("div",{style:{fontSize:11,fontWeight:700,color:C.green,marginBottom:3}},"👷 Supervisor 2 → Áreas C e D"),
+              React.createElement("div",{style:{fontSize:10,color:C.muted}},"Área C: 1 Técn. Manutenção + 1 Técn. Preventiva"),
+              React.createElement("div",{style:{fontSize:10,color:C.muted}},"Área D: 1 Técn. Manutenção + 1 Técn. Preventiva")
+            )
+          )
+        ),
+        [
+          {sup:"Supervisor 1",cor:C.blue,areas:["Área A","Área B"]},
+          {sup:"Supervisor 2",cor:C.green,areas:["Área C","Área D"]}
+        ].map(function(sg,gi){
+          var total=sg.areas.reduce(function(t,a){return t+filtered.filter(function(d){return d.area_tecnico===a;}).length;},0);
+          return React.createElement("div",{key:gi,style:{marginBottom:16}},
+            React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"8px 14px",background:sg.cor+"22",borderRadius:10,border:"1px solid "+sg.cor+"44"}},
+              React.createElement("span",{style:{fontSize:18}},"👷"),
+              React.createElement("div",{style:{fontSize:14,fontWeight:800,color:sg.cor}},sg.sup+" — "+sg.areas.join(" e ")),
+              React.createElement("div",{style:{marginLeft:"auto",fontSize:12,color:sg.cor,fontWeight:600}},total+" cond.")
+            ),
+            React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
+              sg.areas.map(function(area){
+                var condArea=filtered.filter(function(d){return d.area_tecnico===area;});
+                return React.createElement("div",{key:area,style:{background:C.card,border:"1px solid "+sg.cor+"44",borderRadius:12,overflow:"hidden"}},
+                  React.createElement("div",{style:{background:sg.cor+"22",padding:"10px 14px",borderBottom:"1px solid "+sg.cor+"33"}},
+                    React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}},
+                      React.createElement("div",{style:{fontSize:13,fontWeight:700,color:sg.cor}},area),
+                      React.createElement("div",{style:{fontSize:18,fontWeight:800,color:sg.cor}},condArea.length)
+                    ),
+                    React.createElement("div",{style:{display:"flex",gap:4}},
+                      React.createElement("span",{style:{background:C.orange+"22",color:C.orange,fontSize:9,padding:"2px 7px",borderRadius:6,fontWeight:600}},"🔧 1 Manutenção"),
+                      React.createElement("span",{style:{background:C.green+"22",color:C.green,fontSize:9,padding:"2px 7px",borderRadius:6,fontWeight:600}},"🔍 1 Preventiva")
+                    )
+                  ),
+                  React.createElement("div",{style:{maxHeight:280,overflowY:"auto"}},
+                    condArea.length===0
+                      ?React.createElement("div",{style:{padding:"20px",textAlign:"center",color:C.dim,fontSize:12}},"Nenhum condomínio nesta área")
+                      :condArea.map(function(c,i){
+                          return React.createElement("div",{key:i,style:{padding:"7px 14px",borderBottom:"1px solid "+C.border}},
+                            React.createElement("div",{style:{fontSize:12,fontWeight:600}},c.nome),
+                            c.endereco&&React.createElement("div",{style:{fontSize:10,color:C.muted,marginTop:1}},c.endereco),
+                            c.tecnico&&React.createElement("div",{style:{fontSize:10,color:C.cyan,marginTop:1}},"👷 "+c.tecnico)
+                          );
+                        })
+                  )
+                );
+              })
+            )
+          );
+        }),
+        filtered.filter(function(d){return !d.area_tecnico;}).length>0&&React.createElement(Card,null,
+          React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:8}},
+            React.createElement("span",{style:{fontSize:13,fontWeight:700,color:C.dim}},"⚠ Sem área definida"),
+            React.createElement("span",{style:{fontSize:12,color:C.dim}},filtered.filter(function(d){return !d.area_tecnico;}).length+" condomínios")
+          ),
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:6}},
+            filtered.filter(function(d){return !d.area_tecnico;}).map(function(c,i){
+              return React.createElement("div",{key:i,style:{background:C.bg,borderRadius:8,padding:"8px 10px"}},
+                React.createElement("div",{style:{fontSize:12,fontWeight:600}},c.nome),
+                c.endereco&&React.createElement("div",{style:{fontSize:10,color:C.muted}},c.endereco)
+              );
+            })
+          )
+        )
+      ):
       React.createElement(Card,null,
         React.createElement("div",{style:{fontSize:12,color:C.dim,marginBottom:8}},`${filtered.length} registros`),
         React.createElement(Table,{
@@ -3801,6 +3803,14 @@ function OrgFotoCard({fotoKey,nome,cor,size}){
 // ── ORGANOGRAMA ──────────────────────────────────────────────
 function Organograma(){
   var [filial,setFilial]=useState("ceara");
+  var [condominios,setCondominios]=useState([]);
+  var [relatorio,setRelatorio]=useState(null);
+
+  useEffect(function(){
+    sb.from("condominios").select("nome,endereco,area_tecnico,tecnico").order("nome",{ascending:true})
+      .then(function(r){setCondominios(r.data||[]);});
+  },[]);
+
   var azul={bg:"#1e3a5f",border:"#3b82f6",text:"#bfdbfe",badge:"#1d4ed8"};
   var verde={bg:"#14402f",border:"#10b981",text:"#a7f3d0",badge:"#065f46"};
   var ciano={bg:"#0c2a3a",border:"#0ea5e9",text:"#bae6fd",badge:"#0369a1"};
@@ -3810,6 +3820,86 @@ function Organograma(){
   var amarelo={bg:"#2d1f00",border:"#f59e0b",text:"#fde68a",badge:"#b45309"};
   var verde2={bg:"#0f2d1f",border:"#10b981",text:"#a7f3d0",badge:"#065f46"};
   var ln="#334155";
+
+  // Agrupar condomínios por área
+  var condPorArea=useMemo(function(){
+    var map={};
+    condominios.forEach(function(c){
+      var a=c.area_tecnico||"Sem área";
+      if(!map[a])map[a]=[];
+      map[a].push(c);
+    });
+    return map;
+  },[condominios]);
+
+  function getCondArea(area){return condPorArea[area]||[];}
+
+  function gerarRelatorio(){
+    var areas=["Área A","Área B","Área C","Área D"];
+    var w=window.open("","_blank");
+    var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><style>";
+    html+="body{font-family:Arial,sans-serif;padding:24px;color:#1e293b;font-size:12px}";
+    html+="h1{font-size:18px;color:#1a3a6b;border-bottom:3px solid #3b82f6;padding-bottom:8px;margin-bottom:20px}";
+    html+="h2{font-size:14px;color:#fff;background:#1a3a6b;padding:6px 12px;border-radius:6px;margin:16px 0 8px}";
+    html+="h3{font-size:12px;color:#1a3a6b;margin:10px 0 4px;border-left:3px solid #3b82f6;padding-left:8px}";
+    html+="table{width:100%;border-collapse:collapse;margin-bottom:12px}";
+    html+="th{background:#374151;color:#fff;padding:5px 8px;text-align:left;font-size:10px}";
+    html+="td{padding:4px 8px;border-bottom:1px solid #e5e7eb;font-size:10px}";
+    html+="tr:nth-child(even) td{background:#f8faff}";
+    html+=".sup{background:#1e40af;color:#fff;padding:8px 14px;border-radius:8px;margin:12px 0 6px;font-weight:bold;font-size:13px}";
+    html+=".stat{display:inline-block;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:10px;font-size:10px;margin-right:6px}";
+    html+="@media print{body{padding:10px}}</style></head><body>";
+    html+="<h1>🏢 Relatório de Áreas — Servis Tecnologia em Segurança</h1>";
+    html+="<div style='margin-bottom:16px;font-size:11px;color:#6b7280'>Gerado em: "+new Date().toLocaleString("pt-BR")+" | Total: "+condominios.length+" condomínios</div>";
+
+    // Supervisor 1
+    html+="<div class='sup'>👷 Supervisor 1 — Áreas A e B</div>";
+    ["Área A","Área B"].forEach(function(area){
+      var conds=getCondArea(area);
+      var tecnico=conds[0]?conds[0].tecnico||"—":"—";
+      html+="<h3>"+area+" <span class='stat'>"+conds.length+" condomínios</span><span class='stat'>👷 "+tecnico+"</span></h3>";
+      if(conds.length>0){
+        html+="<table><thead><tr><th>#</th><th>Condomínio</th><th>Endereço</th><th>Técnico Resp.</th></tr></thead><tbody>";
+        conds.forEach(function(c,i){
+          html+="<tr><td>"+(i+1)+"</td><td>"+c.nome+"</td><td>"+(c.endereco||"—")+"</td><td>"+(c.tecnico||"—")+"</td></tr>";
+        });
+        html+="</tbody></table>";
+      }else{
+        html+="<p style='color:#6b7280;font-size:10px'>Nenhum condomínio nesta área.</p>";
+      }
+    });
+
+    // Supervisor 2
+    html+="<div class='sup' style='background:#065f46'>👷 Supervisor 2 — Áreas C e D</div>";
+    ["Área C","Área D"].forEach(function(area){
+      var conds=getCondArea(area);
+      var tecnico=conds[0]?conds[0].tecnico||"—":"—";
+      html+="<h3 style='border-color:#10b981;color:#065f46'>"+area+" <span class='stat' style='background:#d1fae5;color:#065f46'>"+conds.length+" condomínios</span><span class='stat' style='background:#d1fae5;color:#065f46'>👷 "+tecnico+"</span></h3>";
+      if(conds.length>0){
+        html+="<table><thead><tr><th>#</th><th>Condomínio</th><th>Endereço</th><th>Técnico Resp.</th></tr></thead><tbody>";
+        conds.forEach(function(c,i){
+          html+="<tr><td>"+(i+1)+"</td><td>"+c.nome+"</td><td>"+(c.endereco||"—")+"</td><td>"+(c.tecnico||"—")+"</td></tr>";
+        });
+        html+="</tbody></table>";
+      }else{
+        html+="<p style='color:#6b7280;font-size:10px'>Nenhum condomínio nesta área.</p>";
+      }
+    });
+
+    // Sem área
+    var semArea=condominios.filter(function(c){return !c.area_tecnico;});
+    if(semArea.length>0){
+      html+="<h2 style='background:#374151'>⚠ Sem Área Definida ("+semArea.length+")</h2>";
+      html+="<table><thead><tr><th>#</th><th>Condomínio</th><th>Endereço</th><th>Técnico Resp.</th></tr></thead><tbody>";
+      semArea.forEach(function(c,i){
+        html+="<tr><td>"+(i+1)+"</td><td>"+c.nome+"</td><td>"+(c.endereco||"—")+"</td><td>"+(c.tecnico||"—")+"</td></tr>";
+      });
+      html+="</tbody></table>";
+    }
+
+    html+="<scr"+"ipt>window.onload=function(){window.print()};</scr"+"ipt></body></html>";
+    w.document.write(html);w.document.close();
+  }
 
   function V(h){return React.createElement("div",{style:{width:2,height:h||28,background:ln,margin:"0 auto"}});}
   function H(w){return React.createElement("div",{style:{height:2,width:w||200,background:ln,margin:"0 auto"}});}
@@ -3824,6 +3914,7 @@ function Organograma(){
       role2?React.createElement("div",{style:{fontSize:10,color:azul.text,opacity:0.7}},""+role2):null
     );
   }
+
   function SupBox(fk,title,badge,cor){
     var c=cor||verde;
     return React.createElement("div",{style:{background:c.bg,border:"2px solid "+c.border,borderRadius:12,padding:"12px 16px",textAlign:"center",minWidth:170,boxShadow:"0 0 20px "+c.border+"22"}},
@@ -3831,14 +3922,23 @@ function Organograma(){
       React.createElement("div",{style:{fontSize:12,fontWeight:800,color:c.text,marginTop:6}},title)
     );
   }
-  function TecBox(fk,title,sub,cor){
+
+  // TecBox com nome do técnico via campo tecnico dos condomínios da área
+  function TecBox(fk,title,sub,cor,area){
     var c=cor||ciano;
-    return React.createElement("div",{style:{background:c.bg,border:"1.5px solid "+c.border,borderRadius:10,padding:"10px 8px",textAlign:"center",flex:1,minWidth:85}},
-      FC(fk,title,c,36),
-      React.createElement("div",{style:{fontSize:10,fontWeight:700,color:c.text,lineHeight:1.2,marginTop:6}},""+title),
-      React.createElement("div",{style:{fontSize:9,color:c.text,opacity:0.7,marginTop:2}},""+sub)
+    var condsArea=area?getCondArea(area):[];
+    var nomeTec=condsArea[0]?condsArea[0].tecnico||title:title;
+    return React.createElement("div",{style:{background:c.bg,border:"1.5px solid "+c.border,borderRadius:10,padding:"10px 8px",textAlign:"center",flex:1,minWidth:85,cursor:area?"pointer":"default"},
+      onClick:area?function(){setRelatorio(area);}:null,
+      title:area?"Clique para ver condomínios de "+area:""
+    },
+      FC(fk,nomeTec,c,36),
+      React.createElement("div",{style:{fontSize:10,fontWeight:700,color:c.text,lineHeight:1.2,marginTop:6}},""+nomeTec),
+      React.createElement("div",{style:{fontSize:9,color:c.text,opacity:0.7,marginTop:2}},""+sub),
+      area&&React.createElement("div",{style:{fontSize:9,color:c.border,marginTop:3,fontWeight:600}},condsArea.length+" cond.")
     );
   }
+
   function PlantonBox(fk,nome,subtipo,cor){
     return React.createElement("div",{style:{background:cor.bg,border:"1.5px solid "+cor.border,borderRadius:10,padding:"10px 8px",textAlign:"center",minWidth:80,flex:1}},
       FC(fk,nome,cor,36),
@@ -3846,6 +3946,7 @@ function Organograma(){
       React.createElement("div",{style:{fontSize:9,color:cor.text,opacity:0.7,marginTop:2}},""+subtipo)
     );
   }
+
   function FilialBox(fk,placeholder,cor){
     return React.createElement("div",{style:{background:cor.bg,border:"2px solid "+cor.border,borderRadius:12,padding:"14px 20px",textAlign:"center",minWidth:260,boxShadow:"0 0 20px "+cor.border+"22"}},
       Bdg(cor,"COORDENAÇÃO FILIAL"),FC(fk,"Coord",cor,48),
@@ -3853,21 +3954,69 @@ function Organograma(){
       React.createElement("div",{style:{fontSize:10,color:cor.text,opacity:0.8,marginTop:4}},"Gestão operacional da filial")
     );
   }
+
   function ApoioRow(items,cor){
     return React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},
       items.map(function(item,i){return React.createElement("div",{key:i,style:{fontSize:10,color:cor.text,background:"rgba(255,255,255,0.05)",borderRadius:6,padding:"3px 8px",borderLeft:"2px solid "+cor.border}},""+item);})
     );
   }
 
+  // Modal de relatório por área
+  function ModalArea({area,onClose}){
+    var conds=getCondArea(area);
+    var corArea=area==="Área A"||area==="Área B"?C.blue:C.green;
+    return React.createElement(Modal,{title:"🏢 "+area+" — "+conds.length+" condomínios",onClose,width:620},
+      conds.length===0
+        ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhum condomínio cadastrado nesta área ainda. Vá em Condomínios e defina a área de cada um.")
+        :React.createElement("div",null,
+            React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
+              React.createElement("div",{style:{background:corArea+"22",border:"1px solid "+corArea+"44",borderRadius:8,padding:"6px 14px",fontSize:12,color:corArea,fontWeight:600}},conds.length+" condomínios"),
+              conds[0]?.tecnico&&React.createElement("div",{style:{background:C.cyan+"22",border:"1px solid "+C.cyan+"44",borderRadius:8,padding:"6px 14px",fontSize:12,color:C.cyan,fontWeight:600}},"👷 "+conds[0].tecnico)
+            ),
+            React.createElement(Table,{
+              cols:["#","Condomínio","Endereço","Técnico Resp."],
+              rows:conds.map(function(c,i){return[
+                React.createElement("span",{style:{color:C.dim,fontSize:11}},i+1),
+                React.createElement("span",{style:{fontWeight:600,fontSize:12}},c.nome),
+                React.createElement("span",{style:{fontSize:11,color:C.muted}},c.endereco||"—"),
+                React.createElement("span",{style:{fontSize:11,color:C.cyan}},c.tecnico||"—")
+              ];})
+            })
+          ),
+      React.createElement("div",{style:{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}},
+        React.createElement("button",{style:btnStyle(C.green),onClick:function(){
+          var w=window.open("","_blank");
+          var conds2=getCondArea(area);
+          var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><style>body{font-family:Arial,sans-serif;padding:20px;font-size:11px}h2{font-size:15px;color:#1a3a6b;border-bottom:2px solid #3b82f6;padding-bottom:6px}th{background:#374151;color:#fff;padding:5px 8px;text-align:left}td{padding:4px 8px;border-bottom:1px solid #e5e7eb}tr:nth-child(even)td{background:#f8faff}</style></head><body>";
+          html+="<h2>🏢 "+area+" — Relatório de Condomínios</h2>";
+          html+="<p style='color:#6b7280;margin-bottom:12px'>Gerado em: "+new Date().toLocaleString("pt-BR")+" | "+conds2.length+" condomínios</p>";
+          html+="<table><thead><tr><th>#</th><th>Condomínio</th><th>Endereço</th><th>Técnico Responsável</th></tr></thead><tbody>";
+          conds2.forEach(function(c,i){html+="<tr><td>"+(i+1)+"</td><td>"+c.nome+"</td><td>"+(c.endereco||"—")+"</td><td>"+(c.tecnico||"—")+"</td></tr>";});
+          html+="</tbody></table><scr"+"ipt>window.onload=function(){window.print()};</scr"+"ipt></body></html>";
+          w.document.write(html);w.document.close();
+        }},"📄 Exportar PDF"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:onClose},"Fechar")
+      )
+    );
+  }
+
   function OrgCeara(){
     function SupBlockCE(fk,n){
-      var t1=n===1?["tec_a_ce","Técnico","Área A"]:["tec_c_ce","Técnico","Área C"];
-      var t2=n===1?["tec_b_ce","Técnico","Área B"]:["tec_d_ce","Técnico","Área D"];
-      var t3=n===1?["tec_p1_ce","Técnico","Preventiva 1"]:["tec_p2_ce","Técnico","Preventiva 2"];
+      var areas=n===1?["Área A","Área B"]:["Área C","Área D"];
+      var t1=n===1?["tec_a_ce","Área A"]:["tec_c_ce","Área C"];
+      var t2=n===1?["tec_b_ce","Área B"]:["tec_d_ce","Área D"];
+      var t3=n===1?["tec_p1_ce","Preventiva 1"]:["tec_p2_ce","Preventiva 2"];
+      var nCondsTotal=getCondArea(areas[0]).length+getCondArea(areas[1]).length;
       return React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",flex:1}},
-        SupBox(fk,"Supervisor Manut. "+n,"MANUTENÇÃO"),V(18),H(250),
+        SupBox(fk,"Supervisor "+n,"MANUTENÇÃO"),
+        nCondsTotal>0&&React.createElement("div",{style:{fontSize:9,color:verde.text,marginTop:4,background:verde.badge,borderRadius:8,padding:"1px 8px"}},nCondsTotal+" cond."),
+        V(18),H(250),
         React.createElement("div",{style:{display:"flex",width:250,justifyContent:"space-between",margin:"0 auto"}},V(18),V(18),V(18)),
-        React.createElement("div",{style:{display:"flex",gap:6,justifyContent:"center",width:"100%"}},TecBox(t1[0],t1[1],t1[2]),TecBox(t2[0],t2[1],t2[2]),TecBox(t3[0],t3[1],t3[2]))
+        React.createElement("div",{style:{display:"flex",gap:6,justifyContent:"center",width:"100%"}},
+          TecBox(t1[0],"Técnico","Manutenção",ciano,areas[0]),
+          TecBox(t2[0],"Técnico","Manutenção",ciano,areas[1]),
+          TecBox(t3[0],"Técnico","Preventiva",roxo)
+        )
       );
     }
     return React.createElement("div",null,
@@ -3902,7 +4051,7 @@ function Organograma(){
       React.createElement("div",{style:{display:"flex",justifyContent:"center"}},SupBox("sup_pi","Supervisor Manut. e Instalação","SUPERVISÃO")),
       V(18),H(260),
       React.createElement("div",{style:{display:"flex",width:260,justifyContent:"space-between",margin:"0 auto"}},V(18),V(18),V(18)),
-      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"center",maxWidth:340,margin:"0 auto"}},TecBox("tec_a_pi","Técnico","Área A"),TecBox("tec_b_pi","Técnico","Área B"),TecBox("tec_p_pi","Técnico","Preventiva 1")),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"center",maxWidth:340,margin:"0 auto"}},TecBox("tec_a_pi","Técnico","Área A",ciano),TecBox("tec_b_pi","Técnico","Área B",ciano),TecBox("tec_p_pi","Técnico","Preventiva 1",roxo)),
       React.createElement("div",{style:{marginTop:36,paddingTop:24,borderTop:"2px dashed #1e293b"}},
         React.createElement("div",{style:{textAlign:"center",marginBottom:16}},React.createElement("span",{style:{background:"#f97316",color:"#fff",fontSize:11,fontWeight:800,padding:"5px 22px",borderRadius:20,letterSpacing:2}},"APOIO OPERACIONAL")),
         React.createElement("div",{style:{background:laranja.bg,border:"2px solid "+laranja.border,borderRadius:12,padding:"16px",maxWidth:500,margin:"0 auto"}},
@@ -3923,7 +4072,7 @@ function Organograma(){
       React.createElement("div",{style:{display:"flex",justifyContent:"center"}},FilialBox("coord_ma","Coordenador Filial MA",amarelo)),
       V(22),H(160),V(18),
       React.createElement("div",{style:{display:"flex",justifyContent:"center"}},
-        React.createElement("div",{style:{background:verde2.bg,border:"2px solid "+verde2.border,borderRadius:12,padding:"12px 20px",textAlign:"center",minWidth:220,boxShadow:"0 0 20px "+verde2.border+"22"}},
+        React.createElement("div",{style:{background:verde2.bg,border:"2px solid "+verde2.border,borderRadius:12,padding:"12px 20px",textAlign:"center",minWidth:220}},
           Bdg(verde2,"SUPERVISÃO OPERACIONAL"),FC("sup_ma","Supervisor MA",verde2,44),
           React.createElement("div",{style:{fontSize:12,fontWeight:800,color:verde2.text,marginTop:6}},"Supervisor Manut. e Instalação")
         )
@@ -3956,25 +4105,32 @@ function Organograma(){
   return React.createElement("div",{style:{background:"#0a0f1e",minHeight:"100vh",padding:"28px 16px",fontFamily:"system-ui,sans-serif"}},
     React.createElement("div",{style:{textAlign:"center",marginBottom:28}},
       React.createElement("div",{style:{fontSize:22,fontWeight:900,color:"#f1f5f9",letterSpacing:2,textTransform:"uppercase"}},"Organograma Corporativo"),
-      React.createElement("div",{style:{width:60,height:3,background:"#3b82f6",borderRadius:2,margin:"8px auto 16px"}}),
-      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:8}},
+      React.createElement("div",{style:{width:60,height:3,background:"#3b82f6",borderRadius:2,margin:"8px auto 12px"}}),
+      // Botões filial e relatório
+      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:8,flexWrap:"wrap"}},
         React.createElement("button",{style:{...btnStyle(C.blue,filial!=="ceara"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("ceara");}},"🏖️ Ceará"),
         React.createElement("button",{style:{...btnStyle(amarelo.border,filial!=="piaui"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("piaui");}},"🌵 Piauí"),
-        React.createElement("button",{style:{...btnStyle("#10b981",filial!=="maranhao"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("maranhao");}},"🌊 Maranhão")
+        React.createElement("button",{style:{...btnStyle("#10b981",filial!=="maranhao"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("maranhao");}},"🌊 Maranhão"),
+        React.createElement("button",{style:{...btnStyle(C.orange,true),fontSize:13,padding:"8px 24px"},onClick:gerarRelatorio},"📄 Relatório de Áreas")
+      ),
+      condominios.length>0&&React.createElement("div",{style:{marginTop:10,fontSize:11,color:"#64748b"}},
+        condominios.length+" condomínios carregados · Clique nos cards de área para ver detalhes"
       )
     ),
     React.createElement("div",{style:{maxWidth:1100,margin:"0 auto"}},
       filial==="ceara"?React.createElement(OrgCeara,null):filial==="piaui"?React.createElement(OrgPiaui,null):React.createElement(OrgMaranhao,null),
       React.createElement("div",{style:{display:"flex",gap:16,justifyContent:"center",flexWrap:"wrap",marginTop:28,paddingTop:16,borderTop:"1px solid #1e293b"}},
-        [[azul.border,"Coordenação"],[verde.border,"Supervisão"],[ciano.border,"Área"],[roxo.border,"Preventiva"],[cinza.border,"Terceirizado"],[laranja.border,"Plantonistas"],[amarelo.border,"Coord. Filial"]].map(function(item,i){
+        [[azul.border,"Coordenação"],[verde.border,"Supervisão"],[ciano.border,"Área (clicável)"],[roxo.border,"Preventiva"],[cinza.border,"Terceirizado"],[laranja.border,"Plantonistas"],[amarelo.border,"Coord. Filial"]].map(function(item,i){
           return React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#64748b"}},
             React.createElement("div",{style:{width:10,height:10,background:item[0],borderRadius:2}}),item[1]
           );
         })
       )
-    )
+    ),
+    relatorio&&React.createElement(ModalArea,{area:relatorio,onClose:function(){setRelatorio(null);}})
   );
 }
+
 
 function ModuloEmBreve({nome}){
   return React.createElement("div",{style:{padding:60,textAlign:"center",color:C.muted}},
