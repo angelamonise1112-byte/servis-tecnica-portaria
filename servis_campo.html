@@ -479,7 +479,10 @@ function DetalheOS({os,usuario,onBack}){
             React.createElement("div",null,
               React.createElement("div",{style:{fontSize:11,color:C.muted}},"Endereço"),
               React.createElement("div",{style:{fontSize:13,color:C.blue,fontWeight:600}},enderecoCond),
-              React.createElement("a",{href:"https://maps.google.com/?q="+encodeURIComponent(enderecoCond),target:"_blank",style:{fontSize:11,color:C.cyan,textDecoration:"none",display:"block",marginTop:4}},"🗺 Abrir no Maps →")
+              React.createElement("div",{style:{display:"flex",gap:8,marginTop:6}},
+                React.createElement("a",{href:"https://maps.google.com/?q="+encodeURIComponent(enderecoCond),target:"_blank",style:{flex:1,background:C.blue+"22",border:"1px solid "+C.blue+"44",color:C.blue,borderRadius:8,padding:"6px 10px",fontSize:11,textDecoration:"none",fontWeight:600,textAlign:"center"}},"🗺 Google Maps"),
+                React.createElement("a",{href:"https://waze.com/ul?q="+encodeURIComponent(enderecoCond),target:"_blank",style:{flex:1,background:C.cyan+"22",border:"1px solid "+C.cyan+"44",color:C.cyan,borderRadius:8,padding:"6px 10px",fontSize:11,textDecoration:"none",fontWeight:600,textAlign:"center"}},"🔵 Waze")
+              )
             )
           ):null
         ),
