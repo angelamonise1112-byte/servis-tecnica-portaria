@@ -1910,7 +1910,7 @@ function Pedidos({usuarioAtual}){
   const [logModal,setLogModal]=useState(null);
   const [logs,setLogs]=useState([]);
   const [verLog,setVerLog]=useState(false);
-  const POR_PAG=50;
+  const [porPag,setPorPag]=useState(20);
   const MESES=["01","02","03","04","05","06","07","08","09","10","11","12"];
   const NOMES_MES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
@@ -1920,7 +1920,7 @@ function Pedidos({usuarioAtual}){
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
-  useEffect(()=>{setPagina(1);},[filtStatus,filtMes,filtAno,busca]);
+  useEffect(()=>{setPagina(1);},[filtStatus,filtMes,filtAno,busca,porPag]);
 
   const anos=useMemo(()=>[...new Set(data.map(d=>d.data?.slice(0,4)).filter(Boolean))].sort().reverse(),[data]);
 
@@ -1933,8 +1933,8 @@ function Pedidos({usuarioAtual}){
       (d.os||"").includes(busca)||(d.pedido||"").includes(busca)||(d.cod||"").includes(busca))
   ),[data,filtStatus,filtMes,filtAno,busca]);
 
-  const totalPags=Math.ceil(filtered.length/POR_PAG);
-  const paginado=filtered.slice((pagina-1)*POR_PAG,pagina*POR_PAG);
+  const totalPags=Math.ceil(filtered.length/porPag);
+  const paginado=filtered.slice((pagina-1)*porPag,pagina*porPag);
 
   const save=async item=>{
     const antes=data.find(x=>x.id===item.id);
@@ -2063,7 +2063,11 @@ function Pedidos({usuarioAtual}){
           ...anos.map(a=>React.createElement("option",{key:a,value:a},a))
         ),
         (filtStatus||filtMes||filtAno||busca)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setFiltStatus("");setFiltMes("");setFiltAno("");setBusca("");}},"✕ Limpar"),
-        React.createElement("span",{style:{fontSize:12,color:C.dim}},`${filtered.length} registros`)
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginLeft:"auto"}},
+          React.createElement("span",{style:{fontSize:11,color:C.dim}},"Exibir:"),
+          [20,30,50].map(n=>React.createElement("button",{key:n,style:{...btnStyle(C.blue,porPag!==n),fontSize:11,padding:"4px 10px"},onClick:()=>setPorPag(n)},n)),
+          React.createElement("span",{style:{fontSize:12,color:C.dim}},`${filtered.length} registros`)
+        )
       ),
       // Log de Alterações
       verLog&&React.createElement(Card,{style:{marginBottom:16}},
@@ -2084,7 +2088,7 @@ function Pedidos({usuarioAtual}){
                   React.createElement("span",{style:{fontSize:12,whiteSpace:"nowrap"}},fmt(d.data)),
                   d.cod?React.createElement("span",{style:{background:C.blue+"22",color:C.blue,fontSize:10,padding:"2px 6px",borderRadius:4,fontWeight:600,whiteSpace:"nowrap"}},d.cod):React.createElement("span",{style:{color:C.dim}},"—"),
                   React.createElement("span",{style:{background:C.purple+"22",color:C.purple,fontSize:10,padding:"2px 6px",borderRadius:4}},d.quant||1),
-                  React.createElement("span",{style:{fontSize:12,color:C.text,maxWidth:220,display:"inline-block"}},d.descricao),
+                  React.createElement("span",{style:{fontSize:12,color:C.text,maxWidth:140,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"},title:d.descricao},d.descricao),
                   d.os?React.createElement("span",{style:{color:C.cyan,fontSize:12,fontWeight:600}},d.os):React.createElement("span",{style:{color:C.dim}},"—"),
                   d.pedido?React.createElement("span",{style:{color:C.blue,fontSize:12}},d.pedido):React.createElement("span",{style:{color:C.dim}},"—"),
                   d.requisicao?React.createElement("span",{style:{color:C.purple,fontSize:12}},d.requisicao):React.createElement("span",{style:{color:C.dim}},"—"),
@@ -2102,7 +2106,7 @@ function Pedidos({usuarioAtual}){
         ),
         totalPags>1&&React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:12,flexWrap:"wrap"}},
           React.createElement("button",{style:{...iBtn(C.blue),opacity:pagina===1?0.3:1},disabled:pagina===1,onClick:()=>setPagina(p=>p-1)},"← Anterior"),
-          React.createElement("span",{style:{fontSize:12,color:C.muted}},`Pág ${pagina}/${totalPags} — ${(pagina-1)*POR_PAG+1}–${Math.min(pagina*POR_PAG,filtered.length)} de ${filtered.length}`),
+          React.createElement("span",{style:{fontSize:12,color:C.muted}},`Pág ${pagina}/${totalPags} — ${(pagina-1)*porPag+1}–${Math.min(pagina*porPag,filtered.length)} de ${filtered.length}`),
           React.createElement("button",{style:{...iBtn(C.blue),opacity:pagina===totalPags?0.3:1},disabled:pagina===totalPags,onClick:()=>setPagina(p=>p+1)},"Próxima →")
         )
       )
