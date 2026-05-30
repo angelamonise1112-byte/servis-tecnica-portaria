@@ -248,11 +248,11 @@ function DetalheOS({os,usuario,onBack}){
       if(fotos.length>1)updates.foto2_url=fotos[1];
       if(fotos.length>2)updates.foto3_url=fotos[2];
       // Fechar OS no banco principal
-      await sb.from("os").update({status:"Fechado",relato:problema+"
+      await sb.from("os").update({status:"Fechado",relato:problema}).eq("num",os.num);
 
-Solução: "+solucao+(material?"
 
-Material: "+material:"")}).eq("num",os.num);
+
+
     }
     if(campo?.id){
       const{data}=await sb.from("os_campo").update(updates).eq("id",campo.id).select().single();
@@ -310,7 +310,7 @@ Material: "+material:"")}).eq("num",os.num);
       <div class="field"><label>Início Atendimento</label><value>${campo?.dt_inicio_atend?new Date(campo.dt_inicio_atend).toLocaleString("pt-BR"):"—"}</value></div>
       <div class="field"><label>Conclusão</label><value>${campo?.dt_conclusao?new Date(campo.dt_conclusao).toLocaleString("pt-BR"):"—"}</value></div>
     </div>
-    <scr`+"ipt>window.onload=()=>window.print();</scr"+"ipt></body></html>";
+    <scr"+"ipt>window.onload=()=>window.print();</scr"+"ipt></body></html>`;
     w.document.write(html);w.document.close();
     setGerandoPDF(false);
   };
