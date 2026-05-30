@@ -3507,6 +3507,93 @@ function Organograma(){
     );
   }
 
+  // ── MARANHÃO ────────────────────────────────────────────────
+  function OrgMaranhao(){
+    var verde2={bg:"#0f2d1f",border:"#10b981",text:"#a7f3d0",badge:"#065f46"};
+    return React.createElement("div",null,
+      // Coordenação
+      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:28}},
+        CoordBox("angela","Ângela Monise","Coordenadora Administrativa","do Setor Técnico"),
+        CoordBox("wesley","Wesley","Coordenador Técnico",null)
+      ),
+      V(24),H(180),V(22),
+      // Coordenação Filial
+      React.createElement("div",{style:{display:"flex",justifyContent:"center"}},
+        React.createElement("div",{style:{background:amarelo.bg,border:"2px solid "+amarelo.border,borderRadius:12,padding:"14px 20px",textAlign:"center",minWidth:260,boxShadow:"0 0 20px "+amarelo.border+"22"}},
+          React.createElement(Badge,{cor:amarelo,label:"COORDENAÇÃO FILIAL"}),
+          FotoCard("coord_filial_ma","Coord. Filial",amarelo,48),
+          React.createElement("div",{style:{fontSize:13,fontWeight:800,color:amarelo.text,marginTop:8}},React.createElement("input",{style:{background:"transparent",border:"none",borderBottom:"1px solid "+amarelo.border,color:amarelo.text,fontSize:13,fontWeight:800,textAlign:"center",width:170,outline:"none",padding:"2px"},placeholder:"Nome do responsável",defaultValue:"Coordenador Filial MA"})),
+          React.createElement("div",{style:{fontSize:10,color:amarelo.text,opacity:0.8,marginTop:6}}),
+          React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:3,marginTop:8,textAlign:"left"}},
+            ["📊 Gestão operacional da filial","📈 Acompanhamento de indicadores","📋 Distribuição de demandas","🤝 Suporte às equipes técnicas","⏱ Controle de produtividade"].map(function(item,i){
+              return React.createElement("div",{key:i,style:{fontSize:9,color:amarelo.text,opacity:0.8}},""+item);
+            })
+          )
+        )
+      ),
+      V(22),H(160),V(18),
+      // Supervisor
+      React.createElement("div",{style:{display:"flex",justifyContent:"center"}},
+        React.createElement("div",{style:{background:verde2.bg,border:"2px solid "+verde2.border,borderRadius:12,padding:"12px 20px",textAlign:"center",minWidth:220,boxShadow:"0 0 20px "+verde2.border+"22"}},
+          React.createElement(Badge,{cor:verde2,label:"SUPERVISÃO OPERACIONAL"}),
+          FotoCard("sup_ma","Supervisor MA",verde2,44),
+          React.createElement("div",{style:{fontSize:12,fontWeight:800,color:verde2.text,marginTop:6}},"Supervisor de Manutenção e Instalação"),
+          React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:3,marginTop:8,textAlign:"left"}},
+            ["📋 Gestão das equipes técnicas","📞 Distribuição de chamados","⏱ Controle de SLA","✅ Qualidade das execuções","🔍 Acompanhamento das preventivas"].map(function(item,i){
+              return React.createElement("div",{key:i,style:{fontSize:9,color:verde2.text,opacity:0.8}},""+item);
+            })
+          )
+        )
+      ),
+      V(18),H(180),
+      React.createElement("div",{style:{display:"flex",width:180,justifyContent:"space-between",margin:"0 auto"}},V(18),V(18)),
+      // Técnicos
+      React.createElement("div",{style:{display:"flex",gap:10,justifyContent:"center",maxWidth:320,margin:"0 auto"}},
+        React.createElement("div",{style:{background:ciano.bg,border:"1.5px solid "+ciano.border,borderRadius:10,padding:"12px 10px",flex:1}},
+          React.createElement(Badge,{cor:ciano,label:"ÁREA"}),
+          FotoCard("tec_area_a_ma","Técnico Área A",ciano,36),
+          React.createElement("div",{style:{fontSize:10,fontWeight:700,color:ciano.text,textAlign:"center",marginTop:6}},"Técnico de Área A"),
+          React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:2,marginTop:6}},
+            ["🔧 Manutenção corretiva","📞 Chamados técnicos","🏢 Atendimento aos condomínios","🤝 Suporte operacional"].map(function(item,i){
+              return React.createElement("div",{key:i,style:{fontSize:9,color:ciano.text,opacity:0.8}},""+item);
+            })
+          )
+        ),
+        React.createElement("div",{style:{background:roxo.bg,border:"1.5px solid "+roxo.border,borderRadius:10,padding:"12px 10px",flex:1}},
+          React.createElement(Badge,{cor:roxo,label:"PREVENTIVA"}),
+          FotoCard("tec_prev_ma","Técnico Preventiva",roxo,36),
+          React.createElement("div",{style:{fontSize:10,fontWeight:700,color:roxo.text,textAlign:"center",marginTop:6}},"Técnico de Preventiva 1"),
+          React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:2,marginTop:6}},
+            ["🔍 Preventivas programadas","✅ Checklists técnicos","📋 Inspeções preventivas","📄 Relatórios de manutenção"].map(function(item,i){
+              return React.createElement("div",{key:i,style:{fontSize:9,color:roxo.text,opacity:0.8}},""+item);
+            })
+          )
+        )
+      ),
+      // Apoio MA
+      React.createElement("div",{style:{marginTop:36,paddingTop:24,borderTop:"2px dashed #1e293b"}},
+        React.createElement("div",{style:{textAlign:"center",marginBottom:16}},
+          React.createElement("span",{style:{background:"#f97316",color:"#fff",fontSize:11,fontWeight:800,padding:"5px 22px",borderRadius:20,letterSpacing:2}},"APOIO OPERACIONAL")
+        ),
+        React.createElement("div",{style:{background:laranja.bg,border:"2px solid "+laranja.border,borderRadius:12,padding:"16px",boxShadow:"0 0 20px "+laranja.border+"22",maxWidth:580,margin:"0 auto"}},
+          React.createElement(Badge,{cor:laranja,label:"4 TÉCNICOS PLANTONISTAS 24h"}),
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}},
+            PlantonBox("pl1_ma","Plantonista 1","24h",laranja),
+            PlantonBox("pl2_ma","Plantonista 2","24h",laranja),
+            PlantonBox("pl3_ma","Plantonista 3","24h",laranja),
+            PlantonBox("pl4_ma","Plantonista 4","24h",laranja)
+          ),
+          React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},
+            ["⚡ Emergências","📞 Chamados fora do horário","🤝 Apoio às equipes de área","🔍 Apoio em preventivas","🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","📋 Apoio em demandas represadas"].map(function(item,i){
+              return React.createElement("div",{key:i,style:{fontSize:10,color:laranja.text,background:"rgba(255,255,255,0.05)",borderRadius:6,padding:"3px 8px",borderLeft:"2px solid "+laranja.border}},""+item);
+            })
+          )
+        )
+      )
+    );
+  }
+
+  return
   return React.createElement("div",{style:{background:"#0a0f1e",minHeight:"100vh",padding:"28px 16px",fontFamily:"system-ui,sans-serif"}},
     // Título + seletor de filial
     React.createElement("div",{style:{textAlign:"center",marginBottom:28}},
@@ -3514,14 +3601,15 @@ function Organograma(){
       React.createElement("div",{style:{width:60,height:3,background:"#3b82f6",borderRadius:2,margin:"8px auto 16px"}}),
       React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:8}},
         React.createElement("button",{style:{...btnStyle(C.blue,filial!=="ceara"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("ceara");}},"🏖️ Ceará"),
-        React.createElement("button",{style:{...btnStyle(amarelo.border,filial!=="piaui"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("piaui");}},"🌵 Piauí")
+        React.createElement("button",{style:{...btnStyle(amarelo.border,filial!=="piaui"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("piaui");}},"🌵 Piauí"),
+        React.createElement("button",{style:{...btnStyle("#10b981",filial!=="maranhao"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("maranhao");}},"🌊 Maranhão")
       )
     ),
     React.createElement("div",{style:{maxWidth:1100,margin:"0 auto"}},
-      filial==="ceara"?React.createElement(OrgCeara,null):React.createElement(OrgPiaui,null),
+      filial==="ceara"?React.createElement(OrgCeara,null):filial==="piaui"?React.createElement(OrgPiaui,null):React.createElement(OrgMaranhao,null),
       // Legenda
       React.createElement("div",{style:{display:"flex",gap:16,justifyContent:"center",flexWrap:"wrap",marginTop:28,paddingTop:16,borderTop:"1px solid #1e293b"}},
-        [[azul.border,"Coordenação"],[verde.border,"Supervisão"],[ciano.border,"Técnicos"],[cinza.border,"Terceirizado"],[laranja.border,"Plantonistas"],[roxo.border,"Ferista"],[amarelo.border,"Coord. Filial"]].map(function(item,i){
+        [[azul.border,"Coordenação"],[verde.border,"Supervisão"],[ciano.border,"Área"],[roxo.border,"Preventiva"],[cinza.border,"Terceirizado"],[laranja.border,"Plantonistas"],[amarelo.border,"Coord. Filial"]].map(function(item,i){
           return React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#64748b"}},
             React.createElement("div",{style:{width:10,height:10,background:item[0],borderRadius:2}}),
             item[1]
