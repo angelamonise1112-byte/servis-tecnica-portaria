@@ -1897,7 +1897,7 @@ function OSPendencia(){
 
 // ── PEDIDOS ───────────────────────────────────────────────────
 function Pedidos({usuarioAtual}){
-  const STATUS_PED={Pendente:{c:C.yellow},Aprovado:{c:C.blue},Retirado:{c:C.orange},Devolvido:{c:C.green},Cancelado:{c:C.red}};
+  const STATUS_PED={"Devolvido":{c:C.green},"Pendente Retirada":{c:C.orange},"Pendente Devolução":{c:C.yellow},"Pendente":{c:C.dim},"Aprovado":{c:C.blue},"Cancelado":{c:C.red}};
   const [data,setData]=useState([]);
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(null);
@@ -2017,7 +2017,7 @@ function Pedidos({usuarioAtual}){
         React.createElement("div",{style:{gridColumn:"1/-1"}},
           React.createElement("label",{style:base.lbl},"✅ Status"),
           React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
-            Object.keys(STATUS_PED).map(s=>React.createElement("button",{key:s,style:{...btnStyle(STATUS_PED[s].c,f.status!==s),flex:1,fontSize:11},onClick:()=>setF(p=>({...p,status:s}))},s))
+            Object.keys(STATUS_PED).map(s=>React.createElement("button",{key:s,style:{...btnStyle(STATUS_PED[s].c,f.status!==s),fontSize:10,padding:"4px 8px"},onClick:()=>setF(p=>({...p,status:s}))},s))
           )
         )
       ),
@@ -2040,12 +2040,11 @@ function Pedidos({usuarioAtual}){
     ),
     React.createElement("div",{style:{padding:"20px 24px"}},
       // KPIs
-      React.createElement(Grid,{cols:5,mb:16},
+      React.createElement(Grid,{cols:4,mb:16},
         React.createElement(KPI,{label:"Total",value:data.length,color:C.blue}),
-        React.createElement(KPI,{label:"Pendentes",value:data.filter(d=>d.status==="Pendente").length,color:C.yellow}),
-        React.createElement(KPI,{label:"Aprovados",value:data.filter(d=>d.status==="Aprovado").length,color:C.blue}),
-        React.createElement(KPI,{label:"Retirados",value:data.filter(d=>d.status==="Retirado").length,color:C.orange}),
-        React.createElement(KPI,{label:"Devolvidos",value:data.filter(d=>d.status==="Devolvido").length,color:C.green})
+        React.createElement(KPI,{label:"Devolvidos",value:data.filter(d=>d.status==="Devolvido").length,color:C.green}),
+        React.createElement(KPI,{label:"Pend. Retirada",value:data.filter(d=>d.status==="Pendente Retirada").length,color:C.orange}),
+        React.createElement(KPI,{label:"Pend. Devolução",value:data.filter(d=>d.status==="Pendente Devolução").length,color:C.yellow})
       ),
       // Filtros
       React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}},
@@ -2088,7 +2087,7 @@ function Pedidos({usuarioAtual}){
                   React.createElement("span",{style:{fontSize:12,whiteSpace:"nowrap"}},fmt(d.data)),
                   d.cod?React.createElement("span",{style:{background:C.blue+"22",color:C.blue,fontSize:10,padding:"2px 6px",borderRadius:4,fontWeight:600,whiteSpace:"nowrap"}},d.cod):React.createElement("span",{style:{color:C.dim}},"—"),
                   React.createElement("span",{style:{background:C.purple+"22",color:C.purple,fontSize:10,padding:"2px 6px",borderRadius:4}},d.quant||1),
-                  React.createElement("span",{style:{fontSize:12,color:C.text,maxWidth:140,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"},title:d.descricao},d.descricao),
+                  React.createElement("div",{style:{fontSize:11,color:C.text,maxWidth:180,wordBreak:"break-word",lineHeight:1.4},title:d.descricao},d.descricao),
                   d.os?React.createElement("span",{style:{color:C.cyan,fontSize:12,fontWeight:600}},d.os):React.createElement("span",{style:{color:C.dim}},"—"),
                   d.pedido?React.createElement("span",{style:{color:C.blue,fontSize:12}},d.pedido):React.createElement("span",{style:{color:C.dim}},"—"),
                   d.requisicao?React.createElement("span",{style:{color:C.purple,fontSize:12}},d.requisicao):React.createElement("span",{style:{color:C.dim}},"—"),
