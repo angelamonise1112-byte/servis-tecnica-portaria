@@ -2666,114 +2666,193 @@ function Problemas(){
 
 // ── ORGANOGRAMA ─────────────────────────────────────────────
 function Organograma(){
-  var azul={bg:"#dbeafe",border:"#3b82f6",text:"#1e40af"};
-  var verde={bg:"#d1fae5",border:"#10b981",text:"#065f46"};
-  var ciano={bg:"#e0f2fe",border:"#0ea5e9",text:"#0c4a6e"};
-  var laranja={bg:"#ffedd5",border:"#f97316",text:"#7c2d12"};
-  var roxo={bg:"#f3e8ff",border:"#a855f7",text:"#581c87"};
-  var ln="#475569";
+  var azul={bg:"#1e3a5f",border:"#3b82f6",text:"#bfdbfe",badge:"#1d4ed8"};
+  var verde={bg:"#14402f",border:"#10b981",text:"#a7f3d0",badge:"#065f46"};
+  var ciano={bg:"#0c2a3a",border:"#0ea5e9",text:"#bae6fd",badge:"#0369a1"};
+  var laranja={bg:"#3d1a07",border:"#f97316",text:"#fed7aa",badge:"#c2410c"};
+  var roxo={bg:"#2e1a4a",border:"#a855f7",text:"#e9d5ff",badge:"#7e22ce"};
+  var cinza={bg:"#1e293b",border:"#475569",text:"#94a3b8",badge:"#334155"};
+  var ln="#334155";
 
-  function VLine(){return React.createElement("div",{style:{width:2,height:28,background:ln,margin:"0 auto"}});}
-  function HLine(w){return React.createElement("div",{style:{width:w||200,height:2,background:ln}});}
+  function Card(props){
+    var cor=props.cor;
+    return React.createElement("div",{style:{
+      background:cor.bg,border:"2px solid "+cor.border,borderRadius:12,
+      padding:props.pad||"14px 18px",textAlign:"center",
+      boxShadow:"0 0 20px "+cor.border+"33",
+      minWidth:props.minW||160,maxWidth:props.maxW||220,
+      position:"relative"
+    }},props.children);
+  }
 
-  function CoordBox(icon,name,role1,role2){
-    return React.createElement("div",{style:{background:azul.bg,border:"2px solid "+azul.border,borderRadius:12,padding:"14px 18px",textAlign:"center",minWidth:200,boxShadow:"0 4px 16px #3b82f622"}},
-      React.createElement("div",{style:{fontSize:30,marginBottom:8}},icon),
-      React.createElement("div",{style:{fontSize:14,fontWeight:800,color:azul.text,marginBottom:3}},name),
-      React.createElement("div",{style:{fontSize:10,color:azul.text,opacity:0.8}},role1),
-      role2&&React.createElement("div",{style:{fontSize:10,color:azul.text,opacity:0.7}},role2)
+  function Badge(props){
+    return React.createElement("div",{style:{
+      display:"inline-block",background:props.cor.badge,color:props.cor.text,
+      fontSize:9,fontWeight:700,padding:"2px 10px",borderRadius:20,
+      letterSpacing:1,marginBottom:6
+    }},props.label);
+  }
+
+  function V(h){return React.createElement("div",{style:{width:2,height:h||28,background:ln,margin:"0 auto"}});}
+  function H(w){return React.createElement("div",{style:{height:2,width:w||200,background:ln,margin:"0 auto"}});}
+  function Dot(){return React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:ln,margin:"0 auto"}});}
+
+  function CoordCard(icon,name,role1,role2){
+    return React.createElement(Card,{cor:azul,minW:200,maxW:230},
+      React.createElement(Badge,{cor:azul,label:"COORDENAÇÃO"}),
+      React.createElement("div",{style:{fontSize:32,margin:"6px 0"}},""+icon),
+      React.createElement("div",{style:{fontSize:14,fontWeight:800,color:"#e0f2fe",marginBottom:3}},""+name),
+      React.createElement("div",{style:{fontSize:10,color:azul.text,lineHeight:1.4}},""+role1),
+      role2?React.createElement("div",{style:{fontSize:10,color:azul.text,opacity:0.8}},""+role2):null
     );
   }
 
-  function SupBox(n){
-    return React.createElement("div",{style:{background:verde.bg,border:"2px solid "+verde.border,borderRadius:12,padding:"12px 16px",textAlign:"center",minWidth:170,boxShadow:"0 4px 16px #10b98122"}},
-      React.createElement("div",{style:{fontSize:26,marginBottom:6}},"👷"),
-      React.createElement("div",{style:{fontSize:13,fontWeight:800,color:verde.text,marginBottom:2}},"Supervisor "+n),
-      React.createElement("div",{style:{fontSize:10,color:verde.text,opacity:0.75}},"Supervisão Operacional")
+  function SupCard(icon,title,badge){
+    return React.createElement(Card,{cor:verde,minW:175,maxW:200},
+      React.createElement(Badge,{cor:verde,label:badge||"SUPERVISÃO"}),
+      React.createElement("div",{style:{fontSize:26,margin:"6px 0"}},""+icon),
+      React.createElement("div",{style:{fontSize:12,fontWeight:800,color:"#d1fae5"}},title)
     );
   }
 
-  function TecBox(icon,title,sub){
-    return React.createElement("div",{style:{background:ciano.bg,border:"2px solid "+ciano.border,borderRadius:10,padding:"10px 8px",textAlign:"center",flex:1,minWidth:85}},
-      React.createElement("div",{style:{fontSize:18,marginBottom:4}},icon),
-      React.createElement("div",{style:{fontSize:10,fontWeight:700,color:ciano.text}},title),
-      React.createElement("div",{style:{fontSize:9,color:ciano.text,opacity:0.75,marginTop:2}},sub)
+  function TecCard(icon,title,sub,cor){
+    var c=cor||ciano;
+    return React.createElement("div",{style:{
+      background:c.bg,border:"1.5px solid "+c.border,borderRadius:10,
+      padding:"10px 8px",textAlign:"center",flex:1,minWidth:80
+    }},
+      React.createElement("div",{style:{fontSize:18,marginBottom:4}},""+icon),
+      React.createElement("div",{style:{fontSize:10,fontWeight:700,color:c.text,lineHeight:1.2}},""+title),
+      React.createElement("div",{style:{fontSize:9,color:c.text,opacity:0.7,marginTop:2}},""+sub)
     );
   }
 
-  function ApoioBox(cor,icon,title,sub,items){
-    return React.createElement("div",{style:{background:cor.bg,border:"2px solid "+cor.border,borderRadius:12,padding:"16px 18px",minWidth:230,maxWidth:260,boxShadow:"0 4px 16px "+cor.border+"22"}},
-      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:12}},
-        React.createElement("div",{style:{width:40,height:40,borderRadius:"50%",background:cor.border,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}},icon),
+  function ApoioCard(cor,icon,title,sub,items){
+    return React.createElement("div",{style:{
+      background:cor.bg,border:"2px solid "+cor.border,borderRadius:12,
+      padding:"16px 18px",minWidth:220,maxWidth:250,
+      boxShadow:"0 0 20px "+cor.border+"33"
+    }},
+      React.createElement(Badge,{cor:cor,label:"APOIO OPERACIONAL"}),
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,margin:"8px 0 12px"}},
+        React.createElement("div",{style:{
+          width:40,height:40,borderRadius:"50%",background:cor.badge,
+          display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0
+        }},""+icon),
         React.createElement("div",null,
-          React.createElement("div",{style:{fontSize:13,fontWeight:800,color:cor.text}},title),
-          React.createElement("div",{style:{fontSize:10,color:cor.text,opacity:0.75}},sub)
+          React.createElement("div",{style:{fontSize:12,fontWeight:800,color:cor.text}},""+title),
+          React.createElement("div",{style:{fontSize:10,color:cor.text,opacity:0.7}},""+sub)
         )
       ),
       React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:4}},
         items.map(function(item,i){
-          return React.createElement("div",{key:i,style:{fontSize:10,color:cor.text,background:"rgba(0,0,0,0.06)",borderRadius:6,padding:"4px 8px"}},item);
+          return React.createElement("div",{key:i,style:{
+            fontSize:10,color:cor.text,background:"rgba(255,255,255,0.05)",
+            borderRadius:6,padding:"4px 8px",borderLeft:"2px solid "+cor.border
+          }},""+item);
         })
       )
     );
   }
 
-  function SupBlock(n){
-    var tec1 = n===1 ? ["🔧","Técnico","Área A"] : ["🔧","Técnico","Área C"];
-    var tec2 = n===1 ? ["🔧","Técnico","Área B"] : ["🔧","Técnico","Área D"];
-    var tec3 = n===1 ? ["🔍","Técnico","Preventiva 1"] : ["🔍","Técnico","Preventiva 2"];
+  function SupBlock(icon,title,badge,tecs){
     return React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",flex:1}},
-      SupBox(n),
-      React.createElement("div",{style:{width:2,height:20,background:ln,margin:"0 auto"}}),
-      React.createElement("div",{style:{width:250,height:2,background:ln,margin:"0 auto"}}),
-      React.createElement("div",{style:{display:"flex",width:250,justifyContent:"space-between",margin:"0 auto"}},
-        React.createElement("div",{style:{width:2,height:18,background:ln}}),
-        React.createElement("div",{style:{width:2,height:18,background:ln}}),
-        React.createElement("div",{style:{width:2,height:18,background:ln}})
+      SupCard(icon,title,badge),
+      V(18),
+      H(tecs.length===2?180:260),
+      React.createElement("div",{style:{
+        display:"flex",width:tecs.length===2?180:260,
+        justifyContent:"space-"+(tecs.length===2?"evenly":"between"),
+        margin:"0 auto"
+      }},
+        tecs.map(function(t,i){return React.createElement("div",{key:i,style:{width:2,height:18,background:ln}});})
       ),
-      React.createElement("div",{style:{display:"flex",gap:6,width:"100%",justifyContent:"center"}},
-        TecBox(tec1[0],tec1[1],tec1[2]),
-        TecBox(tec2[0],tec2[1],tec2[2]),
-        TecBox(tec3[0],tec3[1],tec3[2])
+      React.createElement("div",{style:{display:"flex",gap:6,justifyContent:"center",width:"100%"}},
+        tecs.map(function(t,i){
+          return TecCard(t[0],t[1],t[2],t[3]||null);
+        })
       )
     );
   }
 
-  return React.createElement("div",{style:{background:"#0f172a",minHeight:"100vh",padding:"28px 20px"}},
-    React.createElement("div",{style:{textAlign:"center",marginBottom:32}},
-      React.createElement("div",{style:{fontSize:10,color:"#64748b",letterSpacing:3,marginBottom:6}},"SETOR TÉCNICO · PORTARIA REMOTA · INTEGRAÇÃO RISEG"),
-      React.createElement("div",{style:{fontSize:22,fontWeight:900,color:"#f8fafc",letterSpacing:1}},"ORGANOGRAMA CORPORATIVO"),
-      React.createElement("div",{style:{width:80,height:3,background:"#3b82f6",borderRadius:2,margin:"10px auto 0"}})
+  return React.createElement("div",{style:{background:"#0a0f1e",minHeight:"100vh",padding:"28px 16px",fontFamily:"system-ui,sans-serif"}},
+
+    // Título
+    React.createElement("div",{style:{textAlign:"center",marginBottom:36}},
+      React.createElement("div",{style:{fontSize:24,fontWeight:900,color:"#f1f5f9",letterSpacing:2,textTransform:"uppercase"}},"Organograma Corporativo"),
+      React.createElement("div",{style:{width:60,height:3,background:"#3b82f6",borderRadius:2,margin:"8px auto 0"}})
     ),
-    React.createElement("div",{style:{maxWidth:980,margin:"0 auto"}},
-      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:32}},
-        CoordBox("👩‍💼","Ângela Monise","Coordenadora Administrativa","do Setor Técnico"),
-        CoordBox("👨‍💼","Wesley","Coordenador Técnico",null)
+
+    React.createElement("div",{style:{maxWidth:1050,margin:"0 auto"}},
+
+      // ── COORDENAÇÃO ──
+      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:28}},
+        CoordCard("👩‍💼","Ângela Monise","Coordenadora Administrativa","do Setor Técnico"),
+        CoordCard("👨‍💼","Wesley","Coordenador Técnico",null)
       ),
-      React.createElement("div",{style:{width:2,height:28,background:ln,margin:"0 auto"}}),
-      React.createElement("div",{style:{width:400,height:2,background:ln,margin:"0 auto"}}),
-      React.createElement("div",{style:{display:"flex",width:400,justifyContent:"space-around",margin:"0 auto"}},
-        React.createElement("div",{style:{width:2,height:24,background:ln}}),
-        React.createElement("div",{style:{width:2,height:24,background:ln}})
+
+      V(24),
+      H(420),
+
+      // Linhas para 3 supervisores
+      React.createElement("div",{style:{display:"flex",width:420,justifyContent:"space-between",margin:"0 auto"}},
+        V(22),V(22),V(22)
       ),
-      React.createElement("div",{style:{display:"flex",justifyContent:"space-around",gap:24,alignItems:"flex-start",marginTop:0}},
-        SupBlock(1),
-        React.createElement("div",{style:{width:40}}),
-        SupBlock(2)
+
+      // ── SUPERVISORES ──
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start"}},
+        SupBlock("👷","Supervisor Manut. 1","MANUTENÇÃO",[
+          ["🔧","Técnico","Área A",null],
+          ["🔧","Técnico","Área B",null],
+          ["🔍","Técnico","Preventiva 1",null]
+        ]),
+        SupBlock("👷","Supervisor Manut. 2","MANUTENÇÃO",[
+          ["🔧","Técnico","Área C",null],
+          ["🔧","Técnico","Área D",null],
+          ["🔍","Técnico","Preventiva 2",null]
+        ]),
+        SupBlock("🏗️","Supervisor Instalação","INSTALAÇÃO",[
+          ["👥","Equipe","Terceirizada",cinza]
+        ])
       ),
-      React.createElement("div",{style:{marginTop:40,paddingTop:24,borderTop:"2px dashed #334155"}},
+
+      // ── APOIO OPERACIONAL ──
+      React.createElement("div",{style:{marginTop:44,paddingTop:28,borderTop:"2px dashed #1e293b"}},
         React.createElement("div",{style:{textAlign:"center",marginBottom:20}},
-          React.createElement("span",{style:{background:"#f97316",color:"#fff",fontSize:11,fontWeight:800,padding:"5px 22px",borderRadius:20,letterSpacing:2}},"APOIO OPERACIONAL")
+          React.createElement("div",{style:{
+            display:"inline-flex",alignItems:"center",gap:8,
+            background:"#1e293b",border:"1px solid #334155",
+            borderRadius:20,padding:"6px 20px"
+          }},
+            React.createElement("div",{style:{width:6,height:6,borderRadius:"50%",background:"#f97316"}}),
+            React.createElement("span",{style:{fontSize:11,fontWeight:700,color:"#94a3b8",letterSpacing:2}},
+              "APOIO OPERACIONAL"
+            ),
+            React.createElement("div",{style:{width:6,height:6,borderRadius:"50%",background:"#a855f7"}})
+          )
         ),
-        React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:24,flexWrap:"wrap"}},
-          ApoioBox(laranja,"🌙","Técnico Plantonista","Escala 12x36",["⚡ Emergências","📞 Chamados fora do horário comercial","🤝 Apoio às áreas"]),
-          ApoioBox(roxo,"🔄","Técnico Ferista","Cobertura & Suporte",["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","🔍 Apoio em preventivas","📋 Apoio em demandas represadas"])
+        React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:20,flexWrap:"wrap"}},
+          ApoioCard(laranja,"🌙","Técnico Plantonista","2 Diurnos + 1 Noturno (12x36)",[
+            "⚡ Emergências",
+            "📞 Chamados fora do horário",
+            "🤝 Apoio às equipes de manutenção",
+            "🏗️ Apoio às instalações",
+            "🔍 Apoio às preventivas"
+          ]),
+          ApoioCard(roxo,"🔄","Técnico Ferista","Cobertura & Suporte",[
+            "🏖️ Cobertura de férias",
+            "🏥 Cobertura de afastamentos",
+            "🔍 Apoio em preventivas",
+            "📋 Apoio em demandas represadas"
+          ])
         )
       ),
-      React.createElement("div",{style:{display:"flex",gap:20,justifyContent:"center",flexWrap:"wrap",marginTop:28,paddingTop:16,borderTop:"1px solid #1e293b"}},
-        [[azul.border,"Coordenação"],[verde.border,"Supervisão"],[ciano.border,"Técnicos"],[laranja.border,"Plantonista 12x36"],[roxo.border,"Ferista"]].map(function(item,i){
+
+      // Legenda
+      React.createElement("div",{style:{display:"flex",gap:20,justifyContent:"center",flexWrap:"wrap",marginTop:32,paddingTop:16,borderTop:"1px solid #1e293b"}},
+        [[azul.border,"Coordenação"],[verde.border,"Supervisão"],[ciano.border,"Técnicos"],[cinza.border,"Terceirizado"],[laranja.border,"Plantonista"],[roxo.border,"Ferista"]].map(function(item,i){
           return React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#64748b"}},
-            React.createElement("div",{style:{width:12,height:12,background:item[0],borderRadius:3}}),
+            React.createElement("div",{style:{width:10,height:10,background:item[0],borderRadius:2}}),
             item[1]
           );
         })
