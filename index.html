@@ -3516,7 +3516,13 @@ function Organograma(){
             PlantonBox("pl3_pi","Plantonista 3","24h",laranja),
             PlantonBox("pl4_pi","Plantonista 4","24h",laranja)
           ),
-          ApoioRow(["⚡ Emergências","📞 Chamados fora do horário","🤝 Apoio às equipes","🔍 Apoio em preventivas","🏖️ Férias","🏥 Afastamentos","📋 Demandas"],laranja)
+          ApoioRow(["⚡ Emergências","📞 Chamados fora do horário","🤝 Apoio às equipes","🔍 Apoio em preventivas","🏖️ Férias","🏥 Afastamentos","📋 Demandas"],laranja),
+          React.createElement("div",{style:{marginTop:10}}),
+          Bdg(roxo,"TÉCNICO FERISTA"),
+          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6}},
+            PlantonBox("ferista_pi","Ferista","Cobertura PI",roxo),
+            ApoioRow(["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","🔍 Apoio em preventivas","📋 Apoio em demandas"],roxo)
+          )
         )
       )
     );
