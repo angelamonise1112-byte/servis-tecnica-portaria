@@ -3323,7 +3323,6 @@ function App(){
     }
   },[usuario,tab]);
   if(!usuario)return React.createElement(Login,{onLogin:setUsuario});
-  const {refresh}=React.useContext(RefreshCtx);
   const renderTab=()=>{
     switch(tab){
       case"dashboard":return React.createElement(Dashboard,{setTab});
