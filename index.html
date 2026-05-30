@@ -1054,7 +1054,7 @@ function Demandas(){
   const [busca,setBusca]=useState("");
   const load=useCallback(async()=>{
     setLoading(true);
-    const{data:rows}=await sb.from("demandas").select("*").order("prazo",{ascending:true});
+    const{data:rows}=await sb.from("demandas").select("*").neq("resp","Reginaldo").order("prazo",{ascending:true});
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
@@ -1905,6 +1905,7 @@ function Pedidos({usuarioAtual}){
   const [filtStatus,setFiltStatus]=useState("");
   const [filtMes,setFiltMes]=useState("");
   const [filtAno,setFiltAno]=useState("");
+  const [filtCond,setFiltCond]=useState("");
   const [busca,setBusca]=useState("");
   const [pagina,setPagina]=useState(1);
   const [logModal,setLogModal]=useState(null);
@@ -1920,18 +1921,20 @@ function Pedidos({usuarioAtual}){
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
-  useEffect(()=>{setPagina(1);},[filtStatus,filtMes,filtAno,busca,porPag]);
+  useEffect(()=>{setPagina(1);},[filtStatus,filtMes,filtAno,filtCond,busca,porPag]);
 
   const anos=useMemo(()=>[...new Set(data.map(d=>d.data?.slice(0,4)).filter(Boolean))].sort().reverse(),[data]);
 
+  const condsBanco=useMemo(()=>[...new Set(data.map(d=>d.cond).filter(Boolean))].sort(),[data]);
   const filtered=useMemo(()=>data.filter(d=>
     (!filtStatus||d.status===filtStatus)&&
-    (!filtMes||( d.data||"").slice(5,7)===filtMes)&&
+    (!filtMes||(d.data||"").slice(5,7)===filtMes)&&
     (!filtAno||(d.data||"").slice(0,4)===filtAno)&&
+    (!filtCond||d.cond===filtCond)&&
     (!busca||(d.cond||"").toLowerCase().includes(busca.toLowerCase())||
       (d.descricao||"").toLowerCase().includes(busca.toLowerCase())||
       (d.os||"").includes(busca)||(d.pedido||"").includes(busca)||(d.cod||"").includes(busca))
-  ),[data,filtStatus,filtMes,filtAno,busca]);
+  ),[data,filtStatus,filtMes,filtAno,filtCond,busca]);
 
   const totalPags=Math.ceil(filtered.length/porPag);
   const paginado=filtered.slice((pagina-1)*porPag,pagina*porPag);
@@ -1980,7 +1983,7 @@ function Pedidos({usuarioAtual}){
     .Cancelado{background:#f3f4f6;color:#374151}
     @media print{body{margin:0}}</style></head><body>
     <h2>📦 Relatório de Pedidos — Servis Técnica</h2>
-    <div class="sub">Gerado em: ${new Date().toLocaleString("pt-BR")} | Filtros: ${filtStatus||"Todos status"} | ${filtMes?NOMES_MES[parseInt(filtMes)-1]:"Todos meses"} | ${filtAno||"Todos anos"} | ${rows.length} registros</div>
+    <div class="sub">Gerado em: ${new Date().toLocaleString("pt-BR")} | Filtros: ${filtCond||"Todos condomínios"} | ${filtStatus||"Todos status"} | ${filtMes?NOMES_MES[parseInt(filtMes)-1]:"Todos meses"} | ${filtAno||"Todos anos"} | ${rows.length} registros</div>
     <table><thead><tr>
     <th>#</th><th>Condomínio</th><th>Data</th><th>Cód.</th><th>Qtd</th><th>Descrição</th><th>O.S</th><th>Pedido</th><th>Requisição</th><th>Retirada</th><th>Devolução</th><th>Obs</th><th>Status</th>
     </tr></thead><tbody>
@@ -2061,7 +2064,11 @@ function Pedidos({usuarioAtual}){
           React.createElement("option",{value:""},"Todos anos"),
           ...anos.map(a=>React.createElement("option",{key:a,value:a},a))
         ),
-        (filtStatus||filtMes||filtAno||busca)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setFiltStatus("");setFiltMes("");setFiltAno("");setBusca("");}},"✕ Limpar"),
+        React.createElement("select",{style:{...base.sel,width:220},value:filtCond,onChange:e=>setFiltCond(e.target.value)},
+          React.createElement("option",{value:""},"Todos condomínios"),
+          ...condsBanco.map(c=>React.createElement("option",{key:c,value:c},c))
+        ),
+        (filtStatus||filtMes||filtAno||filtCond||busca)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setFiltStatus("");setFiltMes("");setFiltAno("");setFiltCond("");setBusca("");}},"✕ Limpar"),
         React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginLeft:"auto"}},
           React.createElement("span",{style:{fontSize:11,color:C.dim}},"Exibir:"),
           [20,30,50].map(n=>React.createElement("button",{key:n,style:{...btnStyle(C.blue,porPag!==n),fontSize:11,padding:"4px 10px"},onClick:()=>setPorPag(n)},n)),
@@ -2493,6 +2500,231 @@ function SLA(){
   );
 }
 
+// ── PROBLEMAS ─────────────────────────────────────────────────
+function Problemas(){
+  const [data,setData]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [filtMes,setFiltMes]=useState("");
+  const [filtAno,setFiltAno]=useState("");
+  const [filtTec,setFiltTec]=useState("");
+  const [filtCond,setFiltCond]=useState("");
+  const [detalhe,setDetalhe]=useState(null);
+  const MESES=["01","02","03","04","05","06","07","08","09","10","11","12"];
+  const NOMES_MES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const{data:rows}=await sb.from("os").select("*").order("data",{ascending:false});
+    setData(rows||[]);setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load]);
+
+  const anos=useMemo(()=>[...new Set(data.map(d=>d.data?.slice(0,4)).filter(Boolean))].sort().reverse(),[data]);
+  const conds=useMemo(()=>[...new Set(data.map(d=>d.cond).filter(Boolean))].sort(),[data]);
+
+  const filtered=useMemo(()=>data.filter(d=>{
+    if(!d.data)return false;
+    const[ano,mes]=d.data.split("-");
+    return(!filtMes||mes===filtMes)&&(!filtAno||ano===filtAno)&&
+      (!filtTec||d.tec===filtTec)&&(!filtCond||d.cond===filtCond);
+  }),[data,filtMes,filtAno,filtTec,filtCond]);
+
+  // Análise por problema
+  const analise=useMemo(()=>{
+    const map={};
+    filtered.forEach(os=>{
+      const p=os.prob||"Outros";
+      if(!map[p])map[p]={prob:p,total:0,abertas:0,fechadas:0,tecnicos:{},condominios:{},os:[]};
+      map[p].total++;
+      if(os.status==="Aberto")map[p].abertas++;
+      else map[p].fechadas++;
+      map[p].tecnicos[os.tec]=(map[p].tecnicos[os.tec]||0)+1;
+      map[p].condominios[os.cond]=(map[p].condominios[os.cond]||0)+1;
+      map[p].os.push(os);
+    });
+    return Object.values(map).sort((a,b)=>b.total-a.total);
+  },[filtered]);
+
+  // Top condomínios por problema
+  const topConds=useMemo(()=>{
+    const map={};
+    filtered.forEach(os=>{
+      const k=os.cond;
+      if(!k)return;
+      if(!map[k])map[k]={cond:k,total:0,probs:{}};
+      map[k].total++;
+      map[k].probs[os.prob]=(map[k].probs[os.prob]||0)+1;
+    });
+    return Object.values(map).sort((a,b)=>b.total-a.total).slice(0,10);
+  },[filtered]);
+
+  // Top técnicos
+  const topTecs=useMemo(()=>{
+    const map={};
+    filtered.forEach(os=>{
+      if(!os.tec)return;
+      if(!map[os.tec])map[os.tec]={tec:os.tec,total:0,abertas:0};
+      map[os.tec].total++;
+      if(os.status==="Aberto")map[os.tec].abertas++;
+    });
+    return Object.values(map).sort((a,b)=>b.total-a.total);
+  },[filtered]);
+
+  const maxTotal=Math.max(...analise.map(a=>a.total),1);
+  const maxCond=Math.max(...topConds.map(c=>c.total),1);
+
+  const corProb=idx=>idx===0?C.red:idx===1?C.orange:idx===2?C.yellow:idx<5?C.blue:C.dim;
+
+  return React.createElement("div",null,
+    // Header
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"▲ Análise de Problemas"),
+        React.createElement("div",{style:{fontSize:12,color:C.muted}},`Baseado em ${filtered.length} OS ${filtMes||filtAno||filtTec||filtCond?"filtradas":"no histórico completo"}`)
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+        React.createElement("select",{style:{...base.sel,width:130},value:filtMes,onChange:e=>setFiltMes(e.target.value)},
+          React.createElement("option",{value:""},"Todos meses"),
+          ...MESES.map((m,i)=>React.createElement("option",{key:m,value:m},NOMES_MES[i]))
+        ),
+        React.createElement("select",{style:{...base.sel,width:90},value:filtAno,onChange:e=>setFiltAno(e.target.value)},
+          React.createElement("option",{value:""},"Todos anos"),
+          ...anos.map(a=>React.createElement("option",{key:a,value:a},a))
+        ),
+        React.createElement("select",{style:{...base.sel,width:160},value:filtTec,onChange:e=>setFiltTec(e.target.value)},
+          React.createElement("option",{value:""},"Todos técnicos"),
+          ...TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
+        ),
+        React.createElement("select",{style:{...base.sel,width:200},value:filtCond,onChange:e=>setFiltCond(e.target.value)},
+          React.createElement("option",{value:""},"Todos condomínios"),
+          ...conds.map(c=>React.createElement("option",{key:c,value:c},c))
+        ),
+        (filtMes||filtAno||filtTec||filtCond)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setFiltMes("");setFiltAno("");setFiltTec("");setFiltCond("");}},"✕ Limpar")
+      )
+    ),
+    React.createElement("div",{style:{padding:"20px 24px"}},
+      // KPIs
+      React.createElement(Grid,{cols:4,mb:16},
+        React.createElement(KPI,{label:"Total OS",value:filtered.length,color:C.blue}),
+        React.createElement(KPI,{label:"Tipos de Problema",value:analise.length,color:C.purple}),
+        React.createElement(KPI,{label:"OS Abertas",value:filtered.filter(d=>d.status==="Aberto").length,color:C.red}),
+        React.createElement(KPI,{label:"Problema #1",value:analise[0]?.prob?.split(" ").slice(0,2).join(" ")||"—",color:C.orange})
+      ),
+      loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+      React.createElement("div",null,
+        // Gráfico de barras por problema
+        React.createElement(Card,{style:{marginBottom:16}},
+          React.createElement(CardHeader,{title:"🔢 Ranking de Problemas"}),
+          React.createElement("div",null,
+            analise.map((a,i)=>React.createElement("div",{key:i,style:{marginBottom:10,cursor:"pointer"},onClick:()=>setDetalhe(a)},
+              React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}},
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+                  React.createElement("span",{style:{background:corProb(i),color:"#fff",fontSize:10,fontWeight:700,width:20,height:20,borderRadius:"50%",display:"inline-flex",alignItems:"center",justifyContent:"center"}},i+1),
+                  React.createElement("span",{style:{fontSize:13,fontWeight:i<3?700:400}},a.prob)
+                ),
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+                  a.abertas>0&&React.createElement("span",{style:{fontSize:11,color:C.red}},`${a.abertas} aberta${a.abertas>1?"s":""}`),
+                  React.createElement("span",{style:{fontWeight:700,color:corProb(i),fontSize:14}},a.total),
+                  React.createElement("span",{style:{fontSize:10,color:C.dim}},"OS")
+                )
+              ),
+              React.createElement("div",{style:{width:"100%",height:8,background:C.border,borderRadius:4,overflow:"hidden"}},
+                React.createElement("div",{style:{width:`${(a.total/maxTotal)*100}%`,height:"100%",background:corProb(i),borderRadius:4}})
+              ),
+              React.createElement("div",{style:{display:"flex",gap:12,marginTop:3,fontSize:10,color:C.dim}},
+                React.createElement("span",null,`${Math.round((a.total/filtered.length)*100)}% do total`),
+                React.createElement("span",null,`${a.fechadas} fechadas`),
+                React.createElement("span",{style:{color:C.blue,cursor:"pointer"}},"ver detalhes →")
+              )
+            ))
+          )
+        ),
+        React.createElement(Grid,{cols:2,mb:0},
+          // Top Condomínios
+          React.createElement(Card,null,
+            React.createElement(CardHeader,{title:"🏢 Top 10 Condomínios com mais OS"}),
+            topConds.map((c,i)=>React.createElement("div",{key:i,style:{marginBottom:8}},
+              React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:2}},
+                React.createElement("span",{style:{fontSize:12,fontWeight:i<3?600:400,maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},c.cond),
+                React.createElement("span",{style:{fontWeight:700,color:i===0?C.red:i===1?C.orange:C.blue,fontSize:13}},c.total)
+              ),
+              React.createElement("div",{style:{width:"100%",height:5,background:C.border,borderRadius:3}},
+                React.createElement("div",{style:{width:`${(c.total/maxCond)*100}%`,height:"100%",background:i===0?C.red:i===1?C.orange:i===2?C.yellow:C.blue,borderRadius:3}})
+              ),
+              React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:1}},
+                Object.entries(c.probs).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([p,n])=>`${p}(${n})`).join(" • ")
+              )
+            ))
+          ),
+          // Top Técnicos
+          React.createElement(Card,null,
+            React.createElement(CardHeader,{title:"👷 OS por Técnico"}),
+            topTecs.map((t,i)=>React.createElement("div",{key:i,style:{marginBottom:8}},
+              React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:2}},
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
+                  React.createElement("div",{style:{width:24,height:24,borderRadius:"50%",background:C.blue+"33",border:`1px solid ${C.blue}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.blue}},t.tec[0]),
+                  React.createElement("span",{style:{fontSize:12}},t.tec.split(" ")[0])
+                ),
+                React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center"}},
+                  t.abertas>0&&React.createElement("span",{style:{fontSize:10,color:C.red}},`${t.abertas} abertas`),
+                  React.createElement("span",{style:{fontWeight:700,color:C.blue}},t.total)
+                )
+              ),
+              React.createElement("div",{style:{width:"100%",height:5,background:C.border,borderRadius:3}},
+                React.createElement("div",{style:{width:`${(t.total/topTecs[0]?.total||1)*100}%`,height:"100%",background:C.cyan,borderRadius:3}})
+              )
+            ))
+          )
+        )
+      )
+    ),
+    // Modal detalhe do problema
+    detalhe&&React.createElement(Modal,{title:`▲ ${detalhe.prob}`,onClose:()=>setDetalhe(null),width:620},
+      React.createElement(Grid,{cols:3,mb:12},
+        React.createElement(KPI,{label:"Total OS",value:detalhe.total,color:C.blue}),
+        React.createElement(KPI,{label:"Abertas",value:detalhe.abertas,color:C.red}),
+        React.createElement(KPI,{label:"Fechadas",value:detalhe.fechadas,color:C.green})
+      ),
+      React.createElement("div",{style:{marginBottom:12}},
+        React.createElement("label",{style:base.lbl},"Top condomínios"),
+        React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}},
+          Object.entries(detalhe.condominios).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([c,n])=>
+            React.createElement("div",{key:c,style:{background:C.bg,border:`1px solid ${C.border}`,borderRadius:6,padding:"3px 8px",fontSize:11}},
+              React.createElement("span",{style:{color:C.text}},c),
+              React.createElement("span",{style:{color:C.blue,fontWeight:700,marginLeft:4}},`x${n}`)
+            )
+          )
+        )
+      ),
+      React.createElement("div",{style:{marginBottom:12}},
+        React.createElement("label",{style:base.lbl},"Top técnicos"),
+        React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}},
+          Object.entries(detalhe.tecnicos).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([t,n])=>
+            React.createElement("div",{key:t,style:{background:C.cyan+"11",border:`1px solid ${C.cyan}33`,borderRadius:6,padding:"3px 8px",fontSize:11}},
+              React.createElement("span",{style:{color:C.cyan}},t.split(" ")[0]),
+              React.createElement("span",{style:{color:C.blue,fontWeight:700,marginLeft:4}},`x${n}`)
+            )
+          )
+        )
+      ),
+      React.createElement("label",{style:base.lbl},"Últimas 10 OS"),
+      React.createElement(Table,{
+        cols:["Nº OS","Data","Condomínio","Técnico","Status"],
+        rows:detalhe.os.slice(0,10).map(o=>[
+          React.createElement("span",{style:{color:C.cyan,fontWeight:600}},o.num),
+          fmt(o.data),
+          React.createElement("span",{style:{fontSize:12}},o.cond),
+          o.tec,
+          React.createElement(Pill,{c:o.status==="Aberto"?C.red:C.green},o.status)
+        ])
+      }),
+      React.createElement("div",{style:{display:"flex",justifyContent:"flex-end",marginTop:16}},
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setDetalhe(null)},"Fechar")
+      )
+    )
+  );
+}
+
 function ModuloEmBreve({nome}){
   return React.createElement("div",{style:{padding:60,textAlign:"center",color:C.muted}},
     React.createElement("div",{style:{fontSize:40,marginBottom:12}},"🔧"),
@@ -2637,6 +2869,7 @@ function App(){
       case"os":return React.createElement(OSModule,{tecsBanco});
       case"atestados":return React.createElement(Atestados,{tecsBanco});
       case"horas-extras":return React.createElement(HorasExtras,{tecsBanco});
+      case"problemas":return React.createElement(Problemas,null);
       case"sla":return React.createElement(SLA,null);
       case"reincidencias":return React.createElement(Reincidencias,null);
       case"tecnicos":return React.createElement(Tecnicos,null);
