@@ -119,6 +119,25 @@ function ListaOS({usuario,onSelect,onLogout}){
   const [loading,setLoading]=useState(true);
   const [filtro,setFiltro]=useState("Minhas");
 
+  // Atualizar localização quando está na lista (disponível)
+  useEffect(()=>{
+    if(!navigator.geolocation)return;
+    const update=(pos)=>{
+      sb.from("tecnicos_localizacao").upsert({
+        id:"loc_"+usuario.nome.replace(/\s+/g,"_"),
+        tec:usuario.nome,
+        lat:pos.coords.latitude,
+        lng:pos.coords.longitude,
+        status_campo:"Disponível",
+        os_num:null,os_cond:null,
+        atualizado_em:new Date().toISOString()
+      },{onConflict:"tec"});
+    };
+    navigator.geolocation.getCurrentPosition(update);
+    const interval=setInterval(()=>navigator.geolocation.getCurrentPosition(update),60000);
+    return()=>clearInterval(interval);
+  },[usuario.nome]);
+
   const load=useCallback(async()=>{
     setLoading(true);
     const{data:os}=await sb.from("os").select("*").eq("status","Aberto").order("data",{ascending:false});
@@ -211,6 +230,45 @@ function DetalheOS({os,usuario,onBack}){
   const [campo,setCampo]=useState(os.campo||null);
   const [loading,setLoading]=useState(false);
   const [fotos,setFotos]=useState([]);
+  const [enderecoCond,setEnderecoCond]=useState("");
+  const [historicoOS,setHistoricoOS]=useState([]);
+
+  useEffect(()=>{
+    // Busca endereço: tenta exato, depois parcial com primeiras palavras
+    (async()=>{
+      let res=await sb.from("condominios").select("nome,endereco").eq("nome",os.cond).limit(1);
+      if(!res.data||res.data.length===0){
+        const palavras=os.cond.split(" ").filter(p=>p.length>3).slice(0,3).join(" ");
+        res=await sb.from("condominios").select("nome,endereco").ilike("nome","%"+palavras+"%").limit(1);
+      }
+      if(res.data&&res.data[0]&&res.data[0].endereco)setEnderecoCond(res.data[0].endereco);
+    })();
+    sb.from("os").select("num,data,prob,status,relato").eq("cond",os.cond).eq("status","Fechado")
+      .order("data",{ascending:false}).limit(2)
+      .then(({data})=>setHistoricoOS(data||[]));
+  },[os.cond]);
+
+  // Rastreamento GPS em tempo real
+  useEffect(()=>{
+    if(!navigator.geolocation)return;
+    const updateLoc=(pos)=>{
+      const{latitude:lat,longitude:lng}=pos.coords;
+      sb.from("tecnicos_localizacao").upsert({
+        id:"loc_"+usuario.nome.replace(/\s+/g,"_"),
+        tec:usuario.nome,lat,lng,
+        status_campo:campo?.status_campo||"Disponível",
+        os_num:os.num,
+        os_cond:os.cond,
+        atualizado_em:new Date().toISOString()
+      },{onConflict:"tec"});
+    };
+    const watcher=navigator.geolocation.watchPosition(updateLoc,null,{enableHighAccuracy:true,maximumAge:15000,timeout:10000});
+    // Atualizar a cada 30 segundos mesmo sem movimento
+    const interval=setInterval(()=>{
+      navigator.geolocation.getCurrentPosition(updateLoc);
+    },30000);
+    return()=>{navigator.geolocation.clearWatch(watcher);clearInterval(interval);};
+  },[usuario.nome,campo?.status_campo,os.num,os.cond]);
   const [problema,setProblema]=useState(os.campo?.problema||"");
   const [solucao,setSolucao]=useState(os.campo?.solucao||"");
   const [material,setMaterial]=useState(os.campo?.material||"");
@@ -350,12 +408,57 @@ function DetalheOS({os,usuario,onBack}){
 
       // Info Card
       React.createElement("div",{style:{background:C.card,borderRadius:14,padding:16,marginBottom:14,border:"1px solid "+C.border}},
-        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
-          [["Problema",os.prob],["Prioridade",os.pri||"Média"],["Data",os.data],["Técnico",os.tec]].map(([l,v],i)=>
-            React.createElement("div",{key:i},
-              React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:2}},l),
-              React.createElement("div",{style:{fontSize:13,fontWeight:600}},v||"—")
+        // Número OS + Prioridade
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,paddingBottom:10,borderBottom:"1px solid "+C.border}},
+          React.createElement("div",null,
+            React.createElement("div",{style:{fontSize:10,color:C.muted}},"Nº OS"),
+            React.createElement("div",{style:{fontSize:20,fontWeight:900,color:C.cyan}},"#"+os.num)
+          ),
+          React.createElement("div",{style:{textAlign:"right"}},
+            React.createElement("div",{style:{fontSize:10,color:C.muted}},"Prioridade"),
+            React.createElement("div",{style:{background:(os.pri==="Alta"?C.red:os.pri==="Média"?C.yellow:C.green)+"22",color:os.pri==="Alta"?C.red:os.pri==="Média"?C.yellow:C.green,padding:"3px 12px",borderRadius:10,fontSize:13,fontWeight:700}},os.pri||"Média")
+          )
+        ),
+        // Problema
+        React.createElement("div",{style:{marginBottom:12,paddingBottom:10,borderBottom:"1px solid "+C.border}},
+          React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:4}},"🔧 Problema Reportado"),
+          React.createElement("div",{style:{fontSize:14,fontWeight:600,color:C.text}},os.prob||"—")
+        ),
+        // Condomínio + Endereço
+        React.createElement("div",{style:{marginBottom:10}},
+          React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:4}},"🏢 Condomínio"),
+          React.createElement("div",{style:{fontSize:14,fontWeight:700}},os.cond),
+          enderecoCond?React.createElement("div",{style:{display:"flex",alignItems:"flex-start",gap:6,marginTop:6,background:C.blue+"11",borderRadius:8,padding:"8px 10px"}},
+            React.createElement("span",{style:{fontSize:16,flexShrink:0}},"📍"),
+            React.createElement("div",null,
+              React.createElement("div",{style:{fontSize:11,color:C.muted}},"Endereço"),
+              React.createElement("div",{style:{fontSize:13,color:C.blue,fontWeight:600}},enderecoCond),
+              React.createElement("a",{href:"https://maps.google.com/?q="+encodeURIComponent(enderecoCond),target:"_blank",style:{fontSize:11,color:C.cyan,textDecoration:"none",display:"block",marginTop:4}},"🗺 Abrir no Maps →")
             )
+          ):null
+        ),
+        // Data e Técnico
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
+          [["📅 Data",os.data],["👷 Técnico",os.tec]].map(([l,v],i)=>
+            React.createElement("div",{key:i,style:{background:C.surface,borderRadius:8,padding:"8px 10px"}},
+              React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:2}},l),
+              React.createElement("div",{style:{fontSize:12,fontWeight:600}},v||"—")
+            )
+          )
+        )
+      ),
+
+      // Histórico das últimas OS do condomínio
+      historicoOS.length>0&&React.createElement("div",{style:{background:C.card,borderRadius:14,padding:16,marginBottom:14,border:"1px solid "+C.yellow+"44"}},
+        React.createElement("div",{style:{fontSize:13,fontWeight:700,marginBottom:10,color:C.yellow}},"📋 Últimas OS do Condomínio"),
+        historicoOS.map((h,i)=>
+          React.createElement("div",{key:i,style:{background:C.surface,borderRadius:10,padding:"10px 12px",marginBottom:i<historicoOS.length-1?8:0}},
+            React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:4}},
+              React.createElement("span",{style:{color:C.cyan,fontWeight:700,fontSize:13}},"#"+h.num),
+              React.createElement("span",{style:{fontSize:11,color:C.dim}},h.data)
+            ),
+            React.createElement("div",{style:{fontSize:12,color:C.text,marginBottom:4}},h.prob),
+            h.relato?React.createElement("div",{style:{fontSize:11,color:C.muted,fontStyle:"italic",borderTop:"1px solid "+C.border,paddingTop:4,marginTop:4}},'"'+h.relato.slice(0,100)+(h.relato.length>100?"...":"")+'"'):null
           )
         )
       ),
