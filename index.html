@@ -1501,6 +1501,7 @@ function Preventivas({onSave}){
   const [confirmDel,setConfirmDel]=useState(null);
   const [busca,setBusca]=useState("");
   const [filtStatus,setFiltStatus]=useState("Todos");
+  const [filtTec,setFiltTec]=useState("");
   const STATUS_PREV={"Pendente":{c:C.yellow},"Em andamento":{c:C.blue},"Concluída":{c:C.green},"Cancelada":{c:C.dim}};
   const load=useCallback(async()=>{
     setLoading(true);
@@ -1510,8 +1511,9 @@ function Preventivas({onSave}){
   useEffect(()=>{load();},[load]);
   const filtered=useMemo(()=>data.filter(d=>
     (!busca||d.cond.toLowerCase().includes(busca.toLowerCase()))&&
-    (filtStatus==="Todos"||d.status===filtStatus)
-  ),[data,busca,filtStatus]);
+    (filtStatus==="Todos"||d.status===filtStatus)&&
+    (!filtTec||d.tecnico===filtTec)
+  ),[data,busca,filtStatus,filtTec]);
   const save=async item=>{
     if(item.id&&data.find(x=>x.id===item.id)){await sb.from("preventivas").update(item).eq("id",item.id);}
     else{await sb.from("preventivas").insert(item);}
@@ -1560,7 +1562,7 @@ function Preventivas({onSave}){
   ,[alertasReinc,data]);
 
   const EditModal=({item,onClose})=>{
-    const [f,setF]=useState(item||{cond:CONDS[0],primeira_visita:"",num_pedido:"",equipamentos:"",finalizado:"",retorno:"",laudo_enviado:"",devolucao:"",regua_ip:"",regua_ok:"",status:"Pendente",laudo_url:"",foto_url:"",obs:""});
+    const [f,setF]=useState(item||{cond:CONDS[0],tecnico:"",primeira_visita:"",num_pedido:"",equipamentos:"",finalizado:"",retorno:"",laudo_enviado:"",devolucao:"",regua_ip:"",regua_ok:"",status:"Pendente",laudo_url:"",foto_url:"",obs:""});
     const [uploading,setUploading]=useState(false);
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
     const handleFile=async(e,tipo)=>{
@@ -1579,6 +1581,13 @@ function Preventivas({onSave}){
     return React.createElement(Modal,{title:item?"Editar Preventiva":"Nova Preventiva",onClose,width:580},
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
         React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},CONDS.map(c=>React.createElement("option",{key:c},c)))),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"👷 Técnico Responsável"),
+          React.createElement("select",{style:base.sel,value:f.tecnico||"",onChange:upd("tecnico")},
+            React.createElement("option",{value:""},"Selecionar técnico..."),
+            TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
+          )
+        ),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"1ª Visita"),React.createElement("input",{type:"date",style:base.inp,value:f.primeira_visita,onChange:upd("primeira_visita")})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Nº Pedido"),React.createElement("input",{style:base.inp,value:f.num_pedido,onChange:upd("num_pedido")})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Retorno"),React.createElement("input",{type:"date",style:base.inp,value:f.retorno,onChange:upd("retorno")})),
@@ -1690,15 +1699,20 @@ function Preventivas({onSave}){
       ),
       React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
         React.createElement("input",{style:{...base.inp,width:220},placeholder:"Buscar condomínio...",value:busca,onChange:e=>setBusca(e.target.value)}),
+        React.createElement("select",{style:{...base.sel,width:160},value:filtTec||"",onChange:e=>setFiltTec(e.target.value)},
+          React.createElement("option",{value:""},"Todos técnicos"),
+          ...TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
+        ),
         ["Todos",...Object.keys(STATUS_PREV)].map(s=>React.createElement("button",{key:s,style:btnStyle(STATUS_PREV[s]?.c||C.blue,filtStatus!==s),onClick:()=>setFiltStatus(s)},s)),
         (busca||filtStatus!=="Todos")&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setBusca("");setFiltStatus("Todos");}},"✕ Limpar")
       ),
       loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
       React.createElement(Card,null,
         React.createElement(Table,{
-          cols:["Condomínio","1ª Visita","Nº Pedido","Retorno","Laudo","Régua","Status","Arquivos","Ações"],
+          cols:["Condomínio","👷 Técnico","1ª Visita","Nº Pedido","Retorno","Laudo","Régua","Status","Arquivos","Ações"],
           rows:filtered.map(d=>[
             React.createElement("span",{style:{fontWeight:600}},d.cond),
+            d.tecnico?React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},React.createElement("div",{style:{width:22,height:22,borderRadius:"50%",background:C.green+"22",border:`1px solid ${C.green}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:C.green}},d.tecnico[0]),React.createElement("span",{style:{fontSize:11}},d.tecnico)):React.createElement("span",{style:{color:C.dim}},"—"),
             fmt(d.primeira_visita)||React.createElement("span",{style:{color:C.dim}},"—"),
             d.num_pedido||React.createElement("span",{style:{color:C.dim}},"—"),
             fmt(d.retorno)||React.createElement("span",{style:{color:C.dim}},"—"),
