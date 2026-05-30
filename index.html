@@ -3600,6 +3600,337 @@ function Organograma(){
 }
 
 
+// ── RANKING DE SUPERVISORES ──────────────────────────────────
+function RankingSupervisores(){
+  const [os,setOs]=useState([]);
+  const [preventivas,setPreventivas]=useState([]);
+  const [instalacoes,setInstalacoes]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [mesSel,setMesSel]=useState(String(new Date().getMonth()+1).padStart(2,"0"));
+  const [anoSel,setAnoSel]=useState(String(new Date().getFullYear()));
+  const [detalhe,setDetalhe]=useState(null);
+  const MESES_N=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+  const {tick}=React.useContext(RefreshCtx);
+
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const[{data:osData},{data:prevData},{data:instData}]=await Promise.all([
+      sb.from("os").select("*"),
+      sb.from("preventivas").select("*"),
+      sb.from("instalacoes").select("*")
+    ]);
+    setOs(osData||[]);setPreventivas(prevData||[]);setInstalacoes(instData||[]);
+    setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load,tick]);
+
+  // Calcular prazo 30 dias úteis
+  function prazo30(dataInicio){
+    if(!dataInicio)return null;
+    var d=new Date(dataInicio+"T08:00:00");var h=30;
+    while(h>0){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)h--;}
+    return d.toISOString().split("T")[0];
+  }
+
+  // Calcular horas úteis
+  function horasUteis(d1){
+    var start=new Date(d1+"T08:00:00");var end=new Date();
+    var horas=0;var cur=new Date(start);
+    while(cur<end){if(cur.getDay()!==0&&cur.getDay()!==6){var ini=new Date(cur);ini.setHours(8,0,0,0);var fim2=new Date(cur);fim2.setHours(18,0,0,0);var s=cur<ini?ini:cur;var e=end<fim2?end:fim2;if(e>s)horas+=(e-s)/3600000;}cur.setDate(cur.getDate()+1);cur.setHours(8,0,0,0);}
+    return horas;
+  }
+
+  // Supervisores fixos
+  var supervisores=[
+    {id:"sup1",nome:"Supervisor Manut. 1",tipo:"manutencao",icon:"🔧"},
+    {id:"sup2",nome:"Supervisor Manut. 2",tipo:"manutencao",icon:"🔧"},
+    {id:"sup_inst",nome:"Supervisor Instalação",tipo:"instalacao",icon:"🏗️"},
+    {id:"sup_prev",nome:"Supervisor Preventiva",tipo:"preventiva",icon:"🔍"},
+  ];
+
+  const pontuacoes=useMemo(()=>{
+    var hoje=new Date();
+    var mesNum=parseInt(mesSel);var anoNum=parseInt(anoSel);
+
+    // OS do mês selecionado
+    var osMes=os.filter(function(d){
+      if(!d.data)return false;
+      var p=d.data.split("-");
+      return parseInt(p[1])===mesNum&&parseInt(p[0])===anoNum;
+    });
+
+    return supervisores.map(function(sup){
+      var pts={};var pior=null;var piorVal=100;
+
+      if(sup.tipo==="instalacao"){
+        // 1. Prazo instalação (25%)
+        var instConcluidas=instalacoes.filter(function(i){return i.status==="Concluída no prazo"||i.status==="Concluída com atraso";});
+        var instNoPrazo=instConcluidas.filter(function(i){
+          if(!i.data_inicio||!i.data_entrega_portaria)return false;
+          return i.data_entrega_portaria<=prazo30(i.data_inicio);
+        });
+        pts.prazo=instConcluidas.length>0?Math.round((instNoPrazo.length/instConcluidas.length)*100):100;
+
+        // 2. Qualidade pós-instalação (25%)
+        var instEntregues=instalacoes.filter(function(i){return i.data_entrega_portaria;});
+        var semOS=instEntregues.filter(function(inst){
+          var entrega=new Date(inst.data_entrega_portaria);
+          var tresM=new Date(entrega);tresM.setMonth(tresM.getMonth()+3);
+          var osProblema=os.filter(function(o){
+            if(!o.data||!o.cond)return false;
+            var d=new Date(o.data);
+            return o.cond===inst.cond&&d>=entrega&&d<=tresM;
+          });
+          return osProblema.length===0;
+        });
+        pts.qualidade=instEntregues.length>0?Math.round((semOS.length/instEntregues.length)*100):100;
+
+        // SLA manutenção não se aplica — usar média
+        pts.sla=100;pts.recorrencia=100;pts.metaPrev=100;pts.qualPrev=100;
+
+        var nota=Math.round(pts.prazo*0.5+pts.qualidade*0.5);
+        if(pts.prazo<piorVal){piorVal=pts.prazo;pior="Prazo de Instalação";}
+        if(pts.qualidade<piorVal){piorVal=pts.qualidade;pior="Qualidade Pós-Instalação";}
+        return {sup,pts,nota,pior:pior||"—"};
+      }
+
+      if(sup.tipo==="manutencao"){
+        // 3. SLA 48h úteis (20%)
+        var totalOS=osMes.length;
+        var dentrSLA=osMes.filter(function(o){
+          if(o.status==="Aberto"||!o.data)return false;
+          // Simplificado: OS fechada no mesmo dia ou próximo = dentro do SLA
+          return true; // todas fechadas consideradas no SLA por ora
+        });
+        // Calcular proporcionalmente
+        var abertas=osMes.filter(function(o){return o.status==="Aberto";});
+        var vencidas=abertas.filter(function(o){return o.data&&horasUteis(o.data)>48;});
+        pts.sla=totalOS>0?Math.round(((totalOS-vencidas.length)/totalOS)*100):100;
+
+        // 4. Recorrência (10%)
+        var mapReinc={};
+        osMes.forEach(function(o){
+          var k=o.cond+"||"+o.prob;
+          if(!mapReinc[k])mapReinc[k]=0;
+          mapReinc[k]++;
+        });
+        var reincidencias=Object.values(mapReinc).filter(function(v){return v>=2;}).length;
+        var totalGrupos=Object.keys(mapReinc).length||1;
+        pts.recorrencia=Math.round(Math.max(0,100-(reincidencias/totalGrupos)*100));
+
+        pts.prazo=100;pts.qualidade=100;pts.metaPrev=100;pts.qualPrev=100;
+
+        var nota=Math.round(pts.sla*0.65+pts.recorrencia*0.35);
+        if(pts.sla<piorVal){piorVal=pts.sla;pior="SLA de Atendimento";}
+        if(pts.recorrencia<piorVal){piorVal=pts.recorrencia;pior="Controle de Recorrência";}
+        return {sup,pts,nota,pior:pior||"—"};
+      }
+
+      if(sup.tipo==="preventiva"){
+        // 5. Meta preventivas (10%)
+        var prevMes=preventivas.filter(function(p){return p.status==="Concluída";});
+        pts.metaPrev=Math.min(100,Math.round((prevMes.length/17)*100));
+
+        // 6. Qualidade pós-preventiva (10%)
+        var prevConcl=preventivas.filter(function(p){return p.status==="Concluída"&&p.retorno;});
+        var semOSPrev=prevConcl.filter(function(prev){
+          if(!prev.retorno||!prev.cond)return true;
+          var ret=new Date(prev.retorno);
+          var tresM=new Date(ret);tresM.setMonth(tresM.getMonth()+3);
+          var osProb=os.filter(function(o){
+            if(!o.data)return false;
+            var d=new Date(o.data);
+            return o.cond===prev.cond&&d>=ret&&d<=tresM;
+          });
+          return osProb.length===0;
+        });
+        pts.qualPrev=prevConcl.length>0?Math.round((semOSPrev.length/prevConcl.length)*100):100;
+
+        pts.prazo=100;pts.qualidade=100;pts.sla=100;pts.recorrencia=100;
+
+        var nota=Math.round(pts.metaPrev*0.55+pts.qualPrev*0.45);
+        if(pts.metaPrev<piorVal){piorVal=pts.metaPrev;pior="Meta de Preventivas";}
+        if(pts.qualPrev<piorVal){piorVal=pts.qualPrev;pior="Qualidade Pós-Preventiva";}
+        return {sup,pts,nota,pior:pior||"—"};
+      }
+
+      return {sup,pts:{},nota:0,pior:"—"};
+    }).sort(function(a,b){return b.nota-a.nota;});
+  },[os,preventivas,instalacoes,mesSel,anoSel]);
+
+  function classificacao(nota){
+    if(nota>=90)return {icon:"🥇",label:"Ouro",c:C.yellow};
+    if(nota>=80)return {icon:"🥈",label:"Prata",c:"#94a3b8"};
+    if(nota>=70)return {icon:"🥉",label:"Bronze",c:C.orange};
+    if(nota>=60)return {icon:"⚠️",label:"Atenção",c:C.yellow};
+    return {icon:"🚨",label:"Crítico",c:C.red};
+  }
+
+  function semaforo(val){
+    if(val>=85)return {c:C.green,icon:"🟢"};
+    if(val>=70)return {c:C.yellow,icon:"🟡"};
+    return {c:C.red,icon:"🔴"};
+  }
+
+  var melhor=pontuacoes[0];
+  var pior2=pontuacoes[pontuacoes.length-1];
+  var media=pontuacoes.length>0?Math.round(pontuacoes.reduce(function(s,p){return s+p.nota;},0)/pontuacoes.length):0;
+
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🏆 Ranking de Desempenho"),
+        React.createElement("div",{style:{fontSize:12,color:C.muted}},"Avaliação operacional dos supervisores técnicos")
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center"}},
+        React.createElement("select",{style:{...base.sel,width:140},value:mesSel,onChange:e=>setMesSel(e.target.value)},
+          MESES_N.map(function(m,i){return React.createElement("option",{key:i,value:String(i+1).padStart(2,"0")},m);})
+        ),
+        React.createElement("select",{style:{...base.sel,width:90},value:anoSel,onChange:e=>setAnoSel(e.target.value)},
+          ["2025","2026","2027"].map(function(a){return React.createElement("option",{key:a,value:a},a);})
+        )
+      )
+    ),
+    React.createElement("div",{style:{padding:"20px 24px"}},
+      loading?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.muted}},"Carregando dados..."):
+      React.createElement("div",null,
+
+        // KPIs topo
+        React.createElement(Grid,{cols:4,mb:16},
+          React.createElement("div",{style:{background:C.card,borderRadius:12,padding:16,borderLeft:`4px solid ${C.yellow}`}},
+            React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:4}},"🥇 Melhor do Mês"),
+            React.createElement("div",{style:{fontSize:15,fontWeight:700,color:C.yellow}},melhor?.sup.nome||"—"),
+            React.createElement("div",{style:{fontSize:22,fontWeight:800,color:C.yellow}},melhor?.nota||0),
+            React.createElement("div",{style:{fontSize:10,color:C.dim}},"pontos")
+          ),
+          React.createElement(KPI,{label:"Média Geral",value:media,color:media>=80?C.green:media>=60?C.yellow:C.red}),
+          React.createElement("div",{style:{background:C.card,borderRadius:12,padding:16,borderLeft:`4px solid ${C.red}`}},
+            React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:4}},"⚠️ Atenção"),
+            React.createElement("div",{style:{fontSize:15,fontWeight:700,color:C.red}},pior2?.sup.nome||"—"),
+            React.createElement("div",{style:{fontSize:22,fontWeight:800,color:C.red}},pior2?.nota||0),
+            React.createElement("div",{style:{fontSize:10,color:C.dim}},"pontos")
+          ),
+          React.createElement("div",{style:{background:C.card,borderRadius:12,padding:16,borderLeft:`4px solid ${C.blue}`}},
+            React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:4}},"Supervisores Avaliados"),
+            React.createElement("div",{style:{fontSize:28,fontWeight:800,color:C.blue}},pontuacoes.length),
+            React.createElement("div",{style:{fontSize:10,color:C.dim}},"no período")
+          )
+        ),
+
+        // Ranking Cards
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14,marginBottom:20}},
+          pontuacoes.map(function(p,i){
+            var cls=classificacao(p.nota);
+            var sem=semaforo(p.nota);
+            return React.createElement("div",{key:p.sup.id,style:{background:C.card,borderRadius:14,padding:18,border:`2px solid ${cls.c}33`,cursor:"pointer",transition:"transform 0.2s"},onClick:function(){setDetalhe(p);}},
+              // Posição + ícone classificação
+              React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}},
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+                  React.createElement("div",{style:{width:32,height:32,borderRadius:"50%",background:cls.c+"22",border:`2px solid ${cls.c}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:cls.c}},i+1),
+                  React.createElement("div",null,
+                    React.createElement("div",{style:{fontSize:13,fontWeight:700}},p.sup.nome),
+                    React.createElement("div",{style:{fontSize:10,color:C.muted}},p.sup.icon+" "+p.sup.tipo.charAt(0).toUpperCase()+p.sup.tipo.slice(1))
+                  )
+                ),
+                React.createElement("div",{style:{textAlign:"right"}},
+                  React.createElement("div",{style:{fontSize:10}},sem.icon),
+                  React.createElement("div",{style:{fontSize:22,fontWeight:800,color:cls.c}},p.nota),
+                  React.createElement("div",{style:{fontSize:9,color:C.dim}},"pts")
+                )
+              ),
+              // Barra de progresso
+              React.createElement("div",{style:{marginBottom:10}},
+                React.createElement("div",{style:{width:"100%",height:8,background:C.border,borderRadius:4,overflow:"hidden"}},
+                  React.createElement("div",{style:{width:p.nota+"%",height:"100%",background:`linear-gradient(90deg,${cls.c},${cls.c}88)`,borderRadius:4}})
+                )
+              ),
+              // Classificação
+              React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+                React.createElement("span",{style:{background:cls.c+"22",color:cls.c,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:10}},cls.icon+" "+cls.label),
+                React.createElement("span",{style:{fontSize:10,color:C.dim}},"Pior: "+p.pior)
+              )
+            );
+          })
+        ),
+
+        // Tabela detalhada
+        React.createElement(Card,null,
+          React.createElement(CardHeader,{title:"📊 Comparativo por Indicador"}),
+          React.createElement(Table,{
+            cols:["#","Supervisor","Tipo","Prazo","Qualidade","SLA","Recorrência","Meta Prev.","Qual. Prev.","Nota Final","Class."],
+            rows:pontuacoes.map(function(p,i){
+              function Cell(val,peso){
+                var s=semaforo(val);
+                return React.createElement("div",{style:{textAlign:"center"}},
+                  React.createElement("div",{style:{fontWeight:700,color:s.c,fontSize:13}},val),
+                  React.createElement("div",{style:{fontSize:8,color:C.dim}},peso?peso+"%":"—")
+                );
+              }
+              var cls=classificacao(p.nota);
+              return [
+                React.createElement("span",{style:{color:C.dim,fontSize:12}},i+1),
+                React.createElement("span",{style:{fontWeight:600,fontSize:12}},p.sup.nome),
+                React.createElement("span",{style:{fontSize:11,color:C.muted}},p.sup.tipo),
+                Cell(p.pts.prazo||"—","25"),
+                Cell(p.pts.qualidade||"—","25"),
+                Cell(p.pts.sla||"—","20"),
+                Cell(p.pts.recorrencia||"—","10"),
+                Cell(p.pts.metaPrev||"—","10"),
+                Cell(p.pts.qualPrev||"—","10"),
+                React.createElement("div",{style:{fontWeight:800,fontSize:16,color:cls.c,textAlign:"center"}},p.nota),
+                React.createElement("span",{style:{background:cls.c+"22",color:cls.c,fontSize:11,padding:"2px 8px",borderRadius:10,whiteSpace:"nowrap"}},cls.icon+" "+cls.label)
+              ];
+            })
+          })
+        ),
+
+        // Legenda pesos
+        React.createElement(Card,{style:{marginTop:14}},
+          React.createElement("div",{style:{fontSize:12,fontWeight:600,marginBottom:10,color:C.muted}},"📌 Pesos dos Indicadores"),
+          React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+            [["Prazo Instalação","25%",C.blue],["Qualidade Instalação","25%",C.cyan],["SLA Manutenção","20%",C.orange],["Recorrência","10%",C.yellow],["Meta Preventiva","10%",C.green],["Qual. Pós-Prev.","10%",C.purple]].map(function(item,i){
+              return React.createElement("div",{key:i,style:{background:item[2]+"18",border:"1px solid "+item[2]+"33",borderRadius:8,padding:"6px 12px",fontSize:11}},
+                React.createElement("span",{style:{color:item[2],fontWeight:700}},item[1])," ",item[0]
+              );
+            })
+          )
+        )
+      )
+    ),
+
+    // Modal detalhe
+    detalhe&&React.createElement(Modal,{title:`📊 ${detalhe.sup.nome} — Detalhamento`,onClose:function(){setDetalhe(null);},width:560},
+      React.createElement("div",{style:{textAlign:"center",marginBottom:16}},
+        React.createElement("div",{style:{fontSize:48,marginBottom:4}},classificacao(detalhe.nota).icon),
+        React.createElement("div",{style:{fontSize:36,fontWeight:800,color:classificacao(detalhe.nota).c}},detalhe.nota),
+        React.createElement("div",{style:{fontSize:13,color:C.muted}},"pontos — "+classificacao(detalhe.nota).label)
+      ),
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}},
+        [["Prazo Instalação",detalhe.pts.prazo,"25%",C.blue],["Qualidade Instalação",detalhe.pts.qualidade,"25%",C.cyan],["SLA Manutenção",detalhe.pts.sla,"20%",C.orange],["Controle Recorrência",detalhe.pts.recorrencia,"10%",C.yellow],["Meta Preventiva",detalhe.pts.metaPrev,"10%",C.green],["Qual. Pós-Preventiva",detalhe.pts.qualPrev,"10%",C.purple]].map(function(item,i){
+          var s=semaforo(item[1]);
+          return React.createElement("div",{key:i,style:{background:item[3]+"11",border:"1px solid "+item[3]+"33",borderRadius:10,padding:"10px 12px"}},
+            React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:4}},item[0]+" ("+item[2]+")"),
+            React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
+              React.createElement("div",{style:{flex:1,height:6,background:C.border,borderRadius:3}},
+                React.createElement("div",{style:{width:item[1]+"%",height:"100%",background:item[3],borderRadius:3}})
+              ),
+              React.createElement("span",{style:{fontSize:13,fontWeight:700,color:s.c}},item[1]),
+              React.createElement("span",null,s.icon)
+            )
+          );
+        })
+      ),
+      React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"10px 14px",fontSize:12,color:C.red}},
+        "⚠ Pior indicador: ",React.createElement("strong",null,detalhe.pior)
+      ),
+      React.createElement("div",{style:{display:"flex",justifyContent:"flex-end",marginTop:14}},
+        React.createElement("button",{style:btnStyle(C.blue),onClick:function(){setDetalhe(null);}},"Fechar")
+      )
+    )
+  );
+}
+
 function ModuloEmBreve({nome}){
   return React.createElement("div",{style:{padding:60,textAlign:"center",color:C.muted}},
     React.createElement("div",{style:{fontSize:40,marginBottom:12}},"🔧"),
@@ -3714,6 +4045,7 @@ const TABS=[
   {id:"pedidos",icon:"🛒",label:"Pedidos"},
   {id:"demandas",icon:"📌",label:"Demandas Adm.",badge:"new"},
   {id:"instalacoes",icon:"🔨",label:"Instalações"},
+  {id:"ranking",icon:"🏆",label:"Ranking"},
   {id:"parametros",icon:"📋",label:"Parâmetros"},
   {id:"organograma",icon:"🏢",label:"Organograma"},
   {id:"usuarios",icon:"👤",label:"Usuários"},
@@ -3764,6 +4096,7 @@ function App(){
       case"demandas":return React.createElement(Demandas,{onSave:refresh});
       case"usuarios":return React.createElement(Usuarios,{usuarioAtual:usuario});
       case"instalacoes":return React.createElement(Instalacoes,{onSave:refresh});
+      case"ranking":return React.createElement(RankingSupervisores,null);
       case"parametros":return React.createElement(Parametros,null);
       case"organograma":return React.createElement(Organograma,null);
       default:return React.createElement(ModuloEmBreve,{nome:TABS.find(t=>t.id===tab)?.label||tab});
