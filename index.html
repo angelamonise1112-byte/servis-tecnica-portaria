@@ -1258,7 +1258,12 @@ function Dashboard({setTab}){
         if(d.status==="Aberto")mapMes[k].abertas++;
         else mapMes[k].fechadas++;
       });
-      var osPorMes=Object.values(mapMes).sort(function(a,b){return a.key.localeCompare(b.key);});
+      // Override com totais reais da RISEG por mês 2026
+      var overrides={"2026-01":535,"2026-02":563,"2026-03":473,"2026-04":374,"2026-05":390};
+      var osPorMes=Object.values(mapMes).sort(function(a,b){return a.key.localeCompare(b.key);}).map(function(d){
+        if(overrides[d.key]!==undefined)return Object.assign({},d,{total:overrides[d.key]});
+        return d;
+      });
 
       setStats({
         osAbertas:osAb.length,osFechadas:osFech.length,osTotal:os.length,
