@@ -3519,8 +3519,7 @@ function Organograma(){
         React.createElement("div",{style:{background:verde2.bg,border:"2px solid "+verde2.border,borderRadius:12,padding:"12px 20px",textAlign:"center",minWidth:220,boxShadow:"0 0 20px "+verde2.border+"22"}},
           Bdg(verde2,"SUPERVISÃO OPERACIONAL"),
           FC("sup_ma","Supervisor MA",verde2,44),
-          React.createElement("div",{style:{fontSize:12,fontWeight:800,color:verde2.text,marginTop:6}},"Supervisor Manut. e Instalação"),
-          Items(["📋 Gestão das equipes","📞 Distribuição de chamados","⏱ Controle de SLA","✅ Qualidade das execuções","🔍 Acompanhamento preventivas"],verde2)
+          React.createElement("div",{style:{fontSize:12,fontWeight:800,color:verde2.text,marginTop:6}},"Supervisor Manut. e Instalação")
         )
       ),
       V(18),H(180),
@@ -3529,14 +3528,12 @@ function Organograma(){
         React.createElement("div",{style:{background:ciano.bg,border:"1.5px solid "+ciano.border,borderRadius:10,padding:"12px 10px",flex:1}},
           Bdg(ciano,"ÁREA"),
           FC("tec_a_ma","Técnico A",ciano,36),
-          React.createElement("div",{style:{fontSize:10,fontWeight:700,color:ciano.text,textAlign:"center",marginTop:6}},"Técnico de Área A"),
-          Items(["🔧 Manutenção corretiva","📞 Chamados técnicos","🏢 Atendimento condomínios","🤝 Suporte operacional"],ciano)
+          React.createElement("div",{style:{fontSize:10,fontWeight:700,color:ciano.text,textAlign:"center",marginTop:6}},"Técnico de Área A")
         ),
         React.createElement("div",{style:{background:roxo.bg,border:"1.5px solid "+roxo.border,borderRadius:10,padding:"12px 10px",flex:1}},
           Bdg(roxo,"PREVENTIVA"),
           FC("tec_p_ma","Técnico P",roxo,36),
-          React.createElement("div",{style:{fontSize:10,fontWeight:700,color:roxo.text,textAlign:"center",marginTop:6}},"Técnico de Preventiva 1"),
-          Items(["🔍 Preventivas programadas","✅ Checklists técnicos","📋 Inspeções preventivas","📄 Relatórios de manutenção"],roxo)
+          React.createElement("div",{style:{fontSize:10,fontWeight:700,color:roxo.text,textAlign:"center",marginTop:6}},"Técnico de Preventiva 1")
         )
       ),
       React.createElement("div",{style:{marginTop:36,paddingTop:24,borderTop:"2px dashed #1e293b"}},
@@ -3549,7 +3546,13 @@ function Organograma(){
             PlantonBox("pl3_ma","Plantonista 3","24h",laranja),
             PlantonBox("pl4_ma","Plantonista 4","24h",laranja)
           ),
-          ApoioRow(["⚡ Emergências","📞 Chamados fora do horário","🤝 Apoio às equipes","🔍 Apoio em preventivas","🏖️ Férias","🏥 Afastamentos","📋 Demandas represadas"],laranja)
+          ApoioRow(["⚡ Emergências","📞 Chamados fora do horário","🤝 Apoio às equipes","🔍 Apoio em preventivas","🏖️ Férias","🏥 Afastamentos","📋 Demandas represadas"],laranja),
+          React.createElement("div",{style:{marginTop:12}}),
+          Bdg(roxo,"TÉCNICO FERISTA"),
+          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6}},
+            PlantonBox("ferista_ma","Ferista","Cobertura MA",roxo),
+            ApoioRow(["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","🔍 Apoio em preventivas","📋 Apoio em demandas"],roxo)
+          )
         )
       )
     );
@@ -3772,19 +3775,17 @@ function App(){
           );
         })
       ),
-      React.createElement("div",{style:{padding:"10px 14px",borderTop:`1px solid ${C.border}`}},
-        React.createElement("div",{style:{background:C.card,borderRadius:10,padding:"10px 12px",marginBottom:8}},
-          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:8}},
-            React.createElement("div",{style:{width:32,height:32,borderRadius:"50%",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:14}},usuario.nome[0].toUpperCase()),
-            React.createElement("div",null,React.createElement("div",{style:{fontSize:12,fontWeight:600}},usuario.nome),React.createElement("div",{style:{fontSize:10,color:C.dim}},usuario.nivel))
+      React.createElement("div",{style:{padding:"6px 10px",borderTop:`1px solid ${C.border}`}},
+        React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,background:C.card,borderRadius:8,padding:"6px 8px"}},
+          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
+            React.createElement("div",{style:{width:24,height:24,borderRadius:"50%",background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:11,flexShrink:0}},usuario.nome[0].toUpperCase()),
+            React.createElement("div",null,
+              React.createElement("div",{style:{fontSize:11,fontWeight:600,color:C.text}},usuario.nome),
+              React.createElement("div",{style:{fontSize:9,color:C.dim}},usuario.nivel)
+            )
           ),
-          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:10,textAlign:"center"}},
-            React.createElement("div",{style:{background:C.red+"18",borderRadius:4,padding:"3px 0"}},React.createElement("div",{style:{color:C.red,fontWeight:700}},osCount),React.createElement("div",{style:{color:C.dim}},"OS")),
-            React.createElement("div",{style:{background:C.yellow+"18",borderRadius:4,padding:"3px 0"}},React.createElement("div",{style:{color:C.yellow,fontWeight:700}},atCount),React.createElement("div",{style:{color:C.dim}},"Atest.")),
-            React.createElement("div",{style:{background:C.orange+"18",borderRadius:4,padding:"3px 0"}},React.createElement("div",{style:{color:C.orange,fontWeight:700}},heCount),React.createElement("div",{style:{color:C.dim}},"HE"))
-          )
-        ),
-        React.createElement("button",{onClick:()=>setUsuario(null),style:{...btnStyle(C.red,true),width:"100%",fontSize:12}},"Sair")
+          React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
+        )
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto"}},renderTab())
