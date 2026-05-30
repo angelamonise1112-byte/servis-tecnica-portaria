@@ -780,7 +780,7 @@ function OSModule({tecsBanco=TECNICOS,onSave}){
                     React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},fmt(d.data)),
                     React.createElement("span",{style:{fontSize:11}},d.cond),
                     React.createElement("span",{style:{fontSize:11}},d.tec),
-                    React.createElement("span",{style:{fontSize:11}},d.prob),
+                    React.createElement("div",{style:{fontSize:11,maxWidth:140,wordBreak:"break-word",lineHeight:1.4}},d.prob),
                     React.createElement(Pill,{c:d.pri==="Alta"?C.red:d.pri==="Média"?C.yellow:C.green},d.pri||"Média"),
                     React.createElement(Pill,{c:d.status==="Aberto"?C.red:C.green},d.status),
                     d.relato
@@ -2370,6 +2370,125 @@ function Pedidos({usuarioAtual}){
   );
 }
 
+// ── USUÁRIOS ──────────────────────────────────────────────────
+function Usuarios({usuarioAtual}){
+  const NIVEIS=["admin","gestor","tecnico","visualizador"];
+  const niveisColor={admin:C.red,gestor:C.blue,tecnico:C.cyan,visualizador:C.dim};
+  const [users,setUsers]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modal,setModal]=useState(null);
+  const [confirmDel,setConfirmDel]=useState(null);
+  const [mostrarSenha,setMostrarSenha]=useState({});
+  const [savingMsg,setSavingMsg]=useState("");
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const{data:rows}=await sb.from("usuarios").select("*").order("nome",{ascending:true});
+    setUsers(rows||[]);setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load]);
+  const saveUser=async item=>{
+    setSavingMsg("Salvando...");
+    if(item.id&&users.find(x=>x.id===item.id)){await sb.from("usuarios").update(item).eq("id",item.id);}
+    else{await sb.from("usuarios").insert(item);}
+    setSavingMsg("Salvo!");
+    setTimeout(()=>setSavingMsg(""),2000);
+    setModal(null);load();
+  };
+  const delUser=async id=>{await sb.from("usuarios").delete().eq("id",id);setConfirmDel(null);load();};
+  const resetSenha=async u=>{
+    await sb.from("usuarios").update({primeiro_acesso:true,senha:"trocar"}).eq("id",u.id);
+    setSavingMsg("Senha resetada! Usuario devera criar nova senha no proximo acesso.");
+    setTimeout(()=>setSavingMsg(""),4000);
+    load();
+  };
+  const EditModal=({item,onClose})=>{
+    const ehNovo=!item?.id;
+    const [f,setF]=useState(item||{nome:"",senha:"",nivel:"tecnico",ativo:true,primeiro_acesso:true});
+    const [err,setErr]=useState("");
+    const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+    const submit=async()=>{
+      if(!f.nome.trim()){setErr("Nome e obrigatorio");return;}
+      if(ehNovo&&(!f.senha.trim()||f.senha.length<4)){setErr("Senha deve ter no minimo 4 caracteres");return;}
+      await saveUser({...f,id:f.id||uid()});
+    };
+    return React.createElement(Modal,{title:item?"Editar Usuario":"Novo Usuario",onClose},
+      React.createElement("div",{style:{display:"grid",gap:14}},
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Nome de usuario *"),
+          React.createElement("input",{style:base.inp,value:f.nome,onChange:upd("nome"),placeholder:"ex: joao.silva",disabled:!!item?.id})
+        ),
+        ehNovo&&React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Senha inicial *"),
+          React.createElement("input",{type:"text",style:base.inp,value:f.senha,onChange:upd("senha"),placeholder:"minimo 4 caracteres"}),
+          React.createElement("div",{style:{fontSize:11,color:C.dim,marginTop:4}},"O usuario devera criar uma nova senha no primeiro acesso.")
+        ),
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Nivel de acesso"),
+          React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+            NIVEIS.map(n=>React.createElement("button",{key:n,style:{...btnStyle(niveisColor[n]||C.blue,f.nivel!==n),flex:1,fontSize:11,textTransform:"capitalize"},onClick:()=>setF(p=>({...p,nivel:n}))},n))
+          )
+        ),
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Status"),
+          React.createElement("div",{style:{display:"flex",gap:8}},
+            React.createElement("button",{style:{...btnStyle(C.green,!f.ativo),flex:1},onClick:()=>setF(p=>({...p,ativo:true}))},"Ativo"),
+            React.createElement("button",{style:{...btnStyle(C.dim,f.ativo),flex:1},onClick:()=>setF(p=>({...p,ativo:false}))},"Inativo")
+          )
+        ),
+        err&&React.createElement("div",{style:{color:C.red,fontSize:12}},err)
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:submit},"Salvar")
+      )
+    );
+  };
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"👤 Usuarios"),
+        React.createElement("div",{style:{fontSize:12,color:C.muted}},"Gerencie os acessos ao sistema")
+      ),
+      usuarioAtual?.nivel==="admin"&&React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Novo Usuario")
+    ),
+    React.createElement("div",{style:{padding:"20px 24px"}},
+      savingMsg&&React.createElement("div",{style:{background:C.green+"22",border:`1px solid ${C.green}44`,borderRadius:8,padding:"10px 16px",marginBottom:16,fontSize:13,color:C.green}},savingMsg),
+      React.createElement(Grid,{cols:4,mb:16},
+        React.createElement(KPI,{label:"Total",value:users.length,color:C.blue}),
+        React.createElement(KPI,{label:"Ativos",value:users.filter(u=>u.ativo).length,color:C.green}),
+        React.createElement(KPI,{label:"Admins",value:users.filter(u=>u.nivel==="admin").length,color:C.red}),
+        React.createElement(KPI,{label:"Tecnicos",value:users.filter(u=>u.nivel==="tecnico").length,color:C.cyan})
+      ),
+      loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))",gap:12}},
+        users.map(u=>React.createElement(Card,{key:u.id,style:{borderLeft:`4px solid ${niveisColor[u.nivel]||C.blue}`,opacity:u.ativo?1:0.6}},
+          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:12}},
+            React.createElement("div",{style:{width:40,height:40,borderRadius:"50%",background:(niveisColor[u.nivel]||C.blue)+"22",border:`2px solid ${niveisColor[u.nivel]||C.blue}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:700,color:niveisColor[u.nivel]||C.blue}},u.nome[0].toUpperCase()),
+            React.createElement("div",null,
+              React.createElement("div",{style:{fontWeight:600,fontSize:14}},u.nome),
+              React.createElement(Pill,{c:niveisColor[u.nivel]||C.blue},u.nivel),
+              React.createElement("div",{style:{fontSize:11,color:u.ativo?C.green:C.dim,marginTop:4}},u.ativo?"● Ativo":"● Inativo"),
+              u.primeiro_acesso&&React.createElement("div",{style:{fontSize:10,color:C.yellow,marginTop:2}},"⚠ Aguardando 1º acesso")
+            )
+          ),
+          React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"8px 12px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between"}},
+            React.createElement("span",{style:{fontSize:12,color:C.dim,fontFamily:"monospace"}},mostrarSenha[u.id]?u.senha:"••••••••"),
+            React.createElement("button",{style:{...iBtn(C.dim),fontSize:11},onClick:()=>setMostrarSenha(p=>({...p,[u.id]:!p[u.id]}))},mostrarSenha[u.id]?"Ocultar":"Ver")
+          ),
+          usuarioAtual?.nivel==="admin"&&React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
+            React.createElement("button",{style:{...iBtn(C.blue),flex:1},onClick:()=>setModal(u)},"✏️ Editar"),
+            !u.primeiro_acesso&&u.nome!==usuarioAtual?.nome&&React.createElement("button",{style:{...iBtn(C.orange),flex:1},onClick:()=>resetSenha(u)},"🔑 Resetar"),
+            u.nome!==usuarioAtual?.nome&&React.createElement("button",{style:{...iBtn(C.red),flex:1},onClick:()=>setConfirmDel(u.id)},"🗑 Excluir")
+          )
+        ))
+      ),
+      usuarioAtual?.nivel!=="admin"&&React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim,fontSize:13}},"Apenas administradores podem gerenciar usuarios.")
+    ),
+    modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
+    confirmDel&&React.createElement(Confirm,{msg:"Excluir este usuario?",onYes:()=>delUser(confirmDel),onNo:()=>setConfirmDel(null)})
+  );
+}
+
 function LogTabela(){
   const [logs,setLogs]=useState([]);
   useEffect(()=>{
@@ -2956,6 +3075,246 @@ function Problemas(){
   );
 }
 
+// ── INSTALAÇÕES ───────────────────────────────────────────────
+function Instalacoes({onSave}){
+  const [data,setData]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modal,setModal]=useState(null);
+  const [confirmDel,setConfirmDel]=useState(null);
+  const [detalhe,setDetalhe]=useState(null);
+
+  const STATUS_INST={"Em andamento":{c:C.blue},"Concluída no prazo":{c:C.green},"Concluída com atraso":{c:C.orange},"Cancelada":{c:C.dim}};
+
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const{data:rows}=await sb.from("instalacoes").select("*").order("data_inicio",{ascending:false});
+    setData(rows||[]);setLoading(false);
+  },[]);
+  useEffect(()=>{load();},[load]);
+
+  const save=async item=>{
+    if(item.id&&data.find(x=>x.id===item.id)){await sb.from("instalacoes").update(item).eq("id",item.id);}
+    else{await sb.from("instalacoes").insert(item);}
+    setModal(null);load();if(onSave)onSave();
+  };
+  const del=async id=>{await sb.from("instalacoes").delete().eq("id",id);setConfirmDel(null);load();if(onSave)onSave();};
+
+  // Calcular dias úteis entre datas
+  function diasUteis(d1,d2){
+    var start=new Date(d1);var end=new Date(d2);
+    var count=0;var cur=new Date(start);
+    while(cur<=end){var dow=cur.getDay();if(dow!==0&&dow!==6)count++;cur.setDate(cur.getDate()+1);}
+    return count;
+  }
+
+  // Prazo: 30 dias úteis da data de início
+  function prazo30(dataInicio){
+    if(!dataInicio)return null;
+    var d=new Date(dataInicio);var h=30;
+    while(h>0){d.setDate(d.getDate()+1);var dow=d.getDay();if(dow!==0&&dow!==6)h--;}
+    return d.toISOString().split("T")[0];
+  }
+
+  function avaliarInstalacao(item){
+    if(!item.data_entrega_portaria||!item.data_inicio)return null;
+    var prazo=prazo30(item.data_inicio);
+    return item.data_entrega_portaria<=prazo?"estrela":"abacaxi";
+  }
+
+  const EditModal=({item,onClose})=>{
+    const ehNovo=!item?.id;
+    const [f,setF]=useState(item||{cond:CONDS[0],tec:"",data_inicio:todayStr(),data_retirada_material:"",data_inicio_obra:"",data_reuniao_alinhamento:"",data_entrega_dispositivo:"",data_checklist:"",data_entrega_portaria:"",status:"Em andamento",obs:""});
+    const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+    const prazo=prazo30(f.data_inicio);
+    const avaliacao=f.data_entrega_portaria&&f.data_inicio?(f.data_entrega_portaria<=prazo?"⭐ Estrela — Entregue no prazo!":"🍍 Abacaxi — Entregue com atraso!"):null;
+
+    return React.createElement(Modal,{title:item?"✏️ Editar Instalação":"+ Nova Instalação",onClose,width:600},
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"Condomínio *"),
+          React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},CONDS.map(c=>React.createElement("option",{key:c},c)))
+        ),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"Técnico Responsável"),
+          React.createElement("select",{style:base.sel,value:f.tec,onChange:upd("tec")},
+            React.createElement("option",{value:""},"Selecionar..."),
+            TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
+          )
+        ),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"📅 Data de Início"),React.createElement("input",{type:"date",style:base.inp,value:f.data_inicio||"",onChange:upd("data_inicio")})),
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"⏱ Prazo (30 dias úteis)"),
+          React.createElement("div",{style:{...base.inp,background:C.bg,color:C.green,fontWeight:600}},prazo?fmt(prazo):"—")
+        ),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"📦 Retirada de Material"),React.createElement("input",{type:"date",style:base.inp,value:f.data_retirada_material||"",onChange:upd("data_retirada_material")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"🏗️ Início de Obra"),React.createElement("input",{type:"date",style:base.inp,value:f.data_inicio_obra||"",onChange:upd("data_inicio_obra")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"🤝 Reunião de Alinhamento"),React.createElement("input",{type:"date",style:base.inp,value:f.data_reuniao_alinhamento||"",onChange:upd("data_reuniao_alinhamento")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"🔑 Entrega de Dispositivos"),React.createElement("input",{type:"date",style:base.inp,value:f.data_entrega_dispositivo||"",onChange:upd("data_entrega_dispositivo")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"✅ Checklist"),React.createElement("input",{type:"date",style:base.inp,value:f.data_checklist||"",onChange:upd("data_checklist")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"🏠 Entrega da Portaria"),React.createElement("input",{type:"date",style:base.inp,value:f.data_entrega_portaria||"",onChange:upd("data_entrega_portaria")})),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"Status"),
+          React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
+            Object.keys(STATUS_INST).map(s=>React.createElement("button",{key:s,style:{...btnStyle(STATUS_INST[s].c,f.status!==s),fontSize:11},onClick:()=>setF(p=>({...p,status:s}))},s))
+          )
+        ),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Obs"),React.createElement("textarea",{style:{...base.inp,height:50},value:f.obs||"",onChange:upd("obs")}))
+      ),
+      avaliacao&&React.createElement("div",{style:{background:f.data_entrega_portaria<=prazo?C.green+"22":C.orange+"22",border:`1px solid ${f.data_entrega_portaria<=prazo?C.green:C.orange}44`,borderRadius:8,padding:"10px 14px",marginTop:8,textAlign:"center",fontWeight:700,fontSize:14}},avaliacao),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"💾 Salvar")
+      )
+    );
+  };
+
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🔨 Instalações"),
+        React.createElement("div",{style:{fontSize:12,color:C.muted}},"Portarias novas — prazo de 30 dias úteis")
+      ),
+      React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Nova")
+    ),
+    React.createElement("div",{style:{padding:"20px 24px"}},
+      React.createElement(Grid,{cols:4,mb:16},
+        React.createElement(KPI,{label:"Total",value:data.length,color:C.blue}),
+        React.createElement(KPI,{label:"Em Andamento",value:data.filter(d=>d.status==="Em andamento").length,color:C.blue}),
+        React.createElement(KPI,{label:"⭐ No Prazo",value:data.filter(d=>avaliarInstalacao(d)==="estrela").length,color:C.green}),
+        React.createElement(KPI,{label:"🍍 Com Atraso",value:data.filter(d=>avaliarInstalacao(d)==="abacaxi").length,color:C.orange})
+      ),
+      loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+      data.length===0?React.createElement(Card,null,React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma instalação cadastrada")):
+      React.createElement(Card,null,
+        React.createElement(Table,{
+          cols:["Condomínio","Técnico","Início","Prazo 30DU","Retirada Mat.","Início Obra","Reunião","Dispositivos","Checklist","Entrega","Status","Resultado","Ações"],
+          rows:data.map(function(d){
+            var prazo=prazo30(d.data_inicio);
+            var aval=avaliarInstalacao(d);
+            var hoje=new Date().toISOString().split("T")[0];
+            var atrasada=d.status==="Em andamento"&&prazo&&hoje>prazo;
+            return [
+              React.createElement("span",{style:{fontWeight:600,fontSize:11}},d.cond),
+              React.createElement("span",{style:{fontSize:11}},d.tec||"—"),
+              React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},fmt(d.data_inicio)),
+              React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap",color:atrasada?C.red:C.green,fontWeight:600}},prazo?fmt(prazo):"—"),
+              d.data_retirada_material?React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap",color:C.green}},"✓ "+fmt(d.data_retirada_material)):React.createElement("span",{style:{color:C.dim,fontSize:11}},"—"),
+              d.data_inicio_obra?React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap",color:C.green}},"✓ "+fmt(d.data_inicio_obra)):React.createElement("span",{style:{color:C.dim,fontSize:11}},"—"),
+              d.data_reuniao_alinhamento?React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap",color:C.green}},"✓ "+fmt(d.data_reuniao_alinhamento)):React.createElement("span",{style:{color:C.dim,fontSize:11}},"—"),
+              d.data_entrega_dispositivo?React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap",color:C.green}},"✓ "+fmt(d.data_entrega_dispositivo)):React.createElement("span",{style:{color:C.dim,fontSize:11}},"—"),
+              d.data_checklist?React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap",color:C.green}},"✓ "+fmt(d.data_checklist)):React.createElement("span",{style:{color:C.dim,fontSize:11}},"—"),
+              d.data_entrega_portaria?React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap",color:C.green}},"✓ "+fmt(d.data_entrega_portaria)):React.createElement("span",{style:{color:C.dim,fontSize:11}},"—"),
+              React.createElement(Pill,{c:STATUS_INST[d.status]?.c||C.dim},d.status),
+              aval==="estrela"?React.createElement("span",{style:{fontSize:18},title:"Entregue no prazo"},"⭐"):aval==="abacaxi"?React.createElement("span",{style:{fontSize:18},title:"Entregue com atraso"},"🍍"):atrasada?React.createElement("span",{style:{fontSize:14,color:C.red},title:"Prazo vencido"},"⚠️"):React.createElement("span",{style:{color:C.dim}},"—"),
+              React.createElement("div",{style:{display:"flex",gap:4}},
+                React.createElement("button",{style:iBtn(C.blue),onClick:()=>setModal(d)},"✏️"),
+                React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id)},"🗑")
+              )
+            ];
+          })
+        })
+      )
+    ),
+    modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
+    confirmDel&&React.createElement(Confirm,{msg:"Excluir esta instalação?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
+  );
+}
+
+// ── PARÂMETROS ────────────────────────────────────────────────
+function Parametros(){
+  function ParamCard({icon,title,cor,items}){
+    return React.createElement(Card,{style:{borderLeft:"4px solid "+cor,marginBottom:16}},
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:14}},
+        React.createElement("span",{style:{fontSize:24}},icon),
+        React.createElement("div",{style:{fontSize:16,fontWeight:700,color:cor}},title)
+      ),
+      React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:10}},
+        items.map(function(item,i){
+          return React.createElement("div",{key:i,style:{background:C.bg,borderRadius:10,padding:"12px 16px",borderLeft:"3px solid "+item.cor}},
+            React.createElement("div",{style:{display:"flex",alignItems:"flex-start",gap:10}},
+              React.createElement("span",{style:{fontSize:20,flexShrink:0}},item.icon),
+              React.createElement("div",null,
+                React.createElement("div",{style:{fontSize:13,fontWeight:600,color:C.text,marginBottom:4}},item.titulo),
+                React.createElement("div",{style:{fontSize:12,color:C.muted,lineHeight:1.6}},item.desc),
+                item.resultado&&React.createElement("div",{style:{display:"flex",gap:8,marginTop:8}},
+                  React.createElement("div",{style:{background:C.green+"22",border:"1px solid "+C.green+"44",borderRadius:8,padding:"4px 10px",fontSize:12,color:C.green}},"⭐ "+item.resultado.ok),
+                  React.createElement("div",{style:{background:C.orange+"22",border:"1px solid "+C.orange+"44",borderRadius:8,padding:"4px 10px",fontSize:12,color:C.orange}},"🍍 "+item.resultado.nok)
+                )
+              )
+            )
+          );
+        })
+      )
+    );
+  }
+
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:"1px solid "+C.border}},
+      React.createElement("div",{style:{fontSize:18,fontWeight:700}},"📋 Parâmetros Operacionais"),
+      React.createElement("div",{style:{fontSize:12,color:C.muted}},"Regras e indicadores do Setor Técnico")
+    ),
+    React.createElement("div",{style:{padding:"20px 24px"}},
+
+      ParamCard({
+        icon:"🔨",title:"Instalação — Portaria Nova",cor:C.blue,
+        items:[
+          {icon:"📅",cor:C.blue,titulo:"Prazo de Conclusão",
+           desc:"30 (trinta) dias úteis para conclusão completa da portaria nova, contados a partir da data de início da instalação.",
+           resultado:{ok:"Entregue dentro do prazo",nok:"Entregue com atraso"}},
+          {icon:"🛡️",cor:C.purple,titulo:"Garantia de Qualidade",
+           desc:"Não poderá haver O.S de manutenção aberta antes de 3 (três) meses da data de entrega da portaria. Caso contrário, é considerado falha na instalação.",
+           resultado:null}
+        ]
+      }),
+
+      ParamCard({
+        icon:"🔧",title:"Manutenção Corretiva",cor:C.orange,
+        items:[
+          {icon:"↺",cor:C.orange,titulo:"Recorrência",
+           desc:"A partir de 2 visitas técnicas pelo mesmo motivo no mesmo mês, no mesmo condomínio, é considerado recorrência e indica necessidade de preventiva urgente.",
+           resultado:null},
+          {icon:"⏱",cor:C.red,titulo:"Prazo de Atendimento — SLA",
+           desc:"Prazo de 48 horas úteis (segunda a sexta, 8h às 18h) para atendimento técnico após a abertura da ordem de serviço.",
+           resultado:{ok:"Atendido dentro de 48h úteis",nok:"Atendimento fora do prazo"}}
+        ]
+      }),
+
+      ParamCard({
+        icon:"🔍",title:"Preventiva",cor:C.green,
+        items:[
+          {icon:"📊",cor:C.green,titulo:"Meta Mensal",
+           desc:"A equipe de preventiva deverá efetuar 17 (dezessete) preventivas por mês para atingir a meta de qualidade.",
+           resultado:{ok:"17+ preventivas no mês",nok:"Menos de 17 preventivas"}},
+          {icon:"🛡️",cor:C.yellow,titulo:"Qualidade Pós-Preventiva",
+           desc:"Caso seja gerada O.S de manutenção até 3 (três) meses após a finalização da manutenção preventiva no mesmo condomínio, entra como perda de qualidade.",
+           resultado:{ok:"Sem OS em 3 meses após preventiva",nok:"OS gerada em menos de 3 meses"}}
+        ]
+      }),
+
+      // Resumo visual
+      React.createElement(Card,null,
+        React.createElement(CardHeader,{title:"📌 Resumo de Indicadores"}),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10}},
+          [
+            {icon:"⭐",label:"Instalação no prazo",desc:"30 dias úteis",cor:C.blue},
+            {icon:"⭐",label:"SLA Manutenção",desc:"48h úteis",cor:C.orange},
+            {icon:"⭐",label:"Meta Preventiva",desc:"17/mês",cor:C.green},
+            {icon:"🍍",label:"Instalação atrasada",desc:">30 dias úteis",cor:C.orange},
+            {icon:"🍍",label:"SLA Vencido",desc:">48h úteis",cor:C.red},
+            {icon:"🍍",label:"Perda de qualidade",desc:"OS em <3m após preventiva",cor:C.yellow},
+          ].map(function(item,i){
+            return React.createElement("div",{key:i,style:{background:C.bg,borderRadius:10,padding:"12px",textAlign:"center"}},
+              React.createElement("div",{style:{fontSize:24,marginBottom:4}},item.icon),
+              React.createElement("div",{style:{fontSize:12,fontWeight:600,color:item.cor}},item.label),
+              React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},item.desc)
+            );
+          })
+        )
+      )
+    )
+  );
+}
+
 // ── ORGANOGRAMA ─────────────────────────────────────────────
 function Organograma(){
   var azul={bg:"#1e3a5f",border:"#3b82f6",text:"#bfdbfe",badge:"#1d4ed8"};
@@ -3311,6 +3670,8 @@ const TABS=[
   {id:"reginaldo",icon:"🔧",label:"Serviço Reginaldo"},
   {id:"pedidos",icon:"🛒",label:"Pedidos"},
   {id:"demandas",icon:"📌",label:"Demandas Adm.",badge:"new"},
+  {id:"instalacoes",icon:"🔨",label:"Instalações"},
+  {id:"parametros",icon:"📋",label:"Parâmetros"},
   {id:"organograma",icon:"🏢",label:"Organograma"},
   {id:"usuarios",icon:"👤",label:"Usuários"},
 ];
@@ -3359,6 +3720,8 @@ function App(){
       case"reginaldo":return React.createElement(ServicoReginaldo,{onSave:refresh});
       case"demandas":return React.createElement(Demandas,{onSave:refresh});
       case"usuarios":return React.createElement(Usuarios,{usuarioAtual:usuario});
+      case"instalacoes":return React.createElement(Instalacoes,{onSave:refresh});
+      case"parametros":return React.createElement(Parametros,null);
       case"organograma":return React.createElement(Organograma,null);
       default:return React.createElement(ModuloEmBreve,{nome:TABS.find(t=>t.id===tab)?.label||tab});
     }
