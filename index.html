@@ -598,7 +598,7 @@ function OSModule({tecsBanco=TECNICOS,onSave}){
     const osMes=data.filter(d=>{if(!d.data)return false;const[ano,mes]=d.data.split("-");return mes===mesAtual&&ano===anoAtual;});
     const map={};
     osMes.forEach(os=>{const key=`${os.cond}||${os.prob}`;if(!map[key])map[key]={cond:os.cond,prob:os.prob,count:0};map[key].count++;});
-    return Object.values(map).filter(g=>g.count>=3).sort((a,b)=>b.count-a.count);
+    return Object.values(map).filter(g=>g.count>=2).sort((a,b)=>b.count-a.count);
   },[data,mesAtual,anoAtual]);
 
   const osPorMes=useMemo(()=>{
@@ -729,7 +729,7 @@ function OSModule({tecsBanco=TECNICOS,onSave}){
         React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:6}},
           alertasReincidencia.map((r,i)=>React.createElement("div",{key:i,style:{background:C.surface,border:`1px solid ${C.red}33`,borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
             React.createElement("div",null,React.createElement("div",{style:{fontWeight:600,fontSize:12}},r.cond),React.createElement("div",{style:{fontSize:11,color:C.muted}},r.prob)),
-            React.createElement(Pill,{c:r.count>=6?C.red:r.count>=4?C.orange:C.yellow},`${r.count} OS`)
+            React.createElement(Pill,{c:r.count>=4?C.red:r.count>=2?C.orange:C.yellow},`${r.count} OS`)
           ))
         )
       ),
@@ -1256,7 +1256,7 @@ function Dashboard({setTab}){
         if(!mapReinc[k])mapReinc[k]=0;
         mapReinc[k]++;
       });
-      var reinc=Object.values(mapReinc).filter(function(v){return v>=3;}).length;
+      var reinc=Object.values(mapReinc).filter(function(v){return v>=2;}).length;
 
       // OS por mês — aplicar filtros
       var osFilt=os.filter(function(d){
@@ -1543,9 +1543,9 @@ function Preventivas({onSave}){
         map[key].count++;
         map[key].probs[os.prob]=(map[key].probs[os.prob]||0)+1;
       });
-      // Condomínios com 3+ OS no mês = precisam de preventiva urgente
+      // Condomínios com 2+ OS no mês = precisam de preventiva urgente
       const alertas=Object.values(map)
-        .filter(g=>g.count>=3)
+        .filter(g=>g.count>=2)
         .map(g=>({...g,probPrincipal:Object.entries(g.probs).sort((a,b)=>b[1]-a[1])[0]?.[0]||""}))
         .sort((a,b)=>b.count-a.count);
       setAlertasReinc(alertas);
@@ -1670,10 +1670,10 @@ function Preventivas({onSave}){
           prevUrgentes.map((a,i)=>{
             const statusPrev=a.prev?.status||null;
             const corStatus=statusPrev==="Concluída"?C.green:statusPrev==="Em andamento"?C.blue:C.red;
-            return React.createElement("div",{key:i,style:{background:C.surface,border:`1px solid ${a.count>=6?C.red:C.orange}44`,borderRadius:8,padding:"10px 12px"}},
+            return React.createElement("div",{key:i,style:{background:C.surface,border:`1px solid ${a.count>=4?C.red:C.orange}44`,borderRadius:8,padding:"10px 12px"}},
               React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}},
                 React.createElement("div",{style:{fontWeight:600,fontSize:13}},a.cond),
-                React.createElement(Pill,{c:a.count>=6?C.red:a.count>=4?C.orange:C.yellow},`${a.count} OS`)
+                React.createElement(Pill,{c:a.count>=4?C.red:a.count>=2?C.orange:C.yellow},`${a.count} OS`)
               ),
               React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:6}},a.probPrincipal),
               React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
@@ -1686,7 +1686,7 @@ function Preventivas({onSave}){
             );
           })
         ),
-        React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:10}},"Condomínios com 3+ OS no mês atual. Verifique o status da preventiva e agende visita urgente.")
+        React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:10}},"Condomínios com 2+ OS no mês atual. Verifique o status da preventiva e agende visita urgente.")
       ),
       React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
         React.createElement("input",{style:{...base.inp,width:220},placeholder:"Buscar condomínio...",value:busca,onChange:e=>setBusca(e.target.value)}),
@@ -2426,21 +2426,21 @@ function Reincidencias(){
     });
     // Filtrar apenas grupos com 3 ou mais OS (reincidência)
     return Object.values(map)
-      .filter(g=>g.count>=3)
+      .filter(g=>g.count>=2)
       .sort((a,b)=>b.count-a.count);
   },[data,filtMes,filtAno]);
 
   // Anos disponíveis
   const anos=useMemo(()=>[...new Set(data.map(d=>d.data?.slice(0,4)).filter(Boolean))].sort().reverse(),[data]);
 
-  const nivelAlerta=count=>count>=6?"CRITICO":count>=4?"ALTO":"MODERADO";
-  const nivelCor=count=>count>=6?C.red:count>=4?C.orange:C.yellow;
+  const nivelAlerta=count=>count>=4?"CRITICO":count>=2?"ALTO":"MODERADO";
+  const nivelCor=count=>count>=4?C.red:count>=2?C.orange:C.yellow;
 
   return React.createElement("div",null,
     React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
       React.createElement("div",null,
         React.createElement("div",{style:{fontSize:18,fontWeight:700}},"↺ Reincidências"),
-        React.createElement("div",{style:{fontSize:12,color:C.muted}},"Condomínios com 3+ OS pelo mesmo motivo no mês")
+        React.createElement("div",{style:{fontSize:12,color:C.muted}},"Condomínios com 2+ OS pelo mesmo motivo no mês")
       ),
       React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center"}},
         React.createElement("select",{style:{...base.sel,width:140},value:filtMes,onChange:e=>setFiltMes(e.target.value)},
@@ -2454,9 +2454,9 @@ function Reincidencias(){
     React.createElement("div",{style:{padding:"20px 24px"}},
       React.createElement(Grid,{cols:4,mb:16},
         React.createElement(KPI,{label:"Reincidências",value:reincidencias.length,color:C.red}),
-        React.createElement(KPI,{label:"Críticas (6+)",value:reincidencias.filter(r=>r.count>=6).length,color:C.red}),
-        React.createElement(KPI,{label:"Altas (4-5)",value:reincidencias.filter(r=>r.count>=4&&r.count<6).length,color:C.orange}),
-        React.createElement(KPI,{label:"Moderadas (3)",value:reincidencias.filter(r=>r.count===3).length,color:C.yellow})
+        React.createElement(KPI,{label:"Críticas (4+)",value:reincidencias.filter(r=>r.count>=4).length,color:C.red}),
+        React.createElement(KPI,{label:"Altas (3)",value:reincidencias.filter(r=>r.count===3).length,color:C.orange}),
+        React.createElement(KPI,{label:"Alertas (2)",value:reincidencias.filter(r=>r.count===2).length,color:C.yellow})
       ),
       loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
       reincidencias.length===0
@@ -2464,14 +2464,14 @@ function Reincidencias(){
             React.createElement("div",{style:{textAlign:"center",padding:40}},
               React.createElement("div",{style:{fontSize:36,marginBottom:12}},"✅"),
               React.createElement("div",{style:{fontSize:16,color:C.green,fontWeight:600}},"Nenhuma reincidência em "+NOMES_MES[parseInt(filtMes)-1]+"/"+filtAno),
-              React.createElement("div",{style:{fontSize:13,color:C.muted,marginTop:8}},"Nenhum condomínio atingiu 3 OS pelo mesmo motivo neste mês.")
+              React.createElement("div",{style:{fontSize:13,color:C.muted,marginTop:8}},"Nenhum condomínio com 2+ OS pelo mesmo motivo neste mês.")
             )
           )
         :React.createElement("div",null,
             // Alertas críticos no topo
-            reincidencias.filter(r=>r.count>=4).length>0&&React.createElement("div",{style:{background:C.red+"11",border:`1px solid ${C.red}33`,borderRadius:10,padding:"12px 16px",marginBottom:16}},
+            reincidencias.filter(r=>r.count>=2).length>0&&React.createElement("div",{style:{background:C.red+"11",border:`1px solid ${C.red}33`,borderRadius:10,padding:"12px 16px",marginBottom:16}},
               React.createElement("div",{style:{fontWeight:700,color:C.red,marginBottom:8,fontSize:13}},"⚠ ALERTAS CRÍTICOS — Requer atenção imediata"),
-              reincidencias.filter(r=>r.count>=4).map((r,i)=>
+              reincidencias.filter(r=>r.count>=2).map((r,i)=>
                 React.createElement("div",{key:i,style:{fontSize:12,color:C.red,padding:"3px 0",borderBottom:`1px solid ${C.red}22`}},
                   `• ${r.cond} — ${r.prob} (${r.count} OS)`
                 )
