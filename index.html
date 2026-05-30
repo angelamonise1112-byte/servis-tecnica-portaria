@@ -1896,65 +1896,150 @@ function OSPendencia(){
 }
 
 // ── PEDIDOS ───────────────────────────────────────────────────
-function Pedidos(){
+function Pedidos({usuarioAtual}){
   const STATUS_PED={Pendente:{c:C.yellow},Aprovado:{c:C.blue},Retirado:{c:C.orange},Devolvido:{c:C.green},Cancelado:{c:C.red}};
   const [data,setData]=useState([]);
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
   const [filtStatus,setFiltStatus]=useState("");
+  const [filtMes,setFiltMes]=useState("");
+  const [filtAno,setFiltAno]=useState("");
   const [busca,setBusca]=useState("");
   const [pagina,setPagina]=useState(1);
+  const [logModal,setLogModal]=useState(null);
+  const [logs,setLogs]=useState([]);
+  const [verLog,setVerLog]=useState(false);
   const POR_PAG=50;
+  const MESES=["01","02","03","04","05","06","07","08","09","10","11","12"];
+  const NOMES_MES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
   const load=useCallback(async()=>{
     setLoading(true);
     const{data:rows}=await sb.from("pedidos").select("*").order("data",{ascending:false});
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
-  useEffect(()=>{setPagina(1);},[filtStatus,busca]);
-  const filtered=data.filter(d=>
+  useEffect(()=>{setPagina(1);},[filtStatus,filtMes,filtAno,busca]);
+
+  const anos=useMemo(()=>[...new Set(data.map(d=>d.data?.slice(0,4)).filter(Boolean))].sort().reverse(),[data]);
+
+  const filtered=useMemo(()=>data.filter(d=>
     (!filtStatus||d.status===filtStatus)&&
-    (!busca||(d.cond||"").toLowerCase().includes(busca.toLowerCase())||(d.descricao||"").toLowerCase().includes(busca.toLowerCase())||(d.os||"").includes(busca)||(d.pedido||"").includes(busca))
-  );
+    (!filtMes||( d.data||"").slice(5,7)===filtMes)&&
+    (!filtAno||(d.data||"").slice(0,4)===filtAno)&&
+    (!busca||(d.cond||"").toLowerCase().includes(busca.toLowerCase())||
+      (d.descricao||"").toLowerCase().includes(busca.toLowerCase())||
+      (d.os||"").includes(busca)||(d.pedido||"").includes(busca)||(d.cod||"").includes(busca))
+  ),[data,filtStatus,filtMes,filtAno,busca]);
+
   const totalPags=Math.ceil(filtered.length/POR_PAG);
   const paginado=filtered.slice((pagina-1)*POR_PAG,pagina*POR_PAG);
+
   const save=async item=>{
-    if(item.id&&data.find(x=>x.id===item.id)){await sb.from("pedidos").update(item).eq("id",item.id);}
-    else{await sb.from("pedidos").insert(item);}
+    const antes=data.find(x=>x.id===item.id);
+    if(antes){
+      // Registrar alterações
+      const campos={cond:"Condomínio",data:"Data",cod:"Código",quant:"Qtd",descricao:"Descrição",os:"OS",pedido:"Pedido",requisicao:"Requisição",retirada:"Retirada",devolucao:"Devolução",obs:"Obs",status:"Status"};
+      const logEntries=[];
+      Object.keys(campos).forEach(k=>{
+        const va=String(antes[k]||"");const vd=String(item[k]||"");
+        if(va!==vd)logEntries.push({id:uid(),pedido_id:item.id,campo:campos[k],valor_antes:va,valor_depois:vd,usuario:usuarioAtual?.nome||"sistema"});
+      });
+      if(logEntries.length>0)await sb.from("pedidos_log").insert(logEntries);
+      await sb.from("pedidos").update(item).eq("id",item.id);
+    }else{
+      await sb.from("pedidos").insert(item);
+    }
     setModal(null);load();
   };
+
   const del=async id=>{await sb.from("pedidos").delete().eq("id",id);setConfirmDel(null);load();};
+
+  const verLogs=async item=>{
+    const{data:rows}=await sb.from("pedidos_log").select("*").eq("pedido_id",item.id).order("data_alt",{ascending:false});
+    setLogs(rows||[]);setLogModal(item);
+  };
+
+  const exportarPDF=()=>{
+    const w=window.open("","_blank");
+    const rows=filtered;
+    const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <style>body{font-family:Arial,sans-serif;font-size:10px;margin:20px}
+    h2{font-size:14px;margin-bottom:4px}
+    .sub{font-size:11px;color:#666;margin-bottom:12px}
+    table{width:100%;border-collapse:collapse}
+    th{background:#1a56db;color:#fff;padding:5px 6px;text-align:left;font-size:9px}
+    td{padding:4px 6px;border-bottom:1px solid #eee;font-size:9px}
+    tr:nth-child(even) td{background:#f8f9fa}
+    .st{display:inline-block;padding:1px 6px;border-radius:10px;font-size:8px;font-weight:600}
+    .Devolvido{background:#d1fae5;color:#065f46}
+    .Pendente{background:#fef3c7;color:#92400e}
+    .Retirado{background:#ffedd5;color:#9a3412}
+    .Aprovado{background:#dbeafe;color:#1e40af}
+    .Cancelado{background:#f3f4f6;color:#374151}
+    @media print{body{margin:0}}</style></head><body>
+    <h2>📦 Relatório de Pedidos — Servis Técnica</h2>
+    <div class="sub">Gerado em: ${new Date().toLocaleString("pt-BR")} | Filtros: ${filtStatus||"Todos status"} | ${filtMes?NOMES_MES[parseInt(filtMes)-1]:"Todos meses"} | ${filtAno||"Todos anos"} | ${rows.length} registros</div>
+    <table><thead><tr>
+    <th>#</th><th>Condomínio</th><th>Data</th><th>Cód.</th><th>Qtd</th><th>Descrição</th><th>O.S</th><th>Pedido</th><th>Requisição</th><th>Retirada</th><th>Devolução</th><th>Obs</th><th>Status</th>
+    </tr></thead><tbody>
+    ${rows.map((d,i)=>`<tr><td>${i+1}</td><td>${d.cond||""}</td><td>${fmt(d.data)||""}</td><td>${d.cod||""}</td><td>${d.quant||""}</td><td>${d.descricao||""}</td><td>${d.os||""}</td><td>${d.pedido||""}</td><td>${d.requisicao||""}</td><td>${fmt(d.retirada)||""}</td><td>${fmt(d.devolucao)||""}</td><td>${d.obs||""}</td><td><span class="st ${d.status}">${d.status}</span></td></tr>`).join("")}
+    </tbody></table>
+    <script>window.onload=()=>window.print();</script></body></html>`;
+    w.document.write(html);w.document.close();
+  };
+
   const EditModal=({item,onClose})=>{
+    const ehNovo=!item?.id;
     const [f,setF]=useState(item||{cond:CONDS[0],data:todayStr(),cod:"",quant:1,descricao:"",os:"",pedido:"",requisicao:"",retirada:"",devolucao:"",obs:"",status:"Pendente"});
+    const [busca,setBusca]=useState("");
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-    return React.createElement(Modal,{title:item?.id?"Editar Pedido":"Novo Pedido",onClose,width:560},
+    const condsFilt=CONDS.filter(c=>!busca||c.toLowerCase().includes(busca.toLowerCase()));
+    return React.createElement(Modal,{title:item?.id?"✏️ Editar Pedido":"+ Novo Pedido",onClose,width:580},
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
-        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},CONDS.map(c=>React.createElement("option",{key:c},c)))),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"Condomínio *"),
+          React.createElement("input",{style:{...base.inp,marginBottom:4},placeholder:"Buscar...",value:busca,onChange:e=>setBusca(e.target.value)}),
+          React.createElement("select",{style:{...base.sel,height:80},size:4,value:f.cond,onChange:upd("cond")},condsFilt.map(c=>React.createElement("option",{key:c},c))),
+          f.cond&&React.createElement("div",{style:{fontSize:11,color:C.cyan,marginTop:2}},"✓ "+f.cond)
+        ),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data *"),React.createElement("input",{type:"date",style:base.inp,value:f.data||"",onChange:upd("data")})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Código"),React.createElement("input",{style:base.inp,value:f.cod||"",onChange:upd("cod")})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Quantidade"),React.createElement("input",{type:"number",style:base.inp,value:f.quant||1,onChange:upd("quant")})),
-        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Descrição *"),React.createElement("input",{style:base.inp,value:f.descricao||"",onChange:upd("descricao")})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"OS"),React.createElement("input",{style:base.inp,value:f.os||"",onChange:upd("os")})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Pedido"),React.createElement("input",{style:base.inp,value:f.pedido||"",onChange:upd("pedido")})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Requisição"),React.createElement("input",{style:base.inp,value:f.requisicao||"",onChange:upd("requisicao")})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Retirada"),React.createElement("input",{type:"date",style:base.inp,value:f.retirada||"",onChange:upd("retirada")})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Devolução"),React.createElement("input",{type:"date",style:base.inp,value:f.devolucao||"",onChange:upd("devolucao")})),
-        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Status"),React.createElement("select",{style:base.sel,value:f.status,onChange:upd("status")},Object.keys(STATUS_PED).map(s=>React.createElement("option",{key:s},s)))),
-        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"✍️ Obs"),React.createElement("textarea",{style:{...base.inp,height:60},value:f.obs||"",onChange:upd("obs"),placeholder:"Observações..."}))
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Quantidade"),React.createElement("input",{type:"number",style:base.inp,value:f.quant||1,min:1,onChange:upd("quant")})),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Descrição *"),React.createElement("textarea",{style:{...base.inp,height:60},value:f.descricao||"",onChange:upd("descricao")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"📂 O.S"),React.createElement("input",{style:base.inp,value:f.os||"",onChange:upd("os")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"🗂️ Pedido"),React.createElement("input",{style:base.inp,value:f.pedido||"",onChange:upd("pedido")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"🛒 Requisição"),React.createElement("input",{style:base.inp,value:f.requisicao||"",onChange:upd("requisicao")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"🗓️ Retirada"),React.createElement("input",{type:"date",style:base.inp,value:f.retirada||"",onChange:upd("retirada")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"🗓️ Devolução"),React.createElement("input",{type:"date",style:base.inp,value:f.devolucao||"",onChange:upd("devolucao")})),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"✍️ Obs"),React.createElement("textarea",{style:{...base.inp,height:50},value:f.obs||"",onChange:upd("obs")})),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"✅ Status"),
+          React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
+            Object.keys(STATUS_PED).map(s=>React.createElement("button",{key:s,style:{...btnStyle(STATUS_PED[s].c,f.status!==s),flex:1,fontSize:11},onClick:()=>setF(p=>({...p,status:s}))},s))
+          )
+        )
       ),
       React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
         React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
-        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"Salvar")
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"💾 Salvar")
       )
     );
   };
+
   return React.createElement("div",null,
-    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+    // Header
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}},
       React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🛒 Pedidos"),
-      React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Novo")
+      React.createElement("div",{style:{display:"flex",gap:8}},
+        React.createElement("button",{style:{...btnStyle(C.purple,true),fontSize:12},onClick:()=>setVerLog(v=>!v)},"📋 Log de Alterações"),
+        React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:12},onClick:exportarPDF},"📄 Exportar PDF"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Novo")
+      )
     ),
     React.createElement("div",{style:{padding:"20px 24px"}},
+      // KPIs
       React.createElement(Grid,{cols:5,mb:16},
         React.createElement(KPI,{label:"Total",value:data.length,color:C.blue}),
         React.createElement(KPI,{label:"Pendentes",value:data.filter(d=>d.status==="Pendente").length,color:C.yellow}),
@@ -1962,57 +2047,107 @@ function Pedidos(){
         React.createElement(KPI,{label:"Retirados",value:data.filter(d=>d.status==="Retirado").length,color:C.orange}),
         React.createElement(KPI,{label:"Devolvidos",value:data.filter(d=>d.status==="Devolvido").length,color:C.green})
       ),
-      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
-        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar condomínio, descrição, OS...",value:busca,onChange:e=>setBusca(e.target.value)}),
-        React.createElement("select",{style:{...base.sel,width:160},value:filtStatus,onChange:e=>setFiltStatus(e.target.value)},
-          React.createElement("option",{value:""},"Todos status"),...Object.keys(STATUS_PED).map(s=>React.createElement("option",{key:s,value:s},s))
+      // Filtros
+      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}},
+        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar cond., desc., OS, pedido...",value:busca,onChange:e=>setBusca(e.target.value)}),
+        React.createElement("select",{style:{...base.sel,width:150},value:filtStatus,onChange:e=>setFiltStatus(e.target.value)},
+          React.createElement("option",{value:""},"Todos status"),
+          ...Object.keys(STATUS_PED).map(s=>React.createElement("option",{key:s,value:s},s))
         ),
-        (filtStatus||busca)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setFiltStatus("");setBusca("");}},"✕ Limpar"),
-        React.createElement("span",{style:{fontSize:12,color:C.dim,alignSelf:"center"}},`${filtered.length} registros`)
+        React.createElement("select",{style:{...base.sel,width:120},value:filtMes,onChange:e=>setFiltMes(e.target.value)},
+          React.createElement("option",{value:""},"Todos meses"),
+          ...MESES.map((m,i)=>React.createElement("option",{key:m,value:m},NOMES_MES[i]))
+        ),
+        React.createElement("select",{style:{...base.sel,width:90},value:filtAno,onChange:e=>setFiltAno(e.target.value)},
+          React.createElement("option",{value:""},"Todos anos"),
+          ...anos.map(a=>React.createElement("option",{key:a,value:a},a))
+        ),
+        (filtStatus||filtMes||filtAno||busca)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setFiltStatus("");setFiltMes("");setFiltAno("");setBusca("");}},"✕ Limpar"),
+        React.createElement("span",{style:{fontSize:12,color:C.dim}},`${filtered.length} registros`)
       ),
+      // Log de Alterações
+      verLog&&React.createElement(Card,{style:{marginBottom:16}},
+        React.createElement(CardHeader,{title:"📋 Log de Alterações Recentes"}),
+        React.createElement("div",{style:{fontSize:12,color:C.muted,marginBottom:8}},"Últimas 50 alterações registradas no sistema"),
+        React.createElement(LogTabela,null)
+      ),
+      // Tabela
       loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
       React.createElement("div",null,
         React.createElement(Card,null,
-        data.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhum pedido cadastrado"):
-        React.createElement(Table,{
-          cols:["🏢 Condomínio","🗓️ Data","🔢 Cód. | Qtd — Descrição","📂 O.S","🗂️ Pedido","🛒 Requisição","🗓️ Retirada","🗓️ Devolução","✍️ Obs","✅ Status","Ações"],
-          rows:paginado.map(d=>[
-            React.createElement("span",{style:{fontWeight:600,fontSize:12}},d.cond),
-            React.createElement("span",{style:{fontSize:12,whiteSpace:"nowrap"}},fmt(d.data)),
-            React.createElement("div",{style:{minWidth:160}},
-              React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center",marginBottom:2}},
-                d.cod&&React.createElement("span",{style:{background:C.blue+"22",color:C.blue,fontSize:10,padding:"1px 6px",borderRadius:4,fontWeight:600}},d.cod),
-                d.quant&&React.createElement("span",{style:{background:C.purple+"22",color:C.purple,fontSize:10,padding:"1px 6px",borderRadius:4}},`x${d.quant}`)
-              ),
-              React.createElement("span",{style:{fontSize:12,color:C.text}},d.descricao)
-            ),
-            d.os?React.createElement("span",{style:{color:C.cyan,fontSize:12,fontWeight:600}},d.os):React.createElement("span",{style:{color:C.dim}},"—"),
-            d.pedido?React.createElement("span",{style:{color:C.blue,fontSize:12}},d.pedido):React.createElement("span",{style:{color:C.dim}},"—"),
-            d.requisicao?React.createElement("span",{style:{color:C.purple,fontSize:12}},d.requisicao):React.createElement("span",{style:{color:C.dim}},"—"),
-            d.retirada?React.createElement("span",{style:{fontSize:12,whiteSpace:"nowrap"}},fmt(d.retirada)):React.createElement("span",{style:{color:C.dim}},"—"),
-            d.devolucao
-              ?React.createElement("span",{style:{fontSize:12,whiteSpace:"nowrap",color:new Date(d.devolucao)<new Date()?C.red:C.text}},fmt(d.devolucao))
-              :React.createElement("span",{style:{color:C.dim}},"—"),
-            d.obs?React.createElement("span",{style:{fontSize:11,color:C.muted,maxWidth:120,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"},title:d.obs},d.obs):React.createElement("span",{style:{color:C.dim}},"—"),
-            React.createElement(Pill,{c:STATUS_PED[d.status]?.c||C.dim},d.status),
-            React.createElement("div",{style:{display:"flex",gap:4}},
-              React.createElement("button",{style:iBtn(C.blue),onClick:()=>setModal(d)},"✏️"),
-              React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id)},"🗑")
-            )
-          ])
-        })
-      ),
-        totalPags>1&&React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:12}},
+          data.length===0
+            ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhum pedido cadastrado")
+            :React.createElement(Table,{
+                cols:["🏢 Condomínio","🗓️ Data","🔢 Cód.","📦 Qtd","📝 Descrição","📂 O.S","🗂️ Pedido","🛒 Requisição","🗓️ Retirada","🗓️ Devolução","✍️ Obs","✅ Status","Ações"],
+                rows:paginado.map(d=>[
+                  React.createElement("span",{style:{fontWeight:600,fontSize:12,whiteSpace:"nowrap"}},d.cond),
+                  React.createElement("span",{style:{fontSize:12,whiteSpace:"nowrap"}},fmt(d.data)),
+                  d.cod?React.createElement("span",{style:{background:C.blue+"22",color:C.blue,fontSize:10,padding:"2px 6px",borderRadius:4,fontWeight:600,whiteSpace:"nowrap"}},d.cod):React.createElement("span",{style:{color:C.dim}},"—"),
+                  React.createElement("span",{style:{background:C.purple+"22",color:C.purple,fontSize:10,padding:"2px 6px",borderRadius:4}},d.quant||1),
+                  React.createElement("span",{style:{fontSize:12,color:C.text,maxWidth:220,display:"inline-block"}},d.descricao),
+                  d.os?React.createElement("span",{style:{color:C.cyan,fontSize:12,fontWeight:600}},d.os):React.createElement("span",{style:{color:C.dim}},"—"),
+                  d.pedido?React.createElement("span",{style:{color:C.blue,fontSize:12}},d.pedido):React.createElement("span",{style:{color:C.dim}},"—"),
+                  d.requisicao?React.createElement("span",{style:{color:C.purple,fontSize:12}},d.requisicao):React.createElement("span",{style:{color:C.dim}},"—"),
+                  d.retirada?React.createElement("span",{style:{fontSize:12,whiteSpace:"nowrap"}},fmt(d.retirada)):React.createElement("span",{style:{color:C.dim}},"—"),
+                  d.devolucao?React.createElement("span",{style:{fontSize:12,whiteSpace:"nowrap",color:new Date(d.devolucao)<new Date()&&d.status!=="Devolvido"?C.red:C.text}},fmt(d.devolucao)):React.createElement("span",{style:{color:C.dim}},"—"),
+                  d.obs?React.createElement("span",{style:{fontSize:11,color:C.muted,maxWidth:100,display:"inline-block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"},title:d.obs},d.obs):React.createElement("span",{style:{color:C.dim}},"—"),
+                  React.createElement(Pill,{c:STATUS_PED[d.status]?.c||C.dim},d.status),
+                  React.createElement("div",{style:{display:"flex",gap:4,whiteSpace:"nowrap"}},
+                    React.createElement("button",{style:iBtn(C.blue),onClick:()=>setModal(d),title:"Editar"},"✏️"),
+                    React.createElement("button",{style:iBtn(C.purple),onClick:()=>verLogs(d),title:"Ver histórico"},"📋"),
+                    React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id),title:"Excluir"},"🗑")
+                  )
+                ])
+              })
+        ),
+        totalPags>1&&React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:12,flexWrap:"wrap"}},
           React.createElement("button",{style:{...iBtn(C.blue),opacity:pagina===1?0.3:1},disabled:pagina===1,onClick:()=>setPagina(p=>p-1)},"← Anterior"),
-          React.createElement("span",{style:{fontSize:13,color:C.muted}},`Página ${pagina} de ${totalPags} — ${(pagina-1)*POR_PAG+1} a ${Math.min(pagina*POR_PAG,filtered.length)} de ${filtered.length}`),
+          React.createElement("span",{style:{fontSize:12,color:C.muted}},`Pág ${pagina}/${totalPags} — ${(pagina-1)*POR_PAG+1}–${Math.min(pagina*POR_PAG,filtered.length)} de ${filtered.length}`),
           React.createElement("button",{style:{...iBtn(C.blue),opacity:pagina===totalPags?0.3:1},disabled:pagina===totalPags,onClick:()=>setPagina(p=>p+1)},"Próxima →")
         )
       )
     ),
     modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
+    logModal&&React.createElement(Modal,{title:`📋 Histórico — ${logModal.cond}`,onClose:()=>setLogModal(null),width:620},
+      logs.length===0
+        ?React.createElement("div",{style:{textAlign:"center",padding:30,color:C.dim}},"Nenhuma alteração registrada.")
+        :React.createElement(Table,{
+            cols:["Campo","Valor Anterior","Valor Novo","Usuário","Data/Hora"],
+            rows:logs.map(l=>[
+              React.createElement("span",{style:{color:C.cyan,fontWeight:600}},l.campo),
+              React.createElement("span",{style:{color:C.red,fontSize:11,textDecoration:"line-through"}},l.valor_antes||"—"),
+              React.createElement("span",{style:{color:C.green,fontSize:11}},l.valor_depois||"—"),
+              React.createElement("span",{style:{color:C.muted,fontSize:11}},l.usuario),
+              React.createElement("span",{style:{fontSize:11,color:C.dim}},l.data_alt?new Date(l.data_alt).toLocaleString("pt-BR"):"—")
+            ])
+          }),
+      React.createElement("div",{style:{display:"flex",justifyContent:"flex-end",marginTop:16}},
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setLogModal(null)},"Fechar")
+      )
+    ),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir este pedido?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
   );
 }
+
+function LogTabela(){
+  const [logs,setLogs]=useState([]);
+  useEffect(()=>{
+    sb.from("pedidos_log").select("*").order("data_alt",{ascending:false}).limit(50).then(({data})=>setLogs(data||[]));
+  },[]);
+  if(logs.length===0)return React.createElement("div",{style:{textAlign:"center",padding:20,color:C.dim}},"Nenhuma alteração registrada ainda.");
+  return React.createElement(Table,{
+    cols:["Pedido","Campo","Antes","Depois","Usuário","Data/Hora"],
+    rows:logs.map(l=>[
+      React.createElement("span",{style:{color:C.cyan,fontSize:11}},l.pedido_id),
+      React.createElement("span",{style:{color:C.blue,fontWeight:600,fontSize:11}},l.campo),
+      React.createElement("span",{style:{color:C.red,fontSize:10,textDecoration:"line-through"}},l.valor_antes||"—"),
+      React.createElement("span",{style:{color:C.green,fontSize:10}},l.valor_depois||"—"),
+      React.createElement("span",{style:{fontSize:11,color:C.muted}},l.usuario),
+      React.createElement("span",{style:{fontSize:10,color:C.dim,whiteSpace:"nowrap"}},l.data_alt?new Date(l.data_alt).toLocaleString("pt-BR"):"—")
+    ])
+  });
+}
+
 
 // ── REINCIDÊNCIAS ─────────────────────────────────────────────
 function Reincidencias(){
@@ -2504,7 +2639,7 @@ function App(){
       case"tecnicos":return React.createElement(Tecnicos,null);
       case"particularidades":return React.createElement(Particularidades,null);
       case"os-pendencia":return React.createElement(OSPendencia,{tecsBanco});
-      case"pedidos":return React.createElement(Pedidos,null);
+      case"pedidos":return React.createElement(Pedidos,{usuarioAtual:usuario});
       case"condominios":return React.createElement(Condominios,null);
       case"preventivas":return React.createElement(Preventivas,null);
       case"reginaldo":return React.createElement(ServicoReginaldo,null);
