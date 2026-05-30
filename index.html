@@ -1903,13 +1903,22 @@ function Pedidos(){
   const [modal,setModal]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
   const [filtStatus,setFiltStatus]=useState("");
+  const [busca,setBusca]=useState("");
+  const [pagina,setPagina]=useState(1);
+  const POR_PAG=50;
   const load=useCallback(async()=>{
     setLoading(true);
     const{data:rows}=await sb.from("pedidos").select("*").order("data",{ascending:false});
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
-  const filtered=data.filter(d=>!filtStatus||d.status===filtStatus);
+  useEffect(()=>{setPagina(1);},[filtStatus,busca]);
+  const filtered=data.filter(d=>
+    (!filtStatus||d.status===filtStatus)&&
+    (!busca||(d.cond||"").toLowerCase().includes(busca.toLowerCase())||(d.descricao||"").toLowerCase().includes(busca.toLowerCase())||(d.os||"").includes(busca)||(d.pedido||"").includes(busca))
+  );
+  const totalPags=Math.ceil(filtered.length/POR_PAG);
+  const paginado=filtered.slice((pagina-1)*POR_PAG,pagina*POR_PAG);
   const save=async item=>{
     if(item.id&&data.find(x=>x.id===item.id)){await sb.from("pedidos").update(item).eq("id",item.id);}
     else{await sb.from("pedidos").insert(item);}
@@ -1953,18 +1962,21 @@ function Pedidos(){
         React.createElement(KPI,{label:"Retirados",value:data.filter(d=>d.status==="Retirado").length,color:C.orange}),
         React.createElement(KPI,{label:"Devolvidos",value:data.filter(d=>d.status==="Devolvido").length,color:C.green})
       ),
-      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12}},
+      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
+        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar condomínio, descrição, OS...",value:busca,onChange:e=>setBusca(e.target.value)}),
         React.createElement("select",{style:{...base.sel,width:160},value:filtStatus,onChange:e=>setFiltStatus(e.target.value)},
           React.createElement("option",{value:""},"Todos status"),...Object.keys(STATUS_PED).map(s=>React.createElement("option",{key:s,value:s},s))
         ),
-        filtStatus&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>setFiltStatus("")},"✕ Limpar")
+        (filtStatus||busca)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setFiltStatus("");setBusca("");}},"✕ Limpar"),
+        React.createElement("span",{style:{fontSize:12,color:C.dim,alignSelf:"center"}},`${filtered.length} registros`)
       ),
       loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
-      React.createElement(Card,null,
+      React.createElement("div",null,
+        React.createElement(Card,null,
         data.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhum pedido cadastrado"):
         React.createElement(Table,{
           cols:["🏢 Condomínio","🗓️ Data","🔢 Cód. | Qtd — Descrição","📂 O.S","🗂️ Pedido","🛒 Requisição","🗓️ Retirada","🗓️ Devolução","✍️ Obs","✅ Status","Ações"],
-          rows:filtered.map(d=>[
+          rows:paginado.map(d=>[
             React.createElement("span",{style:{fontWeight:600,fontSize:12}},d.cond),
             React.createElement("span",{style:{fontSize:12,whiteSpace:"nowrap"}},fmt(d.data)),
             React.createElement("div",{style:{minWidth:160}},
@@ -1989,6 +2001,12 @@ function Pedidos(){
             )
           ])
         })
+      ),
+        totalPags>1&&React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:12}},
+          React.createElement("button",{style:{...iBtn(C.blue),opacity:pagina===1?0.3:1},disabled:pagina===1,onClick:()=>setPagina(p=>p-1)},"← Anterior"),
+          React.createElement("span",{style:{fontSize:13,color:C.muted}},`Página ${pagina} de ${totalPags} — ${(pagina-1)*POR_PAG+1} a ${Math.min(pagina*POR_PAG,filtered.length)} de ${filtered.length}`),
+          React.createElement("button",{style:{...iBtn(C.blue),opacity:pagina===totalPags?0.3:1},disabled:pagina===totalPags,onClick:()=>setPagina(p=>p+1)},"Próxima →")
+        )
       )
     ),
     modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
