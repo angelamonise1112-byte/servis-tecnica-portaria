@@ -2977,15 +2977,18 @@ function Reincidencias(){
       const[ano,mes]=d.data.split("-");
       return mes===filtMes&&ano===filtAno;
     });
-    // Agrupar por condomínio + problema
+    // Agrupar por condomínio + problema (normalizado)
     const map={};
     osFiltradas.forEach(os=>{
-      const key=`${os.cond}||${os.prob}`;
-      if(!map[key])map[key]={cond:os.cond,prob:os.prob,os:[],count:0};
+      if(!os.cond)return;
+      // Normalizar problema — pegar primeiras palavras para agrupar similares
+      const probNorm=(os.prob||"Outros").toLowerCase().trim().slice(0,30);
+      const key=(os.cond||"").toLowerCase().trim()+"||"+probNorm;
+      if(!map[key])map[key]={cond:os.cond,prob:os.prob||"Outros",os:[],count:0};
       map[key].os.push(os);
       map[key].count++;
     });
-    // Filtrar apenas grupos com 3 ou mais OS (reincidência)
+    // Reincidência = 2 ou mais OS mesmo cond+problema no mês
     return Object.values(map)
       .filter(g=>g.count>=2)
       .sort((a,b)=>b.count-a.count);
@@ -3182,15 +3185,23 @@ function SLA(){
   },[osComSLA,filtro,busca,filtTec,filtAno,filtMes]);
 
   // Estatísticas
-  const stats=useMemo(()=>({
-    total:osComSLA.length,
-    abertas:osComSLA.filter(o=>o.status==="Aberto").length,
-    vencidas:osComSLA.filter(o=>o.situacao==="Vencida").length,
-    dentroSLA:osComSLA.filter(o=>o.situacao==="Dentro do SLA").length,
-    foraSLA:osComSLA.filter(o=>o.situacao==="Fora do SLA").length,
-    pctSLA:osComSLA.filter(o=>o.status==="Fechado").length>0
-      ?Math.round((osComSLA.filter(o=>o.situacao==="Dentro do SLA").length/osComSLA.filter(o=>o.status==="Fechado").length)*100):0
-  }),[osComSLA]);
+  const stats=useMemo(()=>{
+    const fechadas=osComSLA.filter(o=>o.status==="Fechado"&&o.horasUteis>0);
+    const tempoMedio=fechadas.length>0
+      ?Math.round(fechadas.reduce((s,o)=>s+o.horasUteis,0)/fechadas.length*10)/10
+      :0;
+    return {
+      total:osComSLA.length,
+      abertas:osComSLA.filter(o=>o.status==="Aberto").length,
+      vencidas:osComSLA.filter(o=>o.situacao==="Vencida").length,
+      dentroSLA:osComSLA.filter(o=>o.situacao==="Dentro do SLA").length,
+      foraSLA:osComSLA.filter(o=>o.situacao==="Fora do SLA").length,
+      pctSLA:fechadas.length>0
+        ?Math.round((osComSLA.filter(o=>o.situacao==="Dentro do SLA").length/fechadas.length)*100):0,
+      tempoMedio,
+      fechadas:fechadas.length
+    };
+  },[osComSLA]);
 
   const totalPags=Math.ceil(filtered.length/POR_PAG);
   const paginado=filtered.slice((pagina-1)*POR_PAG,pagina*POR_PAG);
@@ -3233,7 +3244,7 @@ function SLA(){
     ),
     React.createElement("div",{style:{padding:"20px 24px"}},
       // KPIs
-      React.createElement(Grid,{cols:5,mb:16},
+      React.createElement(Grid,{cols:6,mb:16},
         React.createElement(KPI,{label:"Total OS",value:stats.total,color:C.blue}),
         React.createElement(KPI,{label:"🔴 Abertas",value:stats.abertas,color:C.red}),
         React.createElement(KPI,{label:"🚨 Vencidas",value:stats.vencidas,color:stats.vencidas>0?C.red:C.green}),
@@ -3242,6 +3253,11 @@ function SLA(){
           React.createElement("div",{style:{fontSize:26,fontWeight:800,color:stats.pctSLA>=90?C.green:stats.pctSLA>=70?C.yellow:C.red}},stats.pctSLA+"%"),
           React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"% dentro do SLA"),
           React.createElement("div",{style:{fontSize:9,color:C.dim,marginTop:2}},"meta: 100%")
+        ),
+        React.createElement("div",{style:{background:C.card,borderRadius:12,padding:16,textAlign:"center",border:`1px solid ${C.purple}44`}},
+          React.createElement("div",{style:{fontSize:26,fontWeight:800,color:C.purple}},stats.tempoMedio+"h"),
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"Tempo médio"),
+          React.createElement("div",{style:{fontSize:9,color:C.dim,marginTop:2}},`${stats.fechadas} OS fechadas`)
         )
       ),
       loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
