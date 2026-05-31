@@ -630,7 +630,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
     setLoading(true);
     // Cruzar OS com endereços dos condomínios
     const [{data:rows},{data:conds}]=await Promise.all([
-      sb.from("os").select("*").order("data",{ascending:false}),
+      sb.from("os").select("*").or("status.eq.Aberto,data.gte.2026-01-01").order("data",{ascending:false}),
       sb.from("condominios").select("nome,endereco,tecnico")
     ]);
     // Montar mapa de endereços
@@ -1331,7 +1331,7 @@ function Dashboard({setTab}){
         {data:osData},{data:tecData},{data:condData},
         {data:heData},{data:atData},{data:prevData},{data:pedData}
       ]=await Promise.all([
-        sb.from("os").select("num,data,status,cond,tec,prob,pri,relato").gte("data","2026-01-01"),
+        sb.from("os").select("num,data,status,cond,tec,prob,pri,relato").or("status.eq.Aberto,data.gte.2026-01-01"),
         sb.from("tecnicos").select("id"),
         sb.from("condominios").select("id"),
         sb.from("horas_extras").select("status,total_h"),
@@ -2951,6 +2951,7 @@ function Reincidencias(){
   const hoje=new Date();
   const [filtMes,setFiltMes]=useState(String(hoje.getMonth()+1).padStart(2,"0"));
   const [filtAno,setFiltAno]=useState(String(hoje.getFullYear()));
+  const [busca,setBusca]=useState("");
   const [detalhe,setDetalhe]=useState(null);
   const MESES=["01","02","03","04","05","06","07","08","09","10","11","12"];
   const NOMES_MES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -2980,7 +2981,9 @@ function Reincidencias(){
     const osFiltradas=data.filter(d=>{
       if(!d.data)return false;
       const[ano,mes]=d.data.split("-");
-      return mes===filtMes&&ano===filtAno;
+      const matchAno=ano===filtAno;
+      const matchMes=!filtMes||mes===filtMes;
+      return matchAno&&matchMes;
     });
     // Agrupar por condomínio + problema (normalizado)
     const map={};
@@ -2995,7 +2998,7 @@ function Reincidencias(){
     });
     // Reincidência = 2 ou mais OS mesmo cond+problema no mês
     return Object.values(map)
-      .filter(g=>g.count>=2)
+      .filter(g=>g.count>=2&&(!busca||(g.cond||"").toLowerCase().includes(busca.toLowerCase())))
       .sort((a,b)=>b.count-a.count);
   },[data,filtMes,filtAno]);
 
@@ -3014,8 +3017,10 @@ function Reincidencias(){
           ultimaAtualizacao&&React.createElement("span",{style:{fontSize:10,color:C.dim}},`Atualizado: ${ultimaAtualizacao.toLocaleTimeString("pt-BR")}`)
         )
       ),
-      React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center"}},
+      React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",padding:"0 24px 12px"}},
+        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar condomínio...",value:busca,onChange:e=>setBusca(e.target.value)}),
         React.createElement("select",{style:{...base.sel,width:140},value:filtMes,onChange:e=>setFiltMes(e.target.value)},
+          React.createElement("option",{value:""},"Todos os meses"),
           MESES.map((m,i)=>React.createElement("option",{key:m,value:m},NOMES_MES[i]))
         ),
         React.createElement("select",{style:{...base.sel,width:90},value:filtAno,onChange:e=>setFiltAno(e.target.value)},
