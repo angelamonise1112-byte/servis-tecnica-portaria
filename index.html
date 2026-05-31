@@ -4322,6 +4322,40 @@ function App(){
   const [heCount,setHeCount]=useState(0);
   const [osCount,setOsCount]=useState(0);
   const [tecsBanco,setTecsBanco]=useState(TECNICOS);
+
+  // Auto-refresh global a cada 5 minutos
+  useEffect(()=>{
+    const t=setInterval(()=>{refresh();},5*60*1000);
+    // Refresh ao ganhar foco (voltou para a aba)
+    const onFocus=()=>{refresh();};
+    window.addEventListener("focus",onFocus);
+    document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh();});
+    // Ouvir sinal da ferramenta de importação
+    let bc;
+    try{
+      bc=new BroadcastChannel('servis_refresh');
+      bc.onmessage=function(e){
+        if(e.data&&e.data.type==='import_done'){refresh();}
+      };
+    }catch(err){}
+    // Verificar localStorage para importações recentes
+    const checkImport=setInterval(()=>{
+      try{
+        const last=localStorage.getItem('servis_last_import');
+        const lastCheck=localStorage.getItem('servis_last_check')||'';
+        if(last&&last>lastCheck){
+          localStorage.setItem('servis_last_check',last);
+          refresh();
+        }
+      }catch(e){}
+    },10000);
+    return()=>{
+      clearInterval(t);clearInterval(checkImport);
+      window.removeEventListener("focus",onFocus);
+      try{if(bc)bc.close();}catch(e){}
+    };
+  },[refresh]);
+
   useEffect(()=>{
     // Carregar técnicos do banco para ter matrículas atualizadas
     sb.from("tecnicos").select("nome,mat").order("nome",{ascending:true}).then(({data})=>{
