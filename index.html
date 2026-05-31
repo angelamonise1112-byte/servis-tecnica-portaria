@@ -491,23 +491,25 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
 // ── OS ────────────────────────────────────────────────────────
 function NovaOS({setTab,onSave}){
   const [f,setF]=useState({num:"",data:todayStr(),cond:CONDS[0],tec:TECNICOS[0].nome,pri:"Média",prob:PROBS[0],descricao:""});
+  const [toast,setToast]=useState(false);
   const [erro,setErro]=useState("");
   const [loading,setLoading]=useState(false);
+  const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+
   const submit=async()=>{
     setErro("");
     if(!f.num.trim()){setErro("⚠ Informe o Nº da OS");return;}
     if(!f.cond){setErro("⚠ Selecione o condomínio");return;}
     setLoading(true);
-    // Verificar se OS já existe
     const{data:exist}=await sb.from("os").select("id").eq("num",f.num.trim()).limit(1);
     if(exist&&exist.length>0){setErro("⚠ Já existe uma OS com este número");setLoading(false);return;}
     const{error}=await sb.from("os").insert({...f,num:f.num.trim(),id:uid(),status:"Aberto",data:f.data||todayStr()});
-    if(error){setErro("❌ Erro ao criar OS: "+error.message);setLoading(false);return;}
-    setLoading(false);
-    setToast(true);
+    if(error){setErro("❌ Erro: "+error.message);setLoading(false);return;}
+    setLoading(false);setToast(true);
     try{const bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"nova_os"});bc.close();}catch(e){}
     setTimeout(()=>{setToast(false);setTab("os");if(onSave)onSave();},1600);
   };
+
   return React.createElement("div",null,
     React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`}},
       React.createElement("div",{style:{fontSize:18,fontWeight:700}},"＋ Nova OS")
@@ -516,27 +518,49 @@ function NovaOS({setTab,onSave}){
       toast&&React.createElement("div",{style:{background:C.green+"22",border:`1px solid ${C.green}`,borderRadius:8,padding:"10px 16px",marginBottom:16,color:C.green,fontSize:13}},"✅ OS criada com sucesso! Redirecionando..."),
       React.createElement(Card,null,
         React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}},
-          React.createElement("div",null,React.createElement("label",{style:base.lbl},"Nº OS"),React.createElement("input",{style:base.inp,value:f.num,onChange:upd("num"),placeholder:"OS-001"})),
-          React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data"),React.createElement("input",{type:"date",style:base.inp,value:f.data,onChange:upd("data")})),
-          React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Condomínio"),React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},CONDS.map(c=>React.createElement("option",{key:c},c)))),
-          React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Técnico"),React.createElement("select",{style:base.sel,value:f.tec,onChange:upd("tec")},TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome)))),
+          React.createElement("div",null,
+            React.createElement("label",{style:base.lbl},"Nº OS *"),
+            React.createElement("input",{style:base.inp,value:f.num,onChange:upd("num"),placeholder:"514001"})
+          ),
+          React.createElement("div",null,
+            React.createElement("label",{style:base.lbl},"Data"),
+            React.createElement("input",{type:"date",style:base.inp,value:f.data,onChange:upd("data")})
+          ),
+          React.createElement("div",{style:{gridColumn:"1/-1"}},
+            React.createElement("label",{style:base.lbl},"Condomínio *"),
+            React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},
+              CONDS.map(c=>React.createElement("option",{key:c},c))
+            )
+          ),
+          React.createElement("div",{style:{gridColumn:"1/-1"}},
+            React.createElement("label",{style:base.lbl},"Técnico"),
+            React.createElement("select",{style:base.sel,value:f.tec,onChange:upd("tec")},
+              TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
+            )
+          ),
           React.createElement("div",{style:{gridColumn:"1/-1"}},
             React.createElement("label",{style:base.lbl},"Prioridade"),
             React.createElement("div",{style:{display:"flex",gap:8}},
-              ["Alta","Média","Baixa"].map(p=>React.createElement("button",{key:p,style:{...btnStyle(p==="Alta"?C.red:p==="Média"?C.yellow:C.green,f.pri!==p),flex:1},onClick:()=>setF(x=>({...x,pri:p}))},p))
+              ["Alta","Média","Baixa"].map(p=>React.createElement("button",{key:p,
+                style:{...btnStyle(p==="Alta"?C.red:p==="Média"?C.yellow:C.green,f.pri!==p),flex:1},
+                onClick:()=>setF(x=>({...x,pri:p}))},p
+              ))
             )
           ),
-          React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Problema"),React.createElement("select",{style:base.sel,value:f.prob,onChange:upd("prob")},PROBS.map(p=>React.createElement("option",{key:p},p)))),
           React.createElement("div",{style:{gridColumn:"1/-1"}},
-            React.createElement("label",{style:base.lbl},"Descrição do Problema"),
-            React.createElement("textarea",{style:{...base.inp,minHeight:80,resize:"vertical"},value:f.descricao||"",onChange:upd("descricao"),placeholder:"Descreva detalhadamente o problema relatado pelo cliente..."})
+            React.createElement("label",{style:base.lbl},"Problema"),
+            React.createElement("select",{style:base.sel,value:f.prob,onChange:upd("prob")},
+              PROBS.map(p=>React.createElement("option",{key:p},p))
+            )
           ),
           React.createElement("div",{style:{gridColumn:"1/-1"}},
-            erro&&React.createElement("div",{style:{background:C.red+"22",border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",marginBottom:8,fontSize:13,color:C.red}},erro),
-            React.createElement("div",{style:{display:"flex",justifyContent:"flex-end"}},
-              React.createElement("button",{style:{...btnStyle(C.blue),width:"auto",padding:"10px 28px"},onClick:submit,disabled:loading},
-                loading?"⏳ Criando...":"💾 Criar OS"
-              )
+            React.createElement("label",{style:base.lbl},"Descrição adicional"),
+            React.createElement("textarea",{style:{...base.inp,height:80,resize:"vertical"},value:f.descricao||"",onChange:upd("descricao"),placeholder:"Detalhes adicionais..."})
+          ),
+          erro&&React.createElement("div",{style:{gridColumn:"1/-1",background:C.red+"22",border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",fontSize:13,color:C.red}},erro),
+          React.createElement("div",{style:{gridColumn:"1/-1",display:"flex",justifyContent:"flex-end"}},
+            React.createElement("button",{style:{...btnStyle(C.blue),width:"auto",padding:"10px 28px"},onClick:submit,disabled:loading},
+              loading?"⏳ Criando...":"💾 Criar OS"
             )
           )
         )
@@ -545,83 +569,6 @@ function NovaOS({setTab,onSave}){
   );
 }
 
-// ── ACOMPANHAMENTO AO VIVO ───────────────────────────────────
-function AcompanhamentoAoVivo(){
-  const [locs,setLocs]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [aberto,setAberto]=useState(true);
-
-  const load=useCallback(async()=>{
-    const{data}=await sb.from("tecnicos_localizacao").select("*").order("atualizado_em",{ascending:false});
-    setLocs(data||[]);setLoading(false);
-  },[]);
-
-  useEffect(()=>{load();},[load]);
-  useEffect(()=>{const t=setInterval(load,20000);return()=>clearInterval(t);},[load]);
-
-  const agora=new Date();
-  const minAgo=(dt)=>Math.floor((agora-new Date(dt))/60000);
-  const online=(dt)=>minAgo(dt)<15;
-
-  const emCampo=locs.filter(l=>l.status_campo&&l.status_campo!=="Disponível"&&l.status_campo!=="Concluído");
-  const disponiveis=locs.filter(l=>l.status_campo==="Disponível"||!l.status_campo);
-
-  const statusCor=(s)=>s==="Em Atendimento"?C.orange:s==="A Caminho"?C.yellow:s==="No Local"?C.cyan:s==="Concluído"?C.green:C.green;
-  const statusIcon=(s)=>s==="Em Atendimento"?"🔧":s==="A Caminho"?"🚗":s==="No Local"?"📍":s==="Concluído"?"✅":"🟢";
-
-  if(loading)return null;
-  if(locs.length===0)return null;
-
-  return React.createElement("div",{style:{background:C.card,border:`1px solid ${C.blue}44`,borderRadius:12,marginBottom:16,overflow:"hidden"}},
-    // Header clicável
-    React.createElement("div",{
-      style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",cursor:"pointer",background:C.blue+"11"},
-      onClick:()=>setAberto(a=>!a)
-    },
-      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
-        React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:C.green,boxShadow:`0 0 6px ${C.green}`}}),
-        React.createElement("span",{style:{fontSize:13,fontWeight:700,color:C.blue}},"📡 Técnicos em Campo — Ao Vivo"),
-        emCampo.length>0&&React.createElement(Pill,{c:C.orange},emCampo.length+" em atendimento"),
-        disponiveis.length>0&&React.createElement(Pill,{c:C.green},disponiveis.length+" disponíveis")
-      ),
-      React.createElement("span",{style:{color:C.muted,fontSize:12}},aberto?"▲ Recolher":"▼ Expandir")
-    ),
-    // Conteúdo
-    aberto&&React.createElement("div",{style:{padding:"12px 16px"}},
-      locs.length===0?React.createElement("div",{style:{textAlign:"center",padding:20,color:C.dim,fontSize:12}},"Nenhum técnico com app aberto"):
-      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}},
-        locs.map((loc,i)=>{
-          const mins=minAgo(loc.atualizado_em);
-          const isOnline=online(loc.atualizado_em);
-          const cor=statusCor(loc.status_campo);
-          return React.createElement("div",{key:i,style:{background:C.surface,borderRadius:10,padding:"10px 12px",border:`1px solid ${isOnline?cor+"44":C.border}`}},
-            // Nome + status
-            React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:6}},
-              React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:isOnline?C.green:C.dim,flexShrink:0}}),
-              React.createElement("div",{style:{fontWeight:600,fontSize:12,flex:1}},loc.tec),
-              React.createElement("span",{style:{fontSize:14}},statusIcon(loc.status_campo))
-            ),
-            // Status
-            React.createElement("div",{style:{marginBottom:6}},
-              React.createElement("span",{style:{background:cor+"22",color:cor,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:8}},loc.status_campo||"Disponível")
-            ),
-            // OS e condomínio
-            loc.os_num&&React.createElement("div",{style:{fontSize:11,color:C.cyan,marginBottom:2}},"OS #"+loc.os_num),
-            loc.os_cond&&React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},loc.os_cond),
-            // Localização e tempo
-            React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
-              React.createElement("span",{style:{fontSize:10,color:isOnline?C.green:C.dim}},isOnline?mins+"min atrás":mins<60?mins+"min (offline)":Math.floor(mins/60)+"h (offline)"),
-              loc.lat&&loc.lng&&React.createElement("div",{style:{display:"flex",gap:4}},
-                React.createElement("a",{href:`https://maps.google.com/?q=${loc.lat},${loc.lng}`,target:"_blank",style:{background:C.blue+"22",border:`1px solid ${C.blue}33`,color:C.blue,borderRadius:6,padding:"2px 7px",fontSize:10,textDecoration:"none",fontWeight:600}},"🗺"),
-                React.createElement("a",{href:`https://waze.com/ul?ll=${loc.lat},${loc.lng}&navigate=yes`,target:"_blank",style:{background:C.cyan+"22",border:`1px solid ${C.cyan}33`,color:C.cyan,borderRadius:6,padding:"2px 7px",fontSize:10,textDecoration:"none",fontWeight:600}},"W")
-              )
-            )
-          );
-        })
-      )
-    )
-  );
-}
 
 function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
   const [data,setData]=useState([]);
