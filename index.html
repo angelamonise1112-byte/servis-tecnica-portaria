@@ -1400,14 +1400,12 @@ function Dashboard({setTab}){
         else mapMes[k].fechadas++;
       });
       // Override com totais reais da RISEG por mês 2026
-      var overrides={"2026-01":535,"2026-02":563,"2026-03":473,"2026-04":374,"2026-05":411};
+      var overrides=OVERRIDES_2026;
       var osPorMes=Object.values(mapMes).filter(function(d){return d.key>="2026-01";}).sort(function(a,b){return a.key.localeCompare(b.key);}).map(function(d){
         if(overrides[d.key]!==undefined){d.total=overrides[d.key];}
         return d;
       });
-      // Total real = soma dos overrides
-      var totalOverride=Object.values(overrides).reduce(function(s,v){return s+v;},0);
-
+      // Total real = soma dos overrides — calculado fora do loadAll
       setStats({
         osAbertas:osAb.length,osFechadas:osFech.length,osTotal:os.length,
         tecnicos:(tecData||[]).length,condominios:(condData||[]).length,
@@ -1437,7 +1435,9 @@ function Dashboard({setTab}){
   },[]);
   const MESES_L=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
   const maxOS=Math.max(...stats.osPorMes.map(d=>d.total),1);
-  const mediaMensal=stats.osPorMes.length>0?Math.round(stats.osPorMes.reduce((s,d)=>s+d.total,0)/stats.osPorMes.length):0;
+  const OVERRIDES_2026={"2026-01":535,"2026-02":563,"2026-03":473,"2026-04":374,"2026-05":411};
+  const totalOverride=Object.values(OVERRIDES_2026).reduce(function(s,v){return s+v;},0);
+  const mediaMensal=stats.osPorMes.length>0?Math.round(totalOverride/stats.osPorMes.length):0;
   const melhorMes=stats.osPorMes.reduce((m,d)=>d.total>m.total?d:m,{total:0,label:"—"});
 
   return React.createElement("div",null,
