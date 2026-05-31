@@ -490,77 +490,97 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
 
 // ── OS ────────────────────────────────────────────────────────
 function NovaOS({setTab,onSave}){
-  const [f,setF]=useState({num:"",data:todayStr(),cond:CONDS[0],tec:TECNICOS[0].nome,pri:"Média",prob:PROBS[0],descricao:""});
+  const [num,setNum]=useState("");
+  const [data,setData]=useState(todayStr());
+  const [cond,setCond]=useState(CONDS[0]);
+  const [tec,setTec]=useState(TECNICOS[0].nome);
+  const [pri,setPri]=useState("Media");
+  const [prob,setProb]=useState(PROBS[0]);
+  const [desc,setDesc]=useState("");
   const [toast,setToast]=useState(false);
   const [erro,setErro]=useState("");
-  const [loading,setLoading]=useState(false);
-  const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  const [saving,setSaving]=useState(false);
+  const [buscaCond,setBuscaCond]=useState("");
+  const [condsBanco,setCondsBanco]=useState(CONDS);
 
-  const submit=async()=>{
+  useEffect(()=>{
+    sb.from("condominios").select("nome").order("nome",{ascending:true})
+      .then(function(r){
+        if(r.data&&r.data.length>0)setCondsBanco(r.data.map(function(c){return c.nome;}).filter(Boolean));
+      });
+  },[]);
+
+  const condsFilt=useMemo(function(){
+    if(!buscaCond)return condsBanco;
+    return condsBanco.filter(function(c){return c.toLowerCase().includes(buscaCond.toLowerCase());});
+  },[condsBanco,buscaCond]);
+
+  const submit=async function(){
     setErro("");
-    if(!f.num.trim()){setErro("⚠ Informe o Nº da OS");return;}
-    if(!f.cond){setErro("⚠ Selecione o condomínio");return;}
-    setLoading(true);
-    const{data:exist}=await sb.from("os").select("id").eq("num",f.num.trim()).limit(1);
-    if(exist&&exist.length>0){setErro("⚠ Já existe uma OS com este número");setLoading(false);return;}
-    const{error}=await sb.from("os").insert({...f,num:f.num.trim(),id:uid(),status:"Aberto",data:f.data||todayStr()});
-    if(error){setErro("❌ Erro: "+error.message);setLoading(false);return;}
-    setLoading(false);setToast(true);
-    try{const bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"nova_os"});bc.close();}catch(e){}
-    setTimeout(()=>{setToast(false);setTab("os");if(onSave)onSave();},1600);
+    if(!num.trim()){setErro("Informe o Nº da OS");return;}
+    if(!cond){setErro("Selecione o condomínio");return;}
+    setSaving(true);
+    const ex=await sb.from("os").select("id").eq("num",num.trim()).limit(1);
+    if(ex.data&&ex.data.length>0){setErro("Já existe uma OS com este número");setSaving(false);return;}
+    const res=await sb.from("os").insert({id:uid(),num:num.trim(),data:data||todayStr(),cond,tec,pri,prob,descricao:desc,status:"Aberto"});
+    if(res.error){setErro("Erro: "+res.error.message);setSaving(false);return;}
+    setSaving(false);setToast(true);
+    try{var bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"nova_os"});bc.close();}catch(e){}
+    setTimeout(function(){setToast(false);setTab("os");if(onSave)onSave();},1600);
   };
 
   return React.createElement("div",null,
-    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`}},
-      React.createElement("div",{style:{fontSize:18,fontWeight:700}},"＋ Nova OS")
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:"1px solid "+C.border}},
+      React.createElement("div",{style:{fontSize:18,fontWeight:700}},"+ Nova OS")
     ),
-    React.createElement("div",{style:{padding:"20px 24px",maxWidth:520}},
-      toast&&React.createElement("div",{style:{background:C.green+"22",border:`1px solid ${C.green}`,borderRadius:8,padding:"10px 16px",marginBottom:16,color:C.green,fontSize:13}},"✅ OS criada com sucesso! Redirecionando..."),
+    React.createElement("div",{style:{padding:"20px 24px",maxWidth:540}},
+      toast&&React.createElement("div",{style:{background:C.green+"22",border:"1px solid "+C.green,borderRadius:8,padding:"10px 16px",marginBottom:16,color:C.green,fontSize:13}},"OS criada com sucesso!"),
       React.createElement(Card,null,
         React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}},
           React.createElement("div",null,
-            React.createElement("label",{style:base.lbl},"Nº OS *"),
-            React.createElement("input",{style:base.inp,value:f.num,onChange:upd("num"),placeholder:"514001"})
+            React.createElement("label",{style:base.lbl},"No OS *"),
+            React.createElement("input",{style:base.inp,value:num,onChange:function(e){setNum(e.target.value);},placeholder:"514001"})
           ),
           React.createElement("div",null,
             React.createElement("label",{style:base.lbl},"Data"),
-            React.createElement("input",{type:"date",style:base.inp,value:f.data,onChange:upd("data")})
+            React.createElement("input",{type:"date",style:base.inp,value:data,onChange:function(e){setData(e.target.value);}})
           ),
           React.createElement("div",{style:{gridColumn:"1/-1"}},
-            React.createElement("label",{style:base.lbl},"Condomínio *"),
-            React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},
-              CONDS.map(c=>React.createElement("option",{key:c},c))
-            )
+            React.createElement("label",{style:base.lbl},"Condominio *"),
+            React.createElement("input",{style:{...base.inp,marginBottom:6},placeholder:"Buscar condominio...",value:buscaCond,onChange:function(e){setBuscaCond(e.target.value);}}),
+            React.createElement("select",{style:{...base.sel,height:140},size:6,value:cond,onChange:function(e){setCond(e.target.value);setBuscaCond("");}},
+              condsFilt.map(function(c){return React.createElement("option",{key:c,value:c},c);})
+            ),
+            cond&&React.createElement("div",{style:{fontSize:11,color:C.cyan,marginTop:4}},"Selecionado: "+cond)
           ),
           React.createElement("div",{style:{gridColumn:"1/-1"}},
-            React.createElement("label",{style:base.lbl},"Técnico"),
-            React.createElement("select",{style:base.sel,value:f.tec,onChange:upd("tec")},
-              TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
+            React.createElement("label",{style:base.lbl},"Tecnico"),
+            React.createElement("select",{style:base.sel,value:tec,onChange:function(e){setTec(e.target.value);}},
+              TECNICOS.map(function(t){return React.createElement("option",{key:t.mat,value:t.nome},t.nome);})
             )
           ),
           React.createElement("div",{style:{gridColumn:"1/-1"}},
             React.createElement("label",{style:base.lbl},"Prioridade"),
             React.createElement("div",{style:{display:"flex",gap:8}},
-              ["Alta","Média","Baixa"].map(p=>React.createElement("button",{key:p,
-                style:{...btnStyle(p==="Alta"?C.red:p==="Média"?C.yellow:C.green,f.pri!==p),flex:1},
-                onClick:()=>setF(x=>({...x,pri:p}))},p
-              ))
+              React.createElement("button",{style:{...btnStyle(C.red,pri!=="Alta"),flex:1},onClick:function(){setPri("Alta");}},"Alta"),
+              React.createElement("button",{style:{...btnStyle(C.yellow,pri!=="Media"),flex:1},onClick:function(){setPri("Media");}},"Media"),
+              React.createElement("button",{style:{...btnStyle(C.green,pri!=="Baixa"),flex:1},onClick:function(){setPri("Baixa");}},"Baixa")
             )
           ),
           React.createElement("div",{style:{gridColumn:"1/-1"}},
             React.createElement("label",{style:base.lbl},"Problema"),
-            React.createElement("select",{style:base.sel,value:f.prob,onChange:upd("prob")},
-              PROBS.map(p=>React.createElement("option",{key:p},p))
+            React.createElement("select",{style:base.sel,value:prob,onChange:function(e){setProb(e.target.value);}},
+              PROBS.map(function(p){return React.createElement("option",{key:p},p);})
             )
           ),
           React.createElement("div",{style:{gridColumn:"1/-1"}},
-            React.createElement("label",{style:base.lbl},"Descrição adicional"),
-            React.createElement("textarea",{style:{...base.inp,height:80,resize:"vertical"},value:f.descricao||"",onChange:upd("descricao"),placeholder:"Detalhes adicionais..."})
+            React.createElement("label",{style:base.lbl},"Descricao adicional"),
+            React.createElement("textarea",{style:{...base.inp,height:80},value:desc,onChange:function(e){setDesc(e.target.value);},placeholder:"Detalhes..."})
           ),
-          erro&&React.createElement("div",{style:{gridColumn:"1/-1",background:C.red+"22",border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 14px",fontSize:13,color:C.red}},erro),
+          erro&&React.createElement("div",{style:{gridColumn:"1/-1",background:C.red+"22",border:"1px solid "+C.red+"44",borderRadius:8,padding:"10px",fontSize:12,color:C.red}},"⚠ "+erro),
           React.createElement("div",{style:{gridColumn:"1/-1",display:"flex",justifyContent:"flex-end"}},
-            React.createElement("button",{style:{...btnStyle(C.blue),width:"auto",padding:"10px 28px"},onClick:submit,disabled:loading},
-              loading?"⏳ Criando...":"💾 Criar OS"
+            React.createElement("button",{style:{...btnStyle(C.blue),width:"auto",padding:"10px 28px"},onClick:submit,disabled:saving},
+              saving?"Criando...":"Criar OS"
             )
           )
         )
@@ -4547,9 +4567,7 @@ function App(){
     }catch(e){}
     }
   },[usuario,tab]);
-  if(!usuario)return React.createElement(Login,{onLogin:setUsuario});
-
-  // Controle de acesso por nível
+  // Controle de acesso por nível — DEVE ficar antes de qualquer return condicional
   const nivel=usuario?.nivel||"visualizador";
   const isAdmin=nivel==="admin";
   const isGestor=nivel==="gestor"||isAdmin;
@@ -4562,6 +4580,8 @@ function App(){
     if(isCentral)return TABS.filter(t=>["dashboard","nova-os","os","preventivas"].includes(t.id));
     return TABS.filter(t=>["dashboard"].includes(t.id));
   })();
+
+  if(!usuario)return React.createElement(Login,{onLogin:setUsuario});
 
   const renderTab=()=>{
     if(isCentral&&!["dashboard","nova-os","os","preventivas"].includes(tab)){
