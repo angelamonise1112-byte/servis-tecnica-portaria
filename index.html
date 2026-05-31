@@ -492,7 +492,7 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
 function NovaOS({setTab,onSave}){
   const [num,setNum]=useState("");
   const [data,setData]=useState(todayStr());
-  const [cond,setCond]=useState(CONDS[0]);
+  const [cond,setCond]=useState("");
   const [tec,setTec]=useState(TECNICOS[0].nome);
   const [pri,setPri]=useState("Media");
   const [prob,setProb]=useState(PROBS[0]);
@@ -500,10 +500,11 @@ function NovaOS({setTab,onSave}){
   const [toast,setToast]=useState(false);
   const [erro,setErro]=useState("");
   const [saving,setSaving]=useState(false);
-  const [buscaCond,setBuscaCond]=useState("");
+  const [busca,setBusca]=useState("");
+  const [showList,setShowList]=useState(false);
   const [condsBanco,setCondsBanco]=useState(CONDS);
 
-  useEffect(()=>{
+  useEffect(function(){
     sb.from("condominios").select("nome").order("nome",{ascending:true})
       .then(function(r){
         if(r.data&&r.data.length>0)setCondsBanco(r.data.map(function(c){return c.nome;}).filter(Boolean));
@@ -511,18 +512,24 @@ function NovaOS({setTab,onSave}){
   },[]);
 
   const condsFilt=useMemo(function(){
-    if(!buscaCond)return condsBanco;
-    return condsBanco.filter(function(c){return c.toLowerCase().includes(buscaCond.toLowerCase());});
-  },[condsBanco,buscaCond]);
+    if(!busca)return condsBanco;
+    return condsBanco.filter(function(c){return c.toLowerCase().includes(busca.toLowerCase());});
+  },[condsBanco,busca]);
+
+  function selecionarCond(nome){
+    setCond(nome);
+    setBusca(nome);
+    setShowList(false);
+  }
 
   const submit=async function(){
     setErro("");
-    if(!num.trim()){setErro("Informe o Nº da OS");return;}
-    if(!cond){setErro("Selecione o condomínio");return;}
+    if(!num.trim()){setErro("Informe o No da OS");return;}
+    if(!cond){setErro("Selecione o condominio");return;}
     setSaving(true);
-    const ex=await sb.from("os").select("id").eq("num",num.trim()).limit(1);
-    if(ex.data&&ex.data.length>0){setErro("Já existe uma OS com este número");setSaving(false);return;}
-    const res=await sb.from("os").insert({id:uid(),num:num.trim(),data:data||todayStr(),cond,tec,pri,prob,descricao:desc,status:"Aberto"});
+    var ex=await sb.from("os").select("id").eq("num",num.trim()).limit(1);
+    if(ex.data&&ex.data.length>0){setErro("Ja existe uma OS com este numero");setSaving(false);return;}
+    var res=await sb.from("os").insert({id:uid(),num:num.trim(),data:data||todayStr(),cond:cond,tec:tec,pri:pri,prob:prob,descricao:desc,status:"Aberto"});
     if(res.error){setErro("Erro: "+res.error.message);setSaving(false);return;}
     setSaving(false);setToast(true);
     try{var bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"nova_os"});bc.close();}catch(e){}
@@ -534,54 +541,101 @@ function NovaOS({setTab,onSave}){
       React.createElement("div",{style:{fontSize:18,fontWeight:700}},"+ Nova OS")
     ),
     React.createElement("div",{style:{padding:"20px 24px",maxWidth:540}},
-      toast&&React.createElement("div",{style:{background:C.green+"22",border:"1px solid "+C.green,borderRadius:8,padding:"10px 16px",marginBottom:16,color:C.green,fontSize:13}},"OS criada com sucesso!"),
+      toast&&React.createElement("div",{style:{background:C.green+"22",border:"1px solid "+C.green,borderRadius:10,padding:"12px 16px",marginBottom:16,color:C.green,fontSize:13,fontWeight:600}},"✅ OS criada! Redirecionando..."),
       React.createElement(Card,null,
-        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}},
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}},
+          // No OS
           React.createElement("div",null,
             React.createElement("label",{style:base.lbl},"No OS *"),
-            React.createElement("input",{style:base.inp,value:num,onChange:function(e){setNum(e.target.value);},placeholder:"514001"})
+            React.createElement("input",{style:base.inp,value:num,onChange:function(e){setNum(e.target.value);},placeholder:"514001",autoComplete:"off"})
           ),
+          // Data
           React.createElement("div",null,
             React.createElement("label",{style:base.lbl},"Data"),
             React.createElement("input",{type:"date",style:base.inp,value:data,onChange:function(e){setData(e.target.value);}})
           ),
-          React.createElement("div",{style:{gridColumn:"1/-1"}},
+          // Condomínio — autocomplete moderno
+          React.createElement("div",{style:{gridColumn:"1/-1",position:"relative"}},
             React.createElement("label",{style:base.lbl},"Condominio *"),
-            React.createElement("input",{style:{...base.inp,marginBottom:6},placeholder:"Buscar condominio...",value:buscaCond,onChange:function(e){setBuscaCond(e.target.value);}}),
-            React.createElement("select",{style:{...base.sel,height:140},size:6,value:cond,onChange:function(e){setCond(e.target.value);setBuscaCond("");}},
-              condsFilt.map(function(c){return React.createElement("option",{key:c,value:c},c);})
+            React.createElement("div",{style:{position:"relative"}},
+              React.createElement("input",{
+                style:{...base.inp,paddingLeft:36},
+                value:busca,
+                placeholder:"Buscar condominio...",
+                autoComplete:"off",
+                onChange:function(e){setBusca(e.target.value);setCond("");setShowList(true);},
+                onFocus:function(){setShowList(true);},
+                onBlur:function(){setTimeout(function(){setShowList(false);},200)}
+              }),
+              React.createElement("span",{style:{position:"absolute",left:12,top:13,fontSize:14,color:C.muted}},"🔍"),
+              cond&&React.createElement("span",{style:{position:"absolute",right:10,top:12,fontSize:14,color:C.green}},"✓")
             ),
-            cond&&React.createElement("div",{style:{fontSize:11,color:C.cyan,marginTop:4}},"Selecionado: "+cond)
+            // Lista dropdown
+            showList&&condsFilt.length>0&&React.createElement("div",{style:{
+              position:"absolute",top:"100%",left:0,right:0,zIndex:50,
+              background:C.card,border:"1px solid "+C.blue,borderRadius:10,
+              maxHeight:220,overflowY:"auto",boxShadow:"0 8px 24px rgba(0,0,0,.4)",marginTop:2
+            }},
+              condsFilt.slice(0,20).map(function(c){
+                return React.createElement("div",{key:c,
+                  style:{padding:"10px 14px",cursor:"pointer",fontSize:13,
+                    borderBottom:"1px solid "+C.border,
+                    background:c===cond?C.blue+"22":"transparent",
+                    color:c===cond?C.blue:C.text
+                  },
+                  onMouseDown:function(){selecionarCond(c);}
+                },
+                  c===cond&&React.createElement("span",{style:{marginRight:6,color:C.green}},"✓"),
+                  c
+                );
+              }),
+              condsFilt.length>20&&React.createElement("div",{style:{padding:"8px 14px",fontSize:11,color:C.dim,textAlign:"center"}},
+                "+"+(condsFilt.length-20)+" condomínios. Continue digitando para refinar."
+              )
+            ),
+            // Badge do selecionado
+            cond&&React.createElement("div",{style:{marginTop:6,display:"flex",alignItems:"center",gap:6}},
+              React.createElement("div",{style:{background:C.blue+"22",border:"1px solid "+C.blue+"44",borderRadius:20,padding:"3px 12px",fontSize:11,color:C.blue,fontWeight:600}},"✓ "+cond),
+              React.createElement("span",{style:{fontSize:11,color:C.dim,cursor:"pointer"},onMouseDown:function(){setCond("");setBusca("");}
+},"✕ trocar")
+            )
           ),
+          // Técnico
           React.createElement("div",{style:{gridColumn:"1/-1"}},
             React.createElement("label",{style:base.lbl},"Tecnico"),
             React.createElement("select",{style:base.sel,value:tec,onChange:function(e){setTec(e.target.value);}},
               TECNICOS.map(function(t){return React.createElement("option",{key:t.mat,value:t.nome},t.nome);})
             )
           ),
+          // Prioridade
           React.createElement("div",{style:{gridColumn:"1/-1"}},
             React.createElement("label",{style:base.lbl},"Prioridade"),
             React.createElement("div",{style:{display:"flex",gap:8}},
-              React.createElement("button",{style:{...btnStyle(C.red,pri!=="Alta"),flex:1},onClick:function(){setPri("Alta");}},"Alta"),
-              React.createElement("button",{style:{...btnStyle(C.yellow,pri!=="Media"),flex:1},onClick:function(){setPri("Media");}},"Media"),
-              React.createElement("button",{style:{...btnStyle(C.green,pri!=="Baixa"),flex:1},onClick:function(){setPri("Baixa");}},"Baixa")
+              React.createElement("button",{style:{...btnStyle(C.red,pri!=="Alta"),flex:1},onClick:function(){setPri("Alta");}},"🔴 Alta"),
+              React.createElement("button",{style:{...btnStyle(C.yellow,pri!=="Media"),flex:1},onClick:function(){setPri("Media");}},"🟡 Media"),
+              React.createElement("button",{style:{...btnStyle(C.green,pri!=="Baixa"),flex:1},onClick:function(){setPri("Baixa");}},"🟢 Baixa")
             )
           ),
+          // Problema
           React.createElement("div",{style:{gridColumn:"1/-1"}},
             React.createElement("label",{style:base.lbl},"Problema"),
             React.createElement("select",{style:base.sel,value:prob,onChange:function(e){setProb(e.target.value);}},
               PROBS.map(function(p){return React.createElement("option",{key:p},p);})
             )
           ),
+          // Descrição
           React.createElement("div",{style:{gridColumn:"1/-1"}},
             React.createElement("label",{style:base.lbl},"Descricao adicional"),
-            React.createElement("textarea",{style:{...base.inp,height:80},value:desc,onChange:function(e){setDesc(e.target.value);},placeholder:"Detalhes..."})
+            React.createElement("textarea",{style:{...base.inp,height:70},value:desc,onChange:function(e){setDesc(e.target.value);},placeholder:"Detalhes adicionais..."})
           ),
-          erro&&React.createElement("div",{style:{gridColumn:"1/-1",background:C.red+"22",border:"1px solid "+C.red+"44",borderRadius:8,padding:"10px",fontSize:12,color:C.red}},"⚠ "+erro),
+          // Erro
+          erro&&React.createElement("div",{style:{gridColumn:"1/-1",background:C.red+"22",border:"1px solid "+C.red+"44",borderRadius:8,padding:"10px 14px",fontSize:12,color:C.red}},"⚠ "+erro),
+          // Botão
           React.createElement("div",{style:{gridColumn:"1/-1",display:"flex",justifyContent:"flex-end"}},
-            React.createElement("button",{style:{...btnStyle(C.blue),width:"auto",padding:"10px 28px"},onClick:submit,disabled:saving},
-              saving?"Criando...":"Criar OS"
-            )
+            React.createElement("button",{
+              style:{...btnStyle(C.blue),width:"auto",padding:"11px 32px",fontSize:14},
+              onClick:submit,disabled:saving
+            },saving?"Criando...":"💾 Criar OS")
           )
         )
       )
