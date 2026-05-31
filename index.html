@@ -1449,7 +1449,6 @@ function Dashboard({setTab}){
       var osPorMes=Object.values(mapMes).filter(function(d){return d.key>="2026-01";}).sort(function(a,b){return a.key.localeCompare(b.key);});
       // Total real = soma dos meses do banco
       var totalReal=osPorMes.reduce(function(s,d){return s+d.total;},0);
-      var totalReal=Object.values(overrides).reduce(function(s,v){return s+v;},0);
       setStats({
         osAbertas:osAb.length,osFechadas:osFech.length,osTotal:totalReal,
         tecnicos:(tecData||[]).length,condominios:(condData||[]).length,
@@ -4611,10 +4610,6 @@ function App(){
       sb.from("horas_extras").select("status").eq("status","Pendente").then(({data})=>setHeCount(data?.length||0));
       sb.from("os").select("status").eq("status","Aberto").then(({data})=>setOsCount(data?.length||0));
     // Também atualizar via BroadcastChannel
-    try{
-      const bc=new BroadcastChannel("servis_refresh");
-      bc.onmessage=()=>{sb.from("os").select("status").eq("status","Aberto").then(({data})=>setOsCount(data?.length||0));};
-    }catch(e){}
     }
   },[usuario,tab]);
   // Controle de acesso por nível — DEVE ficar antes de qualquer return condicional
