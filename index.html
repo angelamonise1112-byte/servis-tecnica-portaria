@@ -1331,7 +1331,7 @@ function Dashboard({setTab}){
         {data:osData},{data:tecData},{data:condData},
         {data:heData},{data:atData},{data:prevData},{data:pedData}
       ]=await Promise.all([
-        sb.from("os").select("num,data,status,cond,tec,prob,pri,relato"),
+        sb.from("os").select("num,data,status,cond,tec,prob,pri,relato").gte("data","2026-01-01"),
         sb.from("tecnicos").select("id"),
         sb.from("condominios").select("id"),
         sb.from("horas_extras").select("status,total_h"),
@@ -1405,8 +1405,8 @@ function Dashboard({setTab}){
         if(d.status==="Aberto")mapMes[k].abertas++;
         else mapMes[k].fechadas++;
       });
-      // Override com totais reais da RISEG por mês 2026
-      var overrides=OVERRIDES_2026;
+      // Override com totais reais do RISEG por mês 2026
+      var overrides={"2026-01":535,"2026-02":563,"2026-03":473,"2026-04":374,"2026-05":411};
       var osPorMes=Object.values(mapMes).filter(function(d){return d.key>="2026-01";}).sort(function(a,b){return a.key.localeCompare(b.key);}).map(function(d){
         if(overrides[d.key]!==undefined){d.total=overrides[d.key];}
         return d;
