@@ -1957,13 +1957,13 @@ function Condominios({onSave}){
           React.createElement("label",{style:base.lbl},"🗂 Divisão de Área"),
           React.createElement("select",{style:base.sel,value:f.area_tecnico||"",onChange:upd("area_tecnico")},
             React.createElement("option",{value:""},"Selecionar área..."),
-            React.createElement("optgroup",{label:"── Supervisor 1 (Áreas A e B) ──"},
-              React.createElement("option",{value:"Área A"},"Área A"),
-              React.createElement("option",{value:"Área B"},"Área B")
+            React.createElement("optgroup",{label:"── Supervisor 1 (P16 e P17) ──"},
+              React.createElement("option",{value:"P16"},"P16"),
+              React.createElement("option",{value:"P17"},"P17")
             ),
-            React.createElement("optgroup",{label:"── Supervisor 2 (Áreas C e D) ──"},
-              React.createElement("option",{value:"Área C"},"Área C"),
-              React.createElement("option",{value:"Área D"},"Área D")
+            React.createElement("optgroup",{label:"── Supervisor 2 (P18 e P19) ──"},
+              React.createElement("option",{value:"P18"},"P18"),
+              React.createElement("option",{value:"P19"},"P19")
             )
           ),
           React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:4}},"Supervisor 1 → Áreas A e B  |  Supervisor 2 → Áreas C e D")
@@ -2019,19 +2019,19 @@ function Condominios({onSave}){
           React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
             React.createElement("div",{style:{background:C.blue+"11",borderRadius:8,padding:"8px 12px"}},
               React.createElement("div",{style:{fontSize:11,fontWeight:700,color:C.blue,marginBottom:3}},"👷 Supervisor 1 → Áreas A e B"),
-              React.createElement("div",{style:{fontSize:10,color:C.muted}},"Área A: 1 Técn. Manutenção + 1 Técn. Preventiva"),
-              React.createElement("div",{style:{fontSize:10,color:C.muted}},"Área B: 1 Técn. Manutenção + 1 Técn. Preventiva")
+              React.createElement("div",{style:{fontSize:10,color:C.muted}},"P16: 1 Técn. Manutenção + 1 Técn. Preventiva"),
+              React.createElement("div",{style:{fontSize:10,color:C.muted}},"P17: 1 Técn. Manutenção + 1 Técn. Preventiva")
             ),
             React.createElement("div",{style:{background:C.green+"11",borderRadius:8,padding:"8px 12px"}},
               React.createElement("div",{style:{fontSize:11,fontWeight:700,color:C.green,marginBottom:3}},"👷 Supervisor 2 → Áreas C e D"),
-              React.createElement("div",{style:{fontSize:10,color:C.muted}},"Área C: 1 Técn. Manutenção + 1 Técn. Preventiva"),
-              React.createElement("div",{style:{fontSize:10,color:C.muted}},"Área D: 1 Técn. Manutenção + 1 Técn. Preventiva")
+              React.createElement("div",{style:{fontSize:10,color:C.muted}},"P18: 1 Técn. Manutenção + 1 Técn. Preventiva"),
+              React.createElement("div",{style:{fontSize:10,color:C.muted}},"P19: 1 Técn. Manutenção + 1 Técn. Preventiva")
             )
           )
         ),
         [
-          {sup:"Supervisor 1",cor:C.blue,areas:["Área A","Área B"]},
-          {sup:"Supervisor 2",cor:C.green,areas:["Área C","Área D"]}
+          {sup:"Supervisor 1",cor:C.blue,areas:["P16","P17"]},
+          {sup:"Supervisor 2",cor:C.green,areas:["P18","P19"]}
         ].map(function(sg,gi){
           var total=sg.areas.reduce(function(t,a){return t+filtered.filter(function(d){return d.area_tecnico===a;}).length;},0);
           return React.createElement("div",{key:gi,style:{marginBottom:16}},
@@ -3927,10 +3927,10 @@ function Organograma(){
   var [nmSup1,setNmSup1]=useName("sup1","Supervisor 1");
   var [nmSup2,setNmSup2]=useName("sup2","Supervisor 2");
   var [nmSupInst,setNmSupInst]=useName("sup_inst","Supervisor Instalação");
-  var [nmTecA,setNmTecA]=useName("tec_area_a","Técnico Área A");
-  var [nmTecB,setNmTecB]=useName("tec_area_b","Técnico Área B");
-  var [nmTecC,setNmTecC]=useName("tec_area_c","Técnico Área C");
-  var [nmTecD,setNmTecD]=useName("tec_area_d","Técnico Área D");
+  var [nmTecA,setNmTecA]=useName("tec_area_a","Técnico P16");
+  var [nmTecB,setNmTecB]=useName("tec_area_b","Técnico P17");
+  var [nmTecC,setNmTecC]=useName("tec_area_c","Técnico P18");
+  var [nmTecD,setNmTecD]=useName("tec_area_d","Técnico P19");
   var [nmPrev1,setNmPrev1]=useName("tec_prev1","Técnico Preventiva 1");
   var [nmPrev2,setNmPrev2]=useName("tec_prev2","Técnico Preventiva 2");
 
@@ -3963,7 +3963,7 @@ function Organograma(){
   function getCondArea(area){return condPorArea[area]||[];}
 
   function gerarRelatorio(){
-    var areas=["Área A","Área B","Área C","Área D"];
+    var areas=["P16","P17","P18","P19"];
     var w=window.open("","_blank");
     var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><style>";
     html+="body{font-family:Arial,sans-serif;padding:24px;color:#1e293b;font-size:12px}";
@@ -3982,7 +3982,7 @@ function Organograma(){
 
     // Supervisor 1
     html+="<div class='sup'>👷 Supervisor 1 — Áreas A e B</div>";
-    ["Área A","Área B"].forEach(function(area){
+    ["P16","P17"].forEach(function(area){
       var conds=getCondArea(area);
       var tecnico=conds[0]?conds[0].tecnico||"—":"—";
       html+="<h3>"+area+" <span class='stat'>"+conds.length+" condomínios</span><span class='stat'>👷 "+tecnico+"</span></h3>";
@@ -3999,7 +3999,7 @@ function Organograma(){
 
     // Supervisor 2
     html+="<div class='sup' style='background:#065f46'>👷 Supervisor 2 — Áreas C e D</div>";
-    ["Área C","Área D"].forEach(function(area){
+    ["P18","P19"].forEach(function(area){
       var conds=getCondArea(area);
       var tecnico=conds[0]?conds[0].tecnico||"—":"—";
       html+="<h3 style='border-color:#10b981;color:#065f46'>"+area+" <span class='stat' style='background:#d1fae5;color:#065f46'>"+conds.length+" condomínios</span><span class='stat' style='background:#d1fae5;color:#065f46'>👷 "+tecnico+"</span></h3>";
@@ -4096,7 +4096,7 @@ function Organograma(){
   // Modal de relatório por área
   function ModalArea({area,onClose}){
     var conds=getCondArea(area);
-    var corArea=area==="Área A"||area==="Área B"?C.blue:C.green;
+    var corArea=area==="P16"||area==="P17"?C.blue:C.green;
     return React.createElement(Modal,{title:"🏢 "+area+" — "+conds.length+" condomínios",onClose,width:620},
       conds.length===0
         ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhum condomínio cadastrado nesta área ainda. Vá em Condomínios e defina a área de cada um.")
@@ -4134,9 +4134,9 @@ function Organograma(){
 
   function OrgCeara(){
     function SupBlockCE(fk,n){
-      var areas=n===1?["Área A","Área B"]:["Área C","Área D"];
-      var t1=n===1?["tec_a_ce","Área A"]:["tec_c_ce","Área C"];
-      var t2=n===1?["tec_b_ce","Área B"]:["tec_d_ce","Área D"];
+      var areas=n===1?["P16","P17"]:["P18","P19"];
+      var t1=n===1?["tec_a_ce","P16"]:["tec_c_ce","P18"];
+      var t2=n===1?["tec_b_ce","P17"]:["tec_d_ce","P19"];
       var t3=n===1?["tec_p1_ce","Preventiva 1"]:["tec_p2_ce","Preventiva 2"];
       var nCondsTotal=getCondArea(areas[0]).length+getCondArea(areas[1]).length;
       var nmSup=n===1?nmSup1:nmSup2;
@@ -4188,7 +4188,7 @@ function Organograma(){
       React.createElement("div",{style:{display:"flex",justifyContent:"center"}},SupBox("sup_pi","Supervisor Manut. e Instalação","SUPERVISÃO")),
       V(18),H(260),
       React.createElement("div",{style:{display:"flex",width:260,justifyContent:"space-between",margin:"0 auto"}},V(18),V(18),V(18)),
-      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"center",maxWidth:340,margin:"0 auto"}},TecBox("tec_a_pi","Técnico","Área A",ciano),TecBox("tec_b_pi","Técnico","Área B",ciano),TecBox("tec_p_pi","Técnico","Preventiva 1",roxo)),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"center",maxWidth:340,margin:"0 auto"}},TecBox("tec_a_pi","Técnico","P16",ciano),TecBox("tec_b_pi","Técnico","P17",ciano),TecBox("tec_p_pi","Técnico","Preventiva 1",roxo)),
       React.createElement("div",{style:{marginTop:36,paddingTop:24,borderTop:"2px dashed #1e293b"}},
         React.createElement("div",{style:{textAlign:"center",marginBottom:16}},React.createElement("span",{style:{background:"#f97316",color:"#fff",fontSize:11,fontWeight:800,padding:"5px 22px",borderRadius:20,letterSpacing:2}},"APOIO OPERACIONAL")),
         React.createElement("div",{style:{background:laranja.bg,border:"2px solid "+laranja.border,borderRadius:12,padding:"16px",maxWidth:500,margin:"0 auto"}},
@@ -4219,7 +4219,7 @@ function Organograma(){
       React.createElement("div",{style:{display:"flex",gap:10,justifyContent:"center",maxWidth:340,margin:"0 auto"}},
         React.createElement("div",{style:{background:ciano.bg,border:"1.5px solid "+ciano.border,borderRadius:10,padding:"12px 10px",flex:1}},
           Bdg(ciano,"ÁREA"),FC("tec_a_ma","Técnico A",ciano,36),
-          React.createElement("div",{style:{fontSize:10,fontWeight:700,color:ciano.text,textAlign:"center",marginTop:6}},"Técnico de Área A")
+          React.createElement("div",{style:{fontSize:10,fontWeight:700,color:ciano.text,textAlign:"center",marginTop:6}},"Técnico de P16")
         ),
         React.createElement("div",{style:{background:roxo.bg,border:"1.5px solid "+roxo.border,borderRadius:10,padding:"12px 10px",flex:1}},
           Bdg(roxo,"PREVENTIVA"),FC("tec_p_ma","Técnico P",roxo,36),
