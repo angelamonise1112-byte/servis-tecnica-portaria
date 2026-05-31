@@ -2312,6 +2312,9 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
   const [modal,setModal]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
   const [detalhe,setDetalhe]=useState(null);
+  const [busca,setBusca]=useState("");
+  const [filtStatus,setFiltStatus]=useState("");
+  const [filtPri,setFiltPri]=useState("");
 
   const load=useCallback(async()=>{
     setLoading(true);
@@ -2320,11 +2323,28 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
   },[]);
   useEffect(()=>{load();},[load]);
 
-  const sorted=[...data].sort((a,b)=>(priOrd[a.pri]||1)-(priOrd[b.pri]||1));
+  const sorted=useMemo(()=>[...data].filter(d=>{
+    const matchBusca=!busca||(d.cond||"").toLowerCase().includes(busca.toLowerCase())||(d.num||"").includes(busca)||(d.prob||"").toLowerCase().includes(busca.toLowerCase());
+    const matchStatus=!filtStatus||d.status===filtStatus;
+    const matchPri=!filtPri||d.pri===filtPri;
+    return matchBusca&&matchStatus&&matchPri;
+  }).sort((a,b)=>(priOrd[a.pri]||1)-(priOrd[b.pri]||1)),[data,busca,filtStatus,filtPri]);
 
   const save=async item=>{
     if(item.id&&data.find(x=>x.id===item.id)){await sb.from("os_pendencia").update(item).eq("id",item.id);}
     else{await sb.from("os_pendencia").insert(item);}
+    // Se resolvido, fechar a OS no banco principal e registrar data de fechamento
+    if(item.status==="Resolvido"&&item.num){
+      const hoje=todayStr();
+      const{data:osExist}=await sb.from("os").select("id,status").eq("num",item.num).limit(1);
+      if(osExist&&osExist.length>0){
+        await sb.from("os").update({
+          status:"Fechado",
+          data_fechamento:hoje,
+          relato:item.relato||item.descricao||"Pendência resolvida"
+        }).eq("num",item.num);
+      }
+    }
     setModal(null);load();if(onSave)onSave();
   };
   const del=async id=>{await sb.from("os_pendencia").delete().eq("id",id);setConfirmDel(null);load();if(onSave)onSave();};
@@ -2405,12 +2425,31 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
   const hoje=new Date().toISOString().split("T")[0];
 
   return React.createElement("div",null,
-    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
-      React.createElement("div",null,
-        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"⏸ OS em Pendência"),
-        React.createElement("div",{style:{fontSize:12,color:C.muted}},`${data.length} registros`)
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
+        React.createElement("div",null,
+          React.createElement("div",{style:{fontSize:18,fontWeight:700}},"⏸ OS em Pendência"),
+          React.createElement("div",{style:{fontSize:12,color:C.muted}},`${sorted.length} registros`)
+        ),
+        React.createElement("button",{style:btnStyle(C.yellow),onClick:()=>setModal({})},"+ Nova")
       ),
-      React.createElement("button",{style:btnStyle(C.yellow),onClick:()=>setModal({})},"+ Nova")
+      React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+        React.createElement("input",{style:{...base.inp,width:220},placeholder:"Buscar condomínio ou OS...",value:busca,onChange:e=>setBusca(e.target.value)}),
+        React.createElement("select",{style:{...base.sel,width:140},value:filtStatus,onChange:e=>setFiltStatus(e.target.value)},
+          React.createElement("option",{value:""},"Todos status"),
+          React.createElement("option",{value:"Pendente"},"Pendente"),
+          React.createElement("option",{value:"Em andamento"},"Em andamento"),
+          React.createElement("option",{value:"Resolvido"},"Resolvido")
+        ),
+        React.createElement("select",{style:{...base.sel,width:120},value:filtPri,onChange:e=>setFiltPri(e.target.value)},
+          React.createElement("option",{value:""},"Toda prioridade"),
+          React.createElement("option",{value:"Alta"},"🔴 Alta"),
+          React.createElement("option",{value:"Media"},"🟡 Média"),
+          React.createElement("option",{value:"Baixa"},"🟢 Baixa")
+        ),
+        (busca||filtStatus||filtPri)&&React.createElement("button",{style:{...btnStyle(C.dim,true),fontSize:12},onClick:()=>{setBusca("");setFiltStatus("");setFiltPri("");}},"✕ Limpar"),
+        React.createElement("span",{style:{fontSize:12,color:C.dim,alignSelf:"center"}},`${sorted.length} de ${data.length}`)
+      )
     ),
     React.createElement("div",{style:{padding:"20px 24px"}},
       React.createElement(Grid,{cols:4,mb:16},
@@ -2437,15 +2476,19 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
                 vencida&&React.createElement(Pill,{c:C.red},"⚠ Vencida")
               ),
               React.createElement("div",{style:{display:"flex",gap:6}},
-                React.createElement("button",{style:iBtn(C.blue),onClick:e=>{e.stopPropagation();setModal(d);}},  "✏️"),
-                React.createElement("button",{style:iBtn(C.red),onClick:e=>{e.stopPropagation();setConfirmDel(d.id);}},  "🗑")
+                d.status!=="Resolvido"&&React.createElement("button",{style:{...iBtn(C.green),fontSize:10},title:"Marcar como resolvido",onClick:e=>{e.stopPropagation();save({...d,status:"Resolvido"});}
+},"✅"),
+                React.createElement("button",{style:iBtn(C.blue),onClick:e=>{e.stopPropagation();setModal(d);}
+},"✏️"),
+                React.createElement("button",{style:iBtn(C.red),onClick:e=>{e.stopPropagation();setConfirmDel(d.id);}
+},"🗑")
               )
             ),
             // Info principal
             React.createElement("div",{style:{fontSize:14,fontWeight:600,marginBottom:4}},d.cond),
             React.createElement("div",{style:{fontSize:12,color:C.muted,marginBottom:6}},d.prob||d.descricao),
             // Motivo em destaque
-            React.createElement("div",{style:{background:C.yellow+"11",border:`1px solid ${C.yellow}33`,borderRadius:8,padding:"5px 10px",marginBottom:6,fontSize:11,color:C.yellow,fontWeight:600}},"⚠ "+d.motivo),
+            d.motivo&&d.motivo!=="Pendência — importado da planilha"&&React.createElement("div",{style:{background:C.yellow+"11",border:`1px solid ${C.yellow}33`,borderRadius:8,padding:"5px 10px",marginBottom:6,fontSize:11,color:C.yellow,fontWeight:600}},"⚠ "+d.motivo),
             // Relato do técnico (resumo)
             d.relato&&React.createElement("div",{style:{background:C.blue+"08",borderRadius:8,padding:"5px 10px",marginBottom:6,fontSize:11,color:C.muted,borderLeft:`2px solid ${C.blue}`}},
               React.createElement("span",{style:{color:C.blue,fontWeight:600}},"Técnico: "),
