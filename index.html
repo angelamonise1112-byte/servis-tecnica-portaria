@@ -4542,12 +4542,12 @@ function App(){
   const isTecnico=nivel==="tecnico"||isGestor;
   const isCentral=nivel==="central";
   const soLeitura=nivel==="tecnico"||nivel==="visualizador";
-  const tabsVisiveis=useMemo(()=>{
+  const tabsVisiveis=(()=>{
     if(isAdmin||isGestor)return TABS;
     if(isTecnico)return TABS;
     if(isCentral)return TABS.filter(t=>["dashboard","nova-os","os","preventivas"].includes(t.id));
     return TABS.filter(t=>["dashboard"].includes(t.id));
-  },[nivel]);
+  })();
 
   const renderTab=()=>{
     if(isCentral&&!["dashboard","nova-os","os","preventivas"].includes(tab)){
