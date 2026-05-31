@@ -490,7 +490,7 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
 
 // ── OS ────────────────────────────────────────────────────────
 function NovaOS({setTab,onSave}){
-  const [f,setF]=useState({num:"",data:todayStr(),cond:CONDS[0],tec:TECNICOS[0].nome,pri:"Média",prob:PROBS[0]});
+  const [f,setF]=useState({num:"",data:todayStr(),cond:CONDS[0],tec:TECNICOS[0].nome,pri:"Média",prob:PROBS[0],descricao:""});
   const [toast,setToast]=useState(false);
   const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const submit=async()=>{
@@ -516,6 +516,10 @@ function NovaOS({setTab,onSave}){
             )
           ),
           React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Problema"),React.createElement("select",{style:base.sel,value:f.prob,onChange:upd("prob")},PROBS.map(p=>React.createElement("option",{key:p},p)))),
+          React.createElement("div",{style:{gridColumn:"1/-1"}},
+            React.createElement("label",{style:base.lbl},"Descrição do Problema"),
+            React.createElement("textarea",{style:{...base.inp,minHeight:80,resize:"vertical"},value:f.descricao||"",onChange:upd("descricao"),placeholder:"Descreva detalhadamente o problema relatado pelo cliente..."})
+          ),
           React.createElement("div",{style:{gridColumn:"1/-1",display:"flex",justifyContent:"flex-end",marginTop:8}},
             React.createElement("button",{style:btnStyle(C.blue),onClick:submit},"💾 Criar OS")
           )
@@ -1407,9 +1411,10 @@ function Dashboard({setTab}){
         if(overrides[d.key]!==undefined){d.total=overrides[d.key];}
         return d;
       });
-      // Total real = soma dos overrides — calculado fora do loadAll
+      // Total real = soma dos overrides (valores reais do RISEG)
+      var totalReal=Object.values(overrides).reduce(function(s,v){return s+v;},0);
       setStats({
-        osAbertas:osAb.length,osFechadas:osFech.length,osTotal:os.length,
+        osAbertas:osAb.length,osFechadas:osFech.length,osTotal:totalReal,
         tecnicos:(tecData||[]).length,condominios:(condData||[]).length,
         hePend:he.filter(d=>d.status==="Pendente").length,
         heTotal,heAprov:he.filter(d=>d.status==="Aprovado").length,heRegistros:he.length,
@@ -1467,8 +1472,8 @@ function Dashboard({setTab}){
             React.createElement("div",{style:{fontSize:28,fontWeight:800,color:C.blue}},stats.osTotal.toLocaleString("pt-BR")),
             React.createElement("span",{style:{fontSize:18}},"📋")
           ),
-          React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"Total OS Histórico"),
-          React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:4}},`${stats.osFechadas.toLocaleString("pt-BR")} fechadas`)
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"Total OS 2026"),
+          React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:4}},`${(stats.osTotal-stats.osAbertas).toLocaleString("pt-BR")} fechadas`)
         ),
         React.createElement("div",{style:{background:C.card,border:`1px solid ${C.cyan}44`,borderRadius:12,padding:16,cursor:"pointer"},onClick:()=>setTab("tecnicos")},
           React.createElement("div",{style:{fontSize:28,fontWeight:800,color:C.cyan}},stats.tecnicos),
@@ -3109,8 +3114,21 @@ function SLA(){
 
   const load=useCallback(async()=>{
     setLoading(true);
-    // Cruzar com tabela OS — dados completos
-    const{data:rows}=await sb.from("os").select("*").order("data",{ascending:false});
+    // Buscar apenas OS de 2026 com cruzamento de condomínios
+    const [{data:rows},{data:conds}]=await Promise.all([
+      sb.from("os").select("*").gte("data","2026-01-01").order("data",{ascending:false}),
+      sb.from("condominios").select("nome,endereco,tecnico")
+    ]);
+    const mapEnd={};
+    (conds||[]).forEach(c=>{if(c.nome)mapEnd[c.nome.toLowerCase()]={endereco:c.endereco||"",tecnico:c.tecnico||""};});
+    function buscarEnd(nomeCond){
+      if(!nomeCond)return{endereco:"",tecnico:""};
+      const exato=mapEnd[nomeCond.toLowerCase()];
+      if(exato)return exato;
+      const key=Object.keys(mapEnd).find(k=>k.includes((nomeCond||"").toLowerCase().slice(0,12))||(nomeCond||"").toLowerCase().includes(k.slice(0,12)));
+      return key?mapEnd[key]:{endereco:"",tecnico:""};
+    }
+    if(rows){rows.forEach(r=>{const info=buscarEnd(r.cond);r._endereco=info.endereco;});}
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load,tick]);
@@ -3187,17 +3205,19 @@ function SLA(){
   // Estatísticas
   const stats=useMemo(()=>{
     const fechadas=osComSLA.filter(o=>o.status==="Fechado"&&o.horasUteis>0);
+    const dentroSLA=fechadas.filter(o=>o.horasUteis<=48).length;
+    const foraSLA=fechadas.filter(o=>o.horasUteis>48).length;
     const tempoMedio=fechadas.length>0
       ?Math.round(fechadas.reduce((s,o)=>s+o.horasUteis,0)/fechadas.length*10)/10
       :0;
+    const pctSLA=fechadas.length>0?Math.min(100,Math.round((dentroSLA/fechadas.length)*100)):0;
     return {
       total:osComSLA.length,
       abertas:osComSLA.filter(o=>o.status==="Aberto").length,
       vencidas:osComSLA.filter(o=>o.situacao==="Vencida").length,
-      dentroSLA:osComSLA.filter(o=>o.situacao==="Dentro do SLA").length,
-      foraSLA:osComSLA.filter(o=>o.situacao==="Fora do SLA").length,
-      pctSLA:fechadas.length>0
-        ?Math.round((osComSLA.filter(o=>o.situacao==="Dentro do SLA").length/fechadas.length)*100):0,
+      dentroSLA,
+      foraSLA,
+      pctSLA,
       tempoMedio,
       fechadas:fechadas.length
     };
