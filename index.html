@@ -2300,96 +2300,172 @@ function Particularidades({onSave}){
 
 // ── OS PENDÊNCIA ──────────────────────────────────────────────
 function OSPendencia({tecsBanco=TECNICOS,onSave}){
+  const MOTIVO_PEND=["Aguardando peça/material","Aguardando aprovação","Aguardando terceiro","Acesso negado","Problema recorrente","Outros"];
+  const priOrd={"Alta":0,"Media":1,"Baixa":2};
   const [data,setData]=useState([]);
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
-  const MOTIVO_PEND=["Aguardando peca","Aguardando aprovacao do sindico","Aguardando tecnico especialista","Aguardando material","Acesso negado","Problema nao reproduzido","Aguardando fornecedor","Cliente ausente","Outros"];
-  const STATUS_PEND={Pendente:{c:C.red,i:"⚠"},"Em acompanhamento":{c:C.yellow,i:"👁"},Resolvida:{c:C.green,i:"✓"},Cancelada:{c:C.dim,i:"✕"}};
-  const priOrd={Alta:0,Media:1,Baixa:2};
+  const [detalhe,setDetalhe]=useState(null);
+
   const load=useCallback(async()=>{
     setLoading(true);
     const{data:rows}=await sb.from("os_pendencia").select("*").order("prazo",{ascending:true});
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
+
   const sorted=[...data].sort((a,b)=>(priOrd[a.pri]||1)-(priOrd[b.pri]||1));
-  const vencidas=data.filter(d=>prazoVencido(d)).length;
+
   const save=async item=>{
     if(item.id&&data.find(x=>x.id===item.id)){await sb.from("os_pendencia").update(item).eq("id",item.id);}
     else{await sb.from("os_pendencia").insert(item);}
     setModal(null);load();if(onSave)onSave();
   };
   const del=async id=>{await sb.from("os_pendencia").delete().eq("id",id);setConfirmDel(null);load();if(onSave)onSave();};
+
   const EditModal=({item,onClose})=>{
-    const [f,setF]=useState(item||{num:"",cond:CONDS[0],tec:TECNICOS[0].nome,prob:PROBS[0],motivo:MOTIVO_PEND[0],descricao:"",data:todayStr(),prazo:"",pri:"Media",status:"Pendente",obs:""});
+    const [f,setF]=useState(item||{num:"",cond:CONDS[0],tec:TECNICOS[0].nome,prob:PROBS[0],motivo:MOTIVO_PEND[0],descricao:"",relato:"",data:todayStr(),prazo:"",previsao:"",pri:"Media",status:"Pendente",obs:""});
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-    return React.createElement(Modal,{title:item?.id?"Editar Pendência":"Nova Pendência",onClose,width:540},
+    return React.createElement(Modal,{title:item?.id?"Editar Pendência":"Nova Pendência",onClose,width:580},
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Nº OS *"),React.createElement("input",{style:base.inp,value:f.num||"",onChange:upd("num")})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data"),React.createElement("input",{type:"date",style:base.inp,value:f.data||"",onChange:upd("data")})),
         React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},CONDS.map(c=>React.createElement("option",{key:c},c)))),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Técnico"),React.createElement("select",{style:base.sel,value:f.tec,onChange:upd("tec")},TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome)))),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Previsão"),React.createElement("input",{type:"date",style:base.inp,value:f.prazo||"",onChange:upd("prazo")})),
-        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Motivo *"),React.createElement("select",{style:base.sel,value:f.motivo,onChange:upd("motivo")},MOTIVO_PEND.map(m=>React.createElement("option",{key:m},m)))),
-        React.createElement("div",{style:{gridColumn:"1/-1"}},
+        React.createElement("div",null,
           React.createElement("label",{style:base.lbl},"Prioridade"),
-          React.createElement("div",{style:{display:"flex",gap:8}},["Alta","Media","Baixa"].map(p=>React.createElement("button",{key:p,style:{...btnStyle(p==="Alta"?C.red:p==="Media"?C.yellow:C.green,f.pri!==p),flex:1},onClick:()=>setF(x=>({...x,pri:p}))},p)))
+          React.createElement("div",{style:{display:"flex",gap:6}},["Alta","Media","Baixa"].map(p=>React.createElement("button",{key:p,style:{...btnStyle(p==="Alta"?C.red:p==="Media"?C.yellow:C.green,f.pri!==p),flex:1,fontSize:11},onClick:()=>setF(x=>({...x,pri:p}))},p)))
         ),
         React.createElement("div",{style:{gridColumn:"1/-1"}},
-          React.createElement("label",{style:base.lbl},"Status"),
-          React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},Object.keys(STATUS_PEND).map(s=>React.createElement("button",{key:s,style:{...btnStyle(STATUS_PEND[s].c,f.status!==s),fontSize:11},onClick:()=>setF(x=>({...x,status:s}))},`${STATUS_PEND[s].i} ${s}`)))
+          React.createElement("label",{style:base.lbl},"Motivo da Pendência"),
+          React.createElement("select",{style:base.sel,value:f.motivo,onChange:upd("motivo")},MOTIVO_PEND.map(m=>React.createElement("option",{key:m},m)))
         ),
-        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Observações"),React.createElement("textarea",{style:{...base.inp,height:60},value:f.obs||"",onChange:upd("obs")}))
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"📝 Descrição do Problema"),
+          React.createElement("textarea",{style:{...base.inp,height:70},value:f.descricao||"",onChange:upd("descricao"),placeholder:"Descrição detalhada do problema..."})
+        ),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"📃 Relato do Técnico"),
+          React.createElement("textarea",{style:{...base.inp,height:80},value:f.relato||"",onChange:upd("relato"),placeholder:"O que o técnico relatou sobre o problema..."})
+        ),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"📅 Previsão de Resolução"),React.createElement("input",{type:"date",style:base.inp,value:f.previsao||"",onChange:upd("previsao")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Status"),React.createElement("select",{style:base.sel,value:f.status,onChange:upd("status")},["Pendente","Em andamento","Resolvido"].map(s=>React.createElement("option",{key:s},s)))),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"☎️ Observações"),
+          React.createElement("textarea",{style:{...base.inp,height:60},value:f.obs||"",onChange:upd("obs"),placeholder:"Observações adicionais..."})
+        )
       ),
       React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
         React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
-        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"Salvar")
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"💾 Salvar")
       )
     );
   };
+
+  // Modal de detalhe
+  const DetalheModal=({item,onClose})=>React.createElement(Modal,{title:`⏸ Pendência — OS #${item.num}`,onClose,width:560},
+    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}},
+      React.createElement("div",null,React.createElement("label",{style:base.lbl},"Condomínio"),React.createElement("div",{style:{fontWeight:600}},item.cond)),
+      React.createElement("div",null,React.createElement("label",{style:base.lbl},"Técnico"),React.createElement("div",{style:{color:C.cyan}},item.tec)),
+      React.createElement("div",null,React.createElement("label",{style:base.lbl},"Prioridade"),React.createElement(Pill,{c:item.pri==="Alta"?C.red:item.pri==="Media"?C.yellow:C.green},item.pri)),
+      React.createElement("div",null,React.createElement("label",{style:base.lbl},"Status"),React.createElement(Pill,{c:item.status==="Resolvido"?C.green:item.status==="Em andamento"?C.blue:C.yellow},item.status)),
+      React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data Abertura"),React.createElement("div",null,fmt(item.data))),
+      item.previsao&&React.createElement("div",null,React.createElement("label",{style:base.lbl},"📅 Previsão"),React.createElement("div",{style:{color:C.orange,fontWeight:600}},fmt(item.previsao)))
+    ),
+    React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:10}},
+      React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"10px 14px"}},
+        React.createElement("label",{style:{...base.lbl,color:C.yellow,marginBottom:4,display:"block"}},"⚠ Motivo da Pendência"),
+        React.createElement("div",{style:{fontSize:13,fontWeight:600}},item.motivo)
+      ),
+      item.descricao&&React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"10px 14px"}},
+        React.createElement("label",{style:{...base.lbl,marginBottom:4,display:"block"}},"📝 Descrição do Problema"),
+        React.createElement("div",{style:{fontSize:13,color:C.muted,lineHeight:1.6}},item.descricao)
+      ),
+      item.relato&&React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"10px 14px",borderLeft:`3px solid ${C.blue}`}},
+        React.createElement("label",{style:{...base.lbl,color:C.blue,marginBottom:4,display:"block"}},"📃 Relato do Técnico"),
+        React.createElement("div",{style:{fontSize:13,color:C.muted,lineHeight:1.6,whiteSpace:"pre-wrap"}},item.relato)
+      ),
+      item.obs&&React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"10px 14px"}},
+        React.createElement("label",{style:{...base.lbl,marginBottom:4,display:"block"}},"☎️ Observações"),
+        React.createElement("div",{style:{fontSize:13,color:C.muted,lineHeight:1.6}},item.obs)
+      )
+    ),
+    React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:14}},
+      React.createElement("button",{style:btnStyle(C.green),onClick:()=>{setDetalhe(null);setModal(item);}},  "✏️ Editar"),
+      React.createElement("button",{style:btnStyle(C.blue),onClick:onClose},"Fechar")
+    )
+  );
+
+  const hoje=new Date().toISOString().split("T")[0];
+
   return React.createElement("div",null,
     React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
       React.createElement("div",null,
-        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
-          React.createElement("span",{style:{fontSize:18,fontWeight:700}},"⚠ OS em Pendência"),
-          vencidas>0&&React.createElement(Pill,{c:C.red},`${vencidas} atrasadas`)
-        )
+        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"⏸ OS em Pendência"),
+        React.createElement("div",{style:{fontSize:12,color:C.muted}},`${data.length} registros`)
       ),
-      React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Nova")
+      React.createElement("button",{style:btnStyle(C.yellow),onClick:()=>setModal({})},"+ Nova")
     ),
     React.createElement("div",{style:{padding:"20px 24px"}},
       React.createElement(Grid,{cols:4,mb:16},
         React.createElement(KPI,{label:"Total",value:data.length,color:C.blue}),
-        React.createElement(KPI,{label:"Pendentes",value:data.filter(d=>d.status==="Pendente").length,color:C.red}),
-        React.createElement(KPI,{label:"Em Acompanhamento",value:data.filter(d=>d.status==="Em acompanhamento").length,color:C.yellow}),
-        React.createElement(KPI,{label:"Resolvidas",value:data.filter(d=>d.status==="Resolvida").length,color:C.green})
+        React.createElement(KPI,{label:"🔴 Alta",value:data.filter(d=>d.pri==="Alta").length,color:C.red}),
+        React.createElement(KPI,{label:"⏳ Pendente",value:data.filter(d=>d.status==="Pendente").length,color:C.yellow}),
+        React.createElement(KPI,{label:"🔧 Em andamento",value:data.filter(d=>d.status==="Em andamento").length,color:C.blue})
       ),
       loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
-      React.createElement(Card,null,
-        data.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma pendência cadastrada"):
-        React.createElement(Table,{
-          cols:["Nº OS","Condomínio","Técnico","Motivo","Previsão","Prioridade","Status","Ações"],
-          rows:sorted.map(d=>[
-            React.createElement("span",{style:{color:C.cyan}},d.num),
-            d.cond,d.tec,d.motivo,
-            React.createElement("span",{style:{color:prazoVencido(d)?C.red:C.text}},prazoVencido(d)?"⚠ ":"",fmt(d.prazo)),
-            React.createElement(Pill,{c:d.pri==="Alta"?C.red:d.pri==="Media"?C.yellow:C.green},d.pri),
-            React.createElement(Pill,{c:STATUS_PEND[d.status]?.c||C.dim},`${STATUS_PEND[d.status]?.i||""} ${d.status}`),
-            React.createElement("div",{style:{display:"flex",gap:4}},
-              React.createElement("button",{style:iBtn(C.blue),onClick:()=>setModal(d)},"✏️"),
-              React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id)},"🗑")
+      sorted.length===0?React.createElement(Card,null,React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma OS em pendência")):
+      React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:10}},
+        sorted.map(d=>{
+          const vencida=d.previsao&&d.previsao<hoje&&d.status!=="Resolvido";
+          return React.createElement("div",{key:d.id,
+            style:{background:C.card,borderRadius:12,padding:16,border:`1px solid ${vencida?C.red:d.pri==="Alta"?C.orange:C.border}`,cursor:"pointer"},
+            onClick:()=>setDetalhe(d)
+          },
+            // Header
+            React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}},
+              React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center"}},
+                React.createElement("span",{style:{color:C.cyan,fontWeight:700,fontSize:14}},"#"+d.num),
+                React.createElement(Pill,{c:d.pri==="Alta"?C.red:d.pri==="Media"?C.yellow:C.green},d.pri),
+                React.createElement(Pill,{c:d.status==="Resolvido"?C.green:d.status==="Em andamento"?C.blue:C.yellow},d.status),
+                vencida&&React.createElement(Pill,{c:C.red},"⚠ Vencida")
+              ),
+              React.createElement("div",{style:{display:"flex",gap:6}},
+                React.createElement("button",{style:iBtn(C.blue),onClick:e=>{e.stopPropagation();setModal(d);}},  "✏️"),
+                React.createElement("button",{style:iBtn(C.red),onClick:e=>{e.stopPropagation();setConfirmDel(d.id);}},  "🗑")
+              )
+            ),
+            // Info principal
+            React.createElement("div",{style:{fontSize:14,fontWeight:600,marginBottom:4}},d.cond),
+            React.createElement("div",{style:{fontSize:12,color:C.muted,marginBottom:6}},d.prob||d.descricao),
+            // Motivo em destaque
+            React.createElement("div",{style:{background:C.yellow+"11",border:`1px solid ${C.yellow}33`,borderRadius:8,padding:"5px 10px",marginBottom:6,fontSize:11,color:C.yellow,fontWeight:600}},"⚠ "+d.motivo),
+            // Relato do técnico (resumo)
+            d.relato&&React.createElement("div",{style:{background:C.blue+"08",borderRadius:8,padding:"5px 10px",marginBottom:6,fontSize:11,color:C.muted,borderLeft:`2px solid ${C.blue}`}},
+              React.createElement("span",{style:{color:C.blue,fontWeight:600}},"Técnico: "),
+              d.relato.slice(0,100)+(d.relato.length>100?"...":"")
+            ),
+            // Footer
+            React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:4}},
+              React.createElement("div",{style:{display:"flex",gap:8,fontSize:11,color:C.dim}},
+                d.data&&React.createElement("span",null,"📅 "+fmt(d.data)),
+                d.previsao&&React.createElement("span",{style:{color:vencida?C.red:C.orange}},"⏱ Prev: "+fmt(d.previsao)),
+                d.tec&&React.createElement("span",null,"👷 "+d.tec)
+              ),
+              d.obs&&React.createElement("span",{style:{fontSize:10,color:C.dim,fontStyle:"italic"}},d.obs.slice(0,40)+"...")
             )
-          ])
+          );
         })
       )
     ),
     modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
+    detalhe&&React.createElement(DetalheModal,{item:detalhe,onClose:()=>setDetalhe(null)}),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir esta pendência?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
   );
 }
 
-// ── PEDIDOS ───────────────────────────────────────────────────
+
 function Pedidos({usuarioAtual}){
   const STATUS_PED={"Devolvido":{c:C.green},"Pendente Retirada":{c:C.orange},"Pendente Devolução":{c:C.yellow},"Pendente":{c:C.dim},"Aprovado":{c:C.blue},"Cancelado":{c:C.red}};
   const [data,setData]=useState([]);
