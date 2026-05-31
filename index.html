@@ -495,7 +495,10 @@ function NovaOS({setTab,onSave}){
   const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
   const submit=async()=>{
     await sb.from("os").insert({...f,id:uid(),status:"Aberto",data:f.data||todayStr()});
-    setToast(true);setTimeout(()=>{setToast(false);setTab("os");if(onSave)onSave();},1600);
+    setToast(true);
+    // Notificar todas as abas
+    try{const bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"nova_os"});bc.close();}catch(e){}
+    setTimeout(()=>{setToast(false);setTab("os");if(onSave)onSave();},1600);
   };
   return React.createElement("div",null,
     React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`}},
@@ -626,6 +629,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
   const MESES=["01","02","03","04","05","06","07","08","09","10","11","12"];
   const NOMES_MES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
+  const {tick}=React.useContext(RefreshCtx);
   const load=useCallback(async()=>{
     setLoading(true);
     // Cruzar OS com endereços dos condomínios
@@ -657,7 +661,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
     });}
     setData(rows||[]);setLoading(false);
   },[]);
-  useEffect(()=>{load();},[load]);
+  useEffect(()=>{load();},[load,tick]);
   useEffect(()=>{setPagina(1);},[busca,filtCond,filtTec,filtStatus,filtMes,filtAno,subPage]);
 
   const anos=useMemo(()=>[...new Set(data.map(d=>d.data?.slice(0,4)).filter(Boolean))].sort().reverse(),[data]);
@@ -716,6 +720,8 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
   };
 
   const saveOS=async item=>{
+    // Broadcast para atualizar dashboard
+    try{const bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"os_saved"});bc.close();}catch(e){}
     // Registrar data e data_fechamento
     const itemFinal={...item};
     if(!itemFinal.data)itemFinal.data=todayStr();
@@ -1331,7 +1337,7 @@ function Dashboard({setTab}){
         {data:osData},{data:tecData},{data:condData},
         {data:heData},{data:atData},{data:prevData},{data:pedData}
       ]=await Promise.all([
-        sb.from("os").select("num,data,status,cond,tec,prob,pri,relato").or("status.eq.Aberto,data.gte.2026-01-01"),
+        sb.from("os").select("num,data,status,cond,tec,prob,pri,relato").or("status.eq.Aberto,data.gte.2026-01-01").order("data",{ascending:false}),
         sb.from("tecnicos").select("id"),
         sb.from("condominios").select("id"),
         sb.from("horas_extras").select("status,total_h"),
@@ -4574,6 +4580,11 @@ function App(){
       sb.from("atestados").select("status").eq("status","Em análise").then(({data})=>setAtCount(data?.length||0));
       sb.from("horas_extras").select("status").eq("status","Pendente").then(({data})=>setHeCount(data?.length||0));
       sb.from("os").select("status").eq("status","Aberto").then(({data})=>setOsCount(data?.length||0));
+    // Também atualizar via BroadcastChannel
+    try{
+      const bc=new BroadcastChannel("servis_refresh");
+      bc.onmessage=()=>{sb.from("os").select("status").eq("status","Aberto").then(({data})=>setOsCount(data?.length||0));};
+    }catch(e){}
     }
   },[usuario,tab]);
   if(!usuario)return React.createElement(Login,{onLogin:setUsuario});
