@@ -1668,15 +1668,45 @@ function Preventivas({onSave}){
     (filtStatus==="Todos"||d.status===filtStatus)&&
     (!filtTec||d.tecnico===filtTec)
   ),[data,busca,filtStatus,filtTec]);
+  const [saveErr,setSaveErr]=useState("");
   const save=async item=>{
-    // Remover campos que não existem no banco
-    const it={...item};
-    delete it.foto_nome;
-    delete it.laudo_nome;
-    if(it.id&&data.find(x=>x.id===it.id)){
-      await sb.from("preventivas").update(it).eq("id",it.id);
+    setSaveErr("");
+    // Enviar apenas campos conhecidos da tabela preventivas
+    const it={
+      id:item.id||uid(),
+      cond:item.cond||"",
+      tecnico:item.tecnico||"",
+      primeira_visita:item.primeira_visita||"",
+      num_pedido:item.num_pedido||"",
+      equipamentos:item.equipamentos||"",
+      finalizado:item.finalizado||"",
+      retorno:item.retorno||"",
+      laudo_enviado:item.laudo_enviado||"",
+      devolucao:item.devolucao||"",
+      regua_ip:item.regua_ip||"",
+      regua_ok:item.regua_ok||"",
+      status:item.status||"Pendente",
+      obs:item.obs||"",
+      foto_url:item.foto_url||null,
+      laudo_url:item.laudo_url||null,
+    };
+    let res;
+    if(data.find(x=>x.id===it.id)){
+      res=await sb.from("preventivas").update(it).eq("id",it.id);
     }else{
-      await sb.from("preventivas").insert(it);
+      res=await sb.from("preventivas").insert(it);
+    }
+    if(res&&res.error){
+      // Se erro de coluna foto/laudo, tentar sem elas
+      if(res.error.message&&(res.error.message.includes("foto_url")||res.error.message.includes("laudo_url"))){
+        delete it.foto_url;delete it.laudo_url;
+        if(data.find(x=>x.id===it.id)){res=await sb.from("preventivas").update(it).eq("id",it.id);}
+        else{res=await sb.from("preventivas").insert(it);}
+        if(res&&res.error){setSaveErr("Erro: "+res.error.message);return;}
+        setSaveErr("⚠ Salvo sem foto/PDF. Rode o SQL para habilitar anexos.");
+      }else{
+        setSaveErr("Erro: "+res.error.message);return;
+      }
     }
     setModal(null);load();if(onSave)onSave();
   };
@@ -1790,7 +1820,8 @@ function Preventivas({onSave}){
       React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
         React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
         React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"Salvar")
-      )
+      ),
+      saveErr&&React.createElement("div",{style:{marginTop:8,color:C.red,fontSize:11,background:C.red+"11",borderRadius:6,padding:"6px 10px"}},saveErr)
     );
   };
 
