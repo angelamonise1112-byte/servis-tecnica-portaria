@@ -1142,14 +1142,15 @@ function Demandas({onSave}){
   };
   const del=async id=>{await sb.from("demandas").delete().eq("id",id);setConfirmDel(null);load();if(onSave)onSave();};
   const EditModal=({item,onClose})=>{
-    const [f,setF]=useState(item||{resp:pessoas[0].nome,prazo:todayStr(),descricao:"",local_dem:"",pri:"Média",status:"Pendente",obs:""});
+    const [f,setF]=useState(item||{resp:pessoas[0].nome,prazo:todayStr(),descricao:"",cond_dem:"",local_dem:"",pri:"Média",status:"Pendente",obs:""});
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
     return React.createElement(Modal,{title:item?.id?"Editar Demanda":"Nova Demanda",onClose},
       React.createElement("div",{style:{display:"grid",gap:12}},
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Responsável"),React.createElement("select",{style:base.sel,value:f.resp,onChange:upd("resp")},pessoas.map(p=>React.createElement("option",{key:p.nome,value:p.nome},p.nome)))),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Prazo *"),React.createElement("input",{type:"date",style:base.inp,value:f.prazo,onChange:upd("prazo")})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Descrição *"),React.createElement("textarea",{style:{...base.inp,height:70},value:f.descricao,onChange:upd("descricao")})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Local"),React.createElement("input",{style:base.inp,value:f.local_dem||"",onChange:upd("local_dem")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Condomínio (opcional)"),React.createElement("select",{style:base.sel,value:f.cond_dem||"",onChange:upd("cond_dem")},React.createElement("option",{value:""},"Nenhum / Geral"),CONDS.map(function(c){return React.createElement("option",{key:c,value:c},c);}))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Local / Detalhe"),React.createElement("input",{style:base.inp,value:f.local_dem||"",onChange:upd("local_dem")})),
         React.createElement("div",null,
           React.createElement("label",{style:base.lbl},"Prioridade"),
           React.createElement("div",{style:{display:"flex",gap:6}},["Alta","Média","Baixa"].map(p=>React.createElement("button",{key:p,style:{...btnStyle(p==="Alta"?C.red:p==="Média"?C.yellow:C.green,f.pri!==p),flex:1},onClick:()=>setF(x=>({...x,pri:p}))},p)))
@@ -1200,7 +1201,7 @@ function Demandas({onSave}){
       loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
       React.createElement(Card,null,
         React.createElement(Table,{
-          cols:["Responsável","Prazo","Descrição","Local","Prioridade","Status","Ações"],
+          cols:["Responsável","Prazo","Descrição","Condomínio / Local","Prioridade","Status","Ações"],
           rows:filtered.map(d=>{
             const p=pessoas.find(x=>x.nome===d.resp);
             return[
@@ -1209,7 +1210,8 @@ function Demandas({onSave}){
                 d.resp
               ),
               React.createElement("span",{style:{color:prazoVencido(d)?C.red:C.text}},fmt(d.prazo)),
-              (d.descricao||"").slice(0,40),d.local_dem||"—",
+              React.createElement("div",{style:{fontSize:11,maxWidth:320,wordBreak:"break-word",lineHeight:1.5,whiteSpace:"normal"}},d.descricao||""),
+              React.createElement("div",{style:{fontSize:11,color:d.cond_dem?C.cyan:C.dim}},d.cond_dem||d.local_dem||"—"),
               React.createElement(Pill,{c:d.pri==="Alta"?C.red:d.pri==="Média"?C.yellow:C.green},d.pri),
               React.createElement(Pill,{c:STATUS_D[d.status]?.c||C.dim},`${STATUS_D[d.status]?.i} ${d.status}`),
               React.createElement("div",{style:{display:"flex",gap:4}},
