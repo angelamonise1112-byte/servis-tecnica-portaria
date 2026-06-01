@@ -1648,6 +1648,17 @@ function Dashboard({setTab}){
 
 
 // ── PREVENTIVAS ───────────────────────────────────────────────
+  const gerarPDFPreventivas=function(lista){
+    const win=window.open("","_blank");
+    const hoje=new Date().toLocaleDateString("pt-BR");
+    const rows=lista.map(function(d){
+      return "<tr><td>"+(d.cond||"")+"</td><td>"+(d.tecnico||"")+"</td><td>"+(d.status||"")+"</td><td>"+(d.primeira_visita||"—")+"</td><td>"+(d.retorno||"—")+"</td><td>"+(d.devolucao||"—")+"</td><td>"+(d.num_pedido||"—")+"</td><td>"+(d.obs||"—")+"</td><td>"+(d.laudo_url?"✅":"—")+"</td><td>"+(d.foto_url?"✅":"—")+"</td></tr>";
+    }).join("");
+    win.document.write("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Preventivas</title><style>body{font-family:Arial,sans-serif;font-size:10px;padding:16px}h1{font-size:15px}table{width:100%;border-collapse:collapse}th{background:#1e3a5f;color:#fff;padding:5px 7px;font-size:9px;text-align:left}td{padding:4px 7px;border-bottom:1px solid #ddd;font-size:9px;vertical-align:top}tr:nth-child(even){background:#f5f5f5}@media print{body{padding:0}}</style></head><body><h1>Relatório de Preventivas</h1><p style=\"color:#666\">Gerado em "+hoje+" — "+lista.length+" registros</p><table><thead><tr><th>Condomínio</th><th>Técnico</th><th>Status</th><th>1ª Visita</th><th>Retorno</th><th>Devolução</th><th>Nº Pedido</th><th>Observações</th><th>Laudo</th><th>Foto</th></tr></thead><tbody>"+rows+"</tbody></table><script>window.onload=function(){window.print();}<\/script></body></html>");
+    win.document.close();
+  };
+
+
 function Preventivas({onSave}){
   const [data,setData]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -1681,7 +1692,6 @@ function Preventivas({onSave}){
       finalizado:item.finalizado||"",
       retorno:item.retorno||"",
       laudo:item.laudo||"",
-      "laudo enviado":item.laudo_enviado||item["laudo enviado"]||"",
       devolucao:item.devolucao||"",
       regua_ip:item.regua_ip||"",
       regua_ok:item.regua_ok||"",
@@ -1855,7 +1865,10 @@ function Preventivas({onSave}){
         React.createElement("div",{style:{fontSize:18,fontWeight:700}},"◈ Preventivas"),
         React.createElement("div",{style:{fontSize:12,color:C.muted}},`${data.length} condomínios`)
       ),
-      React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Nova")
+      React.createElement("div",{style:{display:"flex",gap:8}},
+        React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:12},onClick:()=>gerarPDFPreventivas(data)},"📄 Relatório PDF"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Nova")
+      )
     ),
     React.createElement("div",{style:{padding:"20px 24px"}},
       React.createElement(Grid,{cols:4,mb:16},
