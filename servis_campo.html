@@ -286,7 +286,10 @@ function MinhasOS({usuario,onSelectOS}){
       ...o,
       endereco:findEnd(o.cond),
       campo:fm[o.num]||null,
-      _minha:condsDaArea.size>0?condsDaArea.has((o.cond||"").toLowerCase()):true
+      // _minha: da área do técnico OU atribuída a ele
+      _minha:condsDaArea.size>0
+        ?(condsDaArea.has((o.cond||"").toLowerCase())||(o.tec||"").toLowerCase().trim()===(usuario?.nome||"").toLowerCase().trim())
+        :true
     }));
     const osFiltradas=(!verTodasAreas&&condsDaArea.size>0)
       ?todasOS.filter(o=>o._minha)
@@ -328,9 +331,8 @@ function MinhasOS({usuario,onSelectOS}){
     return()=>clearInterval(t);
   },[usuario.nome]);
 
-  // "Minhas" = OS com o nome do técnico OU OS abertas hoje na área dele
-  const minhas=osList.filter(o=>o.tec===usuario.nome||(o._minha&&o.data===todayBrasilia()));
-  const daArea=osList.filter(o=>o._minha!==false);
+  const minhas=osList.filter(o=>(o.tec||"").toLowerCase().trim()===(usuario.nome||"").toLowerCase().trim());
+  const daArea=osList.filter(o=>o._minha===true);
   const emCampo=osList.filter(o=>o.campo&&o.campo.status_campo!=="Aguardando"&&o.campo.status_campo!=="Concluído");
   const vencidas=osList.filter(o=>calcHorasUteis(o.data)>48);
 
@@ -421,7 +423,7 @@ function MinhasOS({usuario,onSelectOS}){
           ),
           // Problema + Descrição
           React.createElement("div",{style:{fontSize:12,color:C.muted,marginBottom:os.descricao?4:8,lineHeight:1.4}},os.prob),
-          os.descricao&&React.createElement("div",{style:{fontSize:11,color:C.text,marginBottom:8,lineHeight:1.4,background:C.yellow+"11",borderRadius:6,padding:"4px 8px",borderLeft:"2px solid "+C.yellow}},os.descricao),
+          os.descricao&&os.descricao!==os.prob&&React.createElement("div",{style:{fontSize:11,color:C.text,marginBottom:8,lineHeight:1.4,background:C.yellow+"11",borderRadius:6,padding:"4px 8px",borderLeft:"2px solid "+C.yellow}},os.descricao),
           // Footer
           React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
             React.createElement("div",{style:{display:"flex",gap:6}},
