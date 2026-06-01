@@ -228,8 +228,8 @@ function MinhasOS({usuario,onSelectOS}){
   const [condMap,setCondMap]=useState({});
   const [campoMap,setCampoMap]=useState({});
   const [loading,setLoading]=useState(true);
-  const [filtro,setFiltro]=useState("minhas");
-  const [verTodasAreas,setVerTodasAreas]=useState(false);
+  const [filtro,setFiltro]=useState("todas");
+  const [verTodasAreas,setVerTodasAreas]=useState(true);
   const [minhasAreas,setMinhasAreas]=useState([]);
   const [todosCondsArea,setTodosCondsArea]=useState(new Set());
 
@@ -281,12 +281,17 @@ function MinhasOS({usuario,onSelectOS}){
     const fm={};
     (campo||[]).forEach(c=>{fm[c.num]=c;});
 
-    // 3. Filtrar: "minhas" = área do técnico, "todas" = todas as áreas
-    const osFiltradas=(condsDaArea.size>0&&!verTodasAreas)
-      ?(os||[]).filter(o=>condsDaArea.has((o.cond||"").toLowerCase()))
-      :(os||[]);
-
-    const merged=osFiltradas.map(o=>({...o,endereco:findEnd(o.cond),campo:fm[o.num]||null,_minha:condsDaArea.has((o.cond||"").toLowerCase())}));
+    // 3. Marcar _minha em todas as OS e filtrar conforme verTodasAreas
+    const todasOS=(os||[]).map(o=>({
+      ...o,
+      endereco:findEnd(o.cond),
+      campo:fm[o.num]||null,
+      _minha:condsDaArea.size>0?condsDaArea.has((o.cond||"").toLowerCase()):true
+    }));
+    const osFiltradas=(!verTodasAreas&&condsDaArea.size>0)
+      ?todasOS.filter(o=>o._minha)
+      :todasOS;
+    const merged=osFiltradas;
     // Ordenar: SLA vencida > Alta prioridade > demais por horas decorridas
     merged.sort((a,b)=>{
       const ha=calcHorasUteis(a.data);const hb=calcHorasUteis(b.data);
@@ -356,7 +361,7 @@ function MinhasOS({usuario,onSelectOS}){
             style:{background:verTodasAreas?"#1f6feb":"none",border:"1px solid "+(verTodasAreas?"#1f6feb":C.border),
               color:verTodasAreas?"#fff":C.muted,borderRadius:20,padding:"4px 12px",fontSize:11,cursor:"pointer"},
             onClick:function(){setVerTodasAreas(function(v){return !v;});setTimeout(load,50);}
-          },verTodasAreas?"🌐 Todas":"📍 Só minha área"),
+          },verTodasAreas?"🌐 Ver todas":"📍 Só minha área ("+areaLabel+")"),
           React.createElement("button",{style:{background:"none",border:"none",fontSize:22,color:C.muted,cursor:"pointer"},onClick:load},"🔄")
         )
       ),
