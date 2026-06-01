@@ -1671,7 +1671,6 @@ function Preventivas({onSave}){
   const [saveErr,setSaveErr]=useState("");
   const save=async item=>{
     setSaveErr("");
-    // Enviar apenas campos conhecidos da tabela preventivas
     const it={
       id:item.id||uid(),
       cond:item.cond||"",
@@ -1681,8 +1680,8 @@ function Preventivas({onSave}){
       equipamentos:item.equipamentos||"",
       finalizado:item.finalizado||"",
       retorno:item.retorno||"",
-      laudo_enviado:item.laudo_enviado||"",
-      devolucao:item.devolucao||"",
+      laudo:item.laudo_enviado||item.laudo||"",
+      "devolução":item.devolucao||item["devolução"]||"",
       regua_ip:item.regua_ip||"",
       regua_ok:item.regua_ok||"",
       status:item.status||"Pendente",
@@ -1696,18 +1695,7 @@ function Preventivas({onSave}){
     }else{
       res=await sb.from("preventivas").insert(it);
     }
-    if(res&&res.error){
-      // Se erro de coluna foto/laudo, tentar sem elas
-      if(res.error.message&&(res.error.message.includes("foto_url")||res.error.message.includes("laudo_url"))){
-        delete it.foto_url;delete it.laudo_url;
-        if(data.find(x=>x.id===it.id)){res=await sb.from("preventivas").update(it).eq("id",it.id);}
-        else{res=await sb.from("preventivas").insert(it);}
-        if(res&&res.error){setSaveErr("Erro: "+res.error.message);return;}
-        setSaveErr("⚠ Salvo sem foto/PDF. Rode o SQL para habilitar anexos.");
-      }else{
-        setSaveErr("Erro: "+res.error.message);return;
-      }
-    }
+    if(res&&res.error){setSaveErr("Erro: "+res.error.message);return;}
     setModal(null);load();if(onSave)onSave();
   };
   const del=async id=>{await sb.from("preventivas").delete().eq("id",id);setConfirmDel(null);load();if(onSave)onSave();};
