@@ -734,9 +734,10 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
   const saveOS=async function(item){
     try{var bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"os_saved"});bc.close();}catch(e){}
     const it={...item};
+    // Remover campos virtuais que não existem no banco
+    delete it._endereco;
     if(!it.data)it.data=todayStr();
     if(it.status==="Fechado"&&!it.data_fechamento)it.data_fechamento=todayStr();
-    // Normalizar pri
     if(it.pri==="Média")it.pri="Media";
     var res;
     if(it.id&&data.find(function(x){return x.id===it.id;})){
@@ -744,7 +745,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
     }else{
       res=await sb.from("os").insert(it);
     }
-    if(res&&res.error){console.error("saveOS error:",res.error);alert("Erro ao salvar: "+res.error.message);return;}
+    if(res&&res.error){alert("Erro ao salvar: "+res.error.message);return;}
     setEditOS(null);load();if(onSave)onSave();
   };
 
