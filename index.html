@@ -1752,7 +1752,7 @@ function Preventivas({onSave}){
   ,[alertasReinc,data]);
 
   const EditModal=({item,onClose})=>{
-    const [f,setF]=useState(item||{cond:CONDS[0],tecnico:"",primeira_visita:"",num_pedido:"",equipamentos:"",finalizado:"",retorno:"",laudo_enviado:"",devolucao:"",regua_ip:"",regua_ok:"",status:"Pendente",laudo_url:"",laudo_nome:"",foto_url:"",foto_nome:"",obs:""});
+    const [f,setF]=useState(item||{cond:CONDS[0],tecnico:"",primeira_visita:"",num_pedido:"",equipamentos:"",finalizado:"",retorno:"",laudo:"",devolucao:"",regua_ip:"",regua_ok:"",status:"Pendente",laudo_url:"",laudo_nome:"",foto_url:"",foto_nome:"",obs:""});
     const [uploading,setUploading]=useState(false);
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
     const handleFile=async(e,tipo)=>{
@@ -1798,7 +1798,7 @@ function Preventivas({onSave}){
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Devolução"),React.createElement("input",{type:"date",style:base.inp,value:f.devolucao,onChange:upd("devolucao")})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Equipamentos"),React.createElement("input",{style:base.inp,value:f.equipamentos,onChange:upd("equipamentos")})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Finalizado"),React.createElement("input",{style:base.inp,value:f.finalizado,onChange:upd("finalizado")})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Laudo Enviado"),React.createElement("select",{style:base.sel,value:f.laudo_enviado,onChange:upd("laudo_enviado")},["","ENVIADO (OK)","PENDENTE","NAO ENVIADO"].map(s=>React.createElement("option",{key:s},s)))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Laudo Enviado"),React.createElement("select",{style:base.sel,value:f.laudo,onChange:upd("laudo")},["","ENVIADO (OK)","PENDENTE","NAO ENVIADO"].map(s=>React.createElement("option",{key:s},s)))),
         React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Régua Smart IP"),React.createElement("input",{style:base.inp,value:f.regua_ip,onChange:upd("regua_ip"),placeholder:"ex: 10.20.30.40 admin/Servis01"})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Régua Smart OK"),React.createElement("select",{style:base.sel,value:f.regua_ok,onChange:upd("regua_ok")},["","OK","REPROGRAMAR","SOLICITAR","CANCELADO"].map(s=>React.createElement("option",{key:s},s)))),
         React.createElement("div",null,
@@ -1841,7 +1841,7 @@ function Preventivas({onSave}){
   const DetalheModal=({item,onClose})=>{
     return React.createElement(Modal,{title:`Preventiva — ${item.cond}`,onClose,width:560},
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}},
-        [{l:"1ª Visita",v:fmt(item.primeira_visita)},{l:"Nº Pedido",v:item.num_pedido||"—"},{l:"Retorno",v:fmt(item.retorno)},{l:"Devolução",v:fmt(item.devolucao)},{l:"Equipamentos",v:item.equipamentos||"—"},{l:"Finalizado",v:item.finalizado||"—"},{l:"Laudo Enviado",v:item.laudo_enviado||"—"},{l:"Régua IP",v:item.regua_ip||"—"},{l:"Régua OK",v:item.regua_ok||"—"}].map(k=>
+        [{l:"1ª Visita",v:fmt(item.primeira_visita)},{l:"Nº Pedido",v:item.num_pedido||"—"},{l:"Retorno",v:fmt(item.retorno)},{l:"Devolução",v:fmt(item.devolucao)},{l:"Equipamentos",v:item.equipamentos||"—"},{l:"Finalizado",v:item.finalizado||"—"},{l:"Laudo Enviado",v:item.laudo||"—"},{l:"Régua IP",v:item.regua_ip||"—"},{l:"Régua OK",v:item.regua_ok||"—"}].map(k=>
           React.createElement("div",{key:k.l},React.createElement("label",{style:base.lbl},k.l),React.createElement("div",{style:{color:C.text,fontSize:13}},k.v))
         )
       ),
@@ -1924,7 +1924,7 @@ function Preventivas({onSave}){
             fmt(d.primeira_visita)||React.createElement("span",{style:{color:C.dim}},"—"),
             d.num_pedido||React.createElement("span",{style:{color:C.dim}},"—"),
             fmt(d.retorno)||React.createElement("span",{style:{color:C.dim}},"—"),
-            d.laudo_enviado?React.createElement(Pill,{c:C.green},"✓ Enviado"):React.createElement("span",{style:{color:C.dim}},"—"),
+            d.laudo?React.createElement(Pill,{c:C.green},"✓ Enviado"):React.createElement("span",{style:{color:C.dim}},"—"),
             d.regua_ok?React.createElement(Pill,{c:d.regua_ok==="OK"?C.green:d.regua_ok==="REPROGRAMAR"?C.yellow:C.dim},d.regua_ok):React.createElement("span",{style:{color:C.dim}},"—"),
             React.createElement(Pill,{c:STATUS_PREV[d.status]?.c||C.dim},d.status),
             React.createElement("div",{style:{display:"flex",gap:4}},
