@@ -875,7 +875,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
           ?React.createElement(Card,null,React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma OS encontrada"))
           :React.createElement(Card,null,
               React.createElement(Table,{
-                cols:["Nº OS","Abertura","Fechamento","Condomínio","Endereço","Técnico","Problema","Pri","Status","Ações"],
+                cols:["Nº OS","Abertura","Fechamento","Condomínio","Endereço","Técnico","Problema / Descrição","Pri","Status","Ações"],
                 rows:paginado.map(function(d){
                   return [
                     React.createElement("span",{style:{color:C.cyan,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"},onClick:function(){setDetalheOS(d);}},d.num),
@@ -884,7 +884,10 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
                     React.createElement("div",{style:{fontSize:11,minWidth:120,maxWidth:160,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d.cond),
                     d._endereco?React.createElement("div",{style:{fontSize:10,color:C.blue,minWidth:100,maxWidth:140,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d._endereco):React.createElement("span",{style:{color:C.dim}},"—"),
                     React.createElement("div",{style:{fontSize:11,minWidth:70,maxWidth:100,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d.tec),
-                    React.createElement("div",{style:{fontSize:11,minWidth:120,maxWidth:180,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d.prob),
+                    React.createElement("div",{style:{minWidth:140,maxWidth:200,lineHeight:1.4}},
+                      React.createElement("div",{style:{fontSize:11,fontWeight:600,wordBreak:"break-word",whiteSpace:"normal"}},d.prob),
+                      d.descricao&&d.descricao!==d.prob&&React.createElement("div",{style:{fontSize:10,color:C.muted,marginTop:3,wordBreak:"break-word",whiteSpace:"normal",borderLeft:"2px solid "+C.yellow,paddingLeft:5}},d.descricao)
+                    ),
                     d.pri?React.createElement(Pill,{c:priCor(d.pri)},d.pri[0]):React.createElement("span",{style:{color:C.dim}},"—"),
                     React.createElement(Pill,{c:corSit(d.status)},d.status),
                     React.createElement("div",{style:{display:"flex",gap:4}},
