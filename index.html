@@ -744,12 +744,8 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
       pri:item.pri==="Média"?"Media":item.pri||"Media",
       status:item.status||"Aberto",
       relato:item.relato||"",
-      obs:item.obs||"",
       descricao:item.descricao||"",
       data_fechamento:item.status==="Fechado"?(item.data_fechamento||todayStr()):item.data_fechamento||null,
-      foto_url:item.foto_url||null,
-      laudo_url:item.laudo_url||null,
-      laudo_nome:item.laudo_nome||null,
     };
     var res;
     if(data.find(function(x){return x.id===it.id;})){
@@ -880,7 +876,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
                     React.createElement(Pill,{c:corSit(d.status)},d.status),
                     React.createElement("div",{style:{display:"flex",gap:4}},
                       React.createElement("button",{style:iBtn(C.blue),title:"Ver detalhes",onClick:function(){setDetalheOS(d);}},"\uD83D\uDC41"),
-                      !somenteLeitura&&React.createElement("button",{style:iBtn(C.green),title:"Editar",onClick:function(){setEditOS(d);}},"\u270F\uFE0F"),
+                      !somenteLeitura&&React.createElement("button",{style:iBtn(C.green),title:"Editar",onClick:function(){var clean={...d};delete clean._endereco;setEditOS(clean);}},"\u270F\uFE0F"),
                       !somenteLeitura&&d.status==="Aberto"&&React.createElement("button",{style:iBtn(C.yellow),title:"Mover para Pendência",onClick:function(){setModalPend(d);}},"⏸"),
                       !somenteLeitura&&React.createElement("button",{style:iBtn(C.red),title:"Excluir",onClick:function(){setConfirmDel(d.id);}},"\uD83D\uDDD1")
                     )
@@ -918,7 +914,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
         React.createElement("div",{style:{fontSize:12,color:C.muted,marginTop:4,lineHeight:1.6}},detalheOS.relato)
       ),
       React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:12}},
-        !somenteLeitura&&React.createElement("button",{style:btnStyle(C.green),onClick:function(){setDetalheOS(null);setEditOS(detalheOS);}},"\u270F\uFE0F Editar"),
+        !somenteLeitura&&React.createElement("button",{style:btnStyle(C.green),onClick:function(){var clean={...detalheOS};delete clean._endereco;setDetalheOS(null);setEditOS(clean);}},"\u270F\uFE0F Editar"),
         React.createElement("button",{style:btnStyle(C.blue),onClick:function(){setDetalheOS(null);}},"Fechar")
       )
     ),
