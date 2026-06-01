@@ -813,6 +813,16 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
             ["Aberto","Fechado"].map(function(s){return React.createElement("button",{key:s,style:{...btnStyle(corSit(s),f.status!==s),flex:1,fontSize:11},onClick:function(){setStatus(s);}},s);})
           )
         ),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"Problema"),
+          React.createElement("select",{style:base.sel,value:f.prob,onChange:upd("prob")},
+            PROBS.map(function(p){return React.createElement("option",{key:p},p);})
+          )
+        ),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:base.lbl},"Descrição adicional"),
+          React.createElement("textarea",{style:{...base.inp,height:70},value:f.descricao||"",onChange:upd("descricao"),placeholder:"Detalhes sobre o problema..."})
+        ),
         React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Relato Técnico"),React.createElement("textarea",{style:{...base.inp,height:80},value:f.relato||"",onChange:upd("relato")})),
         React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Observações"),React.createElement("textarea",{style:{...base.inp,height:60},value:f.obs||"",onChange:upd("obs")}))
       ),
