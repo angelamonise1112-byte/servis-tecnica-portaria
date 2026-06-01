@@ -1764,43 +1764,21 @@ function Preventivas({onSave}){
     const handleFile=async function(e,tipo){
       const file=e.target.files[0];
       if(!file)return;
-      setErr("");
-      if(file.size>5*1024*1024){setErr("Arquivo muito grande. Máximo 5MB.");return;}
-      setUploading(true);
       setErr("⏳ Enviando arquivo...");
+      setUploading(true);
       try{
-        const reader=new FileReader();
-        reader.onload=async function(ev){
-          const b64=ev.target.result;
-          const prevId=f.id||uid();
-          const arqId="arq_"+prevId+"_"+tipo+"_"+Date.now();
-          // Salvar na tabela preventivas_arquivos
-          const{error}=await sb.from("preventivas_arquivos").upsert({
-            id:arqId,
-            preventiva_id:prevId,
-            tipo:tipo,
-            nome:file.name,
-            dados:b64
-          });
-          if(error){setErr("Erro ao salvar: "+error.message);setUploading(false);return;}
-          // Salvar URL como referência na preventiva
-          const url="arq://"+arqId;
-          setF(function(p){
-            var n={...p,id:prevId};
-            if(tipo==="laudo"){n.laudo_url=url;n.laudo_nome=file.name;}
-            else{n.foto_url=url;n.foto_nome=file.name;}
-            return n;
-          });
-          setErr("✅ "+file.name+" anexado! Clique em Salvar.");
-          setUploading(false);
-        };
-        reader.onerror=function(){setErr("Erro ao ler arquivo.");setUploading(false);};
-        reader.readAsDataURL(file);
-      }catch(err){
-        setErr("Erro: "+err.message);
-        setUploading(false);
-      }
+        const ext=file.name.split(".").pop();
+        const path=tipo+"/"+(f.id||uid())+"_"+Date.now()+"."+ext;
+        const{data:upData,error:upErr}=await sb.storage.from("preventivas").upload(path,file,{upsert:true});
+        if(upErr){setErr("Erro: "+upErr.message);setUploading(false);return;}
+        const{data:urlData}=sb.storage.from("preventivas").getPublicUrl(path);
+        const url=urlData.publicUrl;
+        setF(function(p){var n={...p};if(tipo==="laudo")n.laudo_url=url;else n.foto_url=url;return n;});
+        setErr("✅ Arquivo enviado! Clique em Salvar.");
+      }catch(e){setErr("Erro: "+e.message);}
+      setUploading(false);
     };
+    
     const doSave=function(){save({...f,id:f.id||uid()});};
     return React.createElement(Modal,{title:item?"Editar Preventiva":"Nova Preventiva",onClose,width:620},
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
