@@ -645,364 +645,262 @@ function NovaOS({setTab,onSave}){
 
 
 function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
+  const {tick}=React.useContext(RefreshCtx);
   const [data,setData]=useState([]);
   const [loading,setLoading]=useState(true);
   const [busca,setBusca]=useState("");
-  const [filtCond,setFiltCond]=useState("");
-  const [filtTec,setFiltTec]=useState("");
   const [filtStatus,setFiltStatus]=useState("Todos");
+  const [filtTec,setFiltTec]=useState("");
+  const [filtAno,setFiltAno]=useState(String(new Date().getFullYear()));
   const [filtMes,setFiltMes]=useState("");
-  const [filtAno,setFiltAno]=useState("");
-  const [subPage,setSubPage]=useState("abertas");
+  const [pagina,setPagina]=useState(1);
   const [detalheOS,setDetalheOS]=useState(null);
   const [editOS,setEditOS]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
   const [modalPend,setModalPend]=useState(null);
-  const [pagina,setPagina]=useState(1);
-  const POR_PAG=50;
-  const MESES=["01","02","03","04","05","06","07","08","09","10","11","12"];
-  const NOMES_MES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  const POR_PAG=20;
+  const MESES_N=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
-  const {tick}=React.useContext(RefreshCtx);
-  const load=useCallback(async()=>{
+  const load=useCallback(async function(){
     setLoading(true);
-    // Cruzar OS com endereços dos condomínios
-    const [{data:rows},{data:conds}]=await Promise.all([
+    const res=await Promise.all([
       sb.from("os").select("*").or("status.eq.Aberto,data.gte.2026-01-01").order("data",{ascending:false}),
       sb.from("condominios").select("nome,endereco,tecnico")
     ]);
-    // Montar mapa de endereços
+    const rows=res[0].data||[];
+    const conds=res[1].data||[];
     const mapEnd={};
-    (conds||[]).forEach(c=>{if(c.nome)mapEnd[c.nome.toLowerCase()]={endereco:c.endereco||"",tecnico:c.tecnico||""};});
-    function buscarEnd(nomeCond){
-      if(!nomeCond)return{endereco:"",tecnico:""};
-      const exato=mapEnd[nomeCond.toLowerCase()];
-      if(exato)return exato;
-      const key=Object.keys(mapEnd).find(k=>k.includes((nomeCond||"").toLowerCase().slice(0,12))||(nomeCond||"").toLowerCase().includes(k.slice(0,12)));
-      return key?mapEnd[key]:{endereco:"",tecnico:""};
+    conds.forEach(function(c){if(c.nome)mapEnd[c.nome.toLowerCase()]=c.endereco||"";});
+    function findEnd(nome){
+      if(!nome)return"";
+      const k=(nome||"").toLowerCase();
+      if(mapEnd[k])return mapEnd[k];
+      const key=Object.keys(mapEnd).find(function(m){return k.startsWith(m.slice(0,8))||m.startsWith(k.slice(0,8));});
+      return key?mapEnd[key]:"";
     }
-    // Adicionar endereço em cada OS
-    if(rows){rows.forEach(r=>{const info=buscarEnd(r.cond);r._endereco=info.endereco;r._tecCond=info.tecnico;});}
-    // Ordenar: abertas primeiro por data desc, depois fechadas por data_fechamento desc
-    if(rows){rows.sort((a,b)=>{
+    rows.forEach(function(r){r._endereco=findEnd(r.cond);});
+    rows.sort(function(a,b){
       if(a.status==="Aberto"&&b.status!=="Aberto")return -1;
-      if(a.status!=="Aberto"&&b.status==="Aberto")return 1;
-      if(a.status==="Fechado"&&b.status==="Fechado"){
-        const df=(a.data_fechamento||a.data);const df2=(b.data_fechamento||b.data);
-        return df2.localeCompare(df);
-      }
+      if(b.status==="Aberto"&&a.status!=="Aberto")return 1;
       return (b.data||"").localeCompare(a.data||"");
-    });}
-    setData(rows||[]);setLoading(false);
-  },[]);
-  useEffect(()=>{load();},[load,tick]);
-  useEffect(()=>{setPagina(1);},[busca,filtCond,filtTec,filtStatus,filtMes,filtAno,subPage]);
-
-  const anos=useMemo(()=>[...new Set(data.map(d=>d.data?.slice(0,4)).filter(Boolean))].sort().reverse(),[data]);
-  const conds=useMemo(()=>[...new Set(data.map(d=>d.cond).filter(Boolean))].sort(),[data]);
-  const osAbertas=useMemo(()=>data.filter(d=>d.status==="Aberto"),[data]);
-  const osFechadas=useMemo(()=>data.filter(d=>d.status==="Fechado"),[data]);
-
-  const hoje=new Date();
-  const mesAtual=String(hoje.getMonth()+1).padStart(2,"0");
-  const anoAtual=String(hoje.getFullYear());
-  const alertasReincidencia=useMemo(()=>{
-    const osMes=data.filter(d=>{if(!d.data)return false;const[ano,mes]=d.data.split("-");return mes===mesAtual&&ano===anoAtual;});
-    const map={};
-    osMes.forEach(os=>{const key=`${os.cond}||${os.prob}`;if(!map[key])map[key]={cond:os.cond,prob:os.prob,count:0};map[key].count++;});
-    return Object.values(map).filter(g=>g.count>=2).sort((a,b)=>b.count-a.count);
-  },[data,mesAtual,anoAtual]);
-
-  const osPorMes=useMemo(()=>{
-    const map={};
-    data.forEach(d=>{
-      if(!d.data)return;
-      const[ano,mes]=d.data.split("-");
-      const key=`${ano}-${mes}`;
-      const meses=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-      if(!map[key])map[key]={key,label:`${meses[parseInt(mes)-1]}/${ano.slice(2)}`,total:0,abertas:0,fechadas:0};
-      map[key].total++;
-      if(d.status==="Aberto")map[key].abertas++;else map[key].fechadas++;
     });
-    return Object.values(map).sort((a,b)=>a.key.localeCompare(b.key)).slice(-18);
-  },[data]);
-  const maxOsMes=Math.max(...osPorMes.map(d=>d.total),1);
+    setData(rows);setLoading(false);
+  },[]);
 
-  const baseList=subPage==="abertas"?osAbertas:subPage==="fechadas"?osFechadas:data;
-  const filtered=useMemo(()=>baseList.filter(d=>{
-    const matchBusca=!busca||(d.num||"").includes(busca)||(d.cond||"").toLowerCase().includes(busca.toLowerCase());
-    const matchCond=!filtCond||d.cond===filtCond;
-    const matchTec=!filtTec||d.tec===filtTec;
-    const matchStatus=filtStatus==="Todos"||d.status===filtStatus;
-    const[ano,mes]=(d.data||"--").split("-");
-    return matchBusca&&matchCond&&matchTec&&matchStatus&&(!filtMes||mes===filtMes)&&(!filtAno||ano===filtAno);
-  }),[baseList,busca,filtCond,filtTec,filtStatus,filtMes,filtAno]);
+  useEffect(function(){load();},[load,tick]);
+
+  const anos=useMemo(function(){
+    return [...new Set(data.map(function(d){return d.data?d.data.slice(0,4):"";}).filter(Boolean))].sort().reverse();
+  },[data]);
+  const tecs=useMemo(function(){
+    return [...new Set(data.map(function(d){return d.tec;}).filter(Boolean))].sort();
+  },[data]);
+  const conds=useMemo(function(){
+    return [...new Set(data.map(function(d){return d.cond;}).filter(Boolean))].sort();
+  },[data]);
+
+  const filtered=useMemo(function(){
+    return data.filter(function(d){
+      const matchB=!busca||(d.num||"").includes(busca)||(d.cond||"").toLowerCase().includes(busca.toLowerCase());
+      const matchS=filtStatus==="Todos"||(d.status||"")===(filtStatus||"");
+      const matchT=!filtTec||d.tec===filtTec;
+      const p=(d.data||"--").split("-");
+      const matchA=!filtAno||p[0]===filtAno;
+      const matchM=!filtMes||p[1]===filtMes;
+      return matchB&&matchS&&matchT&&matchA&&matchM;
+    });
+  },[data,busca,filtStatus,filtTec,filtAno,filtMes]);
 
   const totalPags=Math.ceil(filtered.length/POR_PAG);
   const paginado=filtered.slice((pagina-1)*POR_PAG,pagina*POR_PAG);
-  const limparFiltros=()=>{setBusca("");setFiltCond("");setFiltTec("");setFiltStatus("Todos");setFiltMes("");setFiltAno("");};
-  const temFiltro=busca||filtCond||filtTec||filtStatus!=="Todos"||filtMes||filtAno;
 
-  const moverParaPendencia=async(os)=>{
-    const id="pend_"+Date.now();
+  useEffect(function(){setPagina(1);},[busca,filtStatus,filtTec,filtAno,filtMes]);
+
+  const abertas=data.filter(function(d){return d.status==="Aberto";}).length;
+  const fechadas=data.filter(function(d){return d.status==="Fechado";}).length;
+
+  const saveOS=async function(item){
+    try{var bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"os_saved"});bc.close();}catch(e){}
+    const it={...item};
+    if(!it.data)it.data=todayStr();
+    if(it.status==="Fechado"&&!it.data_fechamento)it.data_fechamento=todayStr();
+    if(it.id&&data.find(function(x){return x.id===it.id;})){
+      await sb.from("os").update(it).eq("id",it.id);
+    }else{
+      await sb.from("os").insert(it);
+    }
+    setEditOS(null);load();if(onSave)onSave();
+  };
+
+  const delOS=async function(id){
+    await sb.from("os").delete().eq("id",id);
+    setConfirmDel(null);load();if(onSave)onSave();
+  };
+
+  const moverParaPendencia=async function(os){
     await sb.from("os_pendencia").insert({
-      id,num:os.num,cond:os.cond,tec:os.tec,prob:os.prob,
-      motivo:"Aguardando peça/material",descricao:"OS movida para pendência pelo dashboard",
-      data:os.data,prazo:"",pri:os.pri||"Media",status:"Pendente",obs:""
+      id:"pend_"+os.num+"_"+Date.now(),
+      num:os.num,cond:os.cond,tec:os.tec,prob:os.prob,
+      motivo:"Aguardando peça/material",descricao:"",relato:"",
+      data:os.data,prazo:"",previsao:"",pri:"Media",status:"Pendente",obs:""
     });
     setModalPend(null);if(onSave)onSave();
   };
 
-  const saveOS=async item=>{
-    // Broadcast para atualizar dashboard
-    try{const bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"os_saved"});bc.close();}catch(e){}
-    // Registrar data e data_fechamento
-    const itemFinal={...item};
-    if(!itemFinal.data)itemFinal.data=todayStr();
-    if(item.status==="Fechado"&&!item.data_fechamento){
-      itemFinal.data_fechamento=todayStr();
-    }
-    if(item.id&&data.find(x=>x.id===item.id)){await sb.from("os").update(itemFinal).eq("id",item.id);}
-    else{await sb.from("os").insert(itemFinal);}
-    setEditOS(null);load();if(onSave)onSave();
-  };
-  const delOS=async id=>{await sb.from("os").delete().eq("id",id);setConfirmDel(null);load();if(onSave)onSave();};
+  function priCor(p){return p==="Alta"?C.red:p==="Média"?C.yellow:C.green;}
+  function corSit(s){return s==="Aberto"?C.red:s==="Fechado"?C.green:C.blue;}
 
-  // Modal de edição de OS
-  const EditOSModal=({item,onClose})=>{
-    const [f,setF]=useState({...item});
-    const [uploading,setUploading]=useState(false);
-    const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-    const handleFile=async(e,tipo)=>{
-      const file=e.target.files[0];if(!file)return;
-      setUploading(true);
-      const r=new FileReader();
-      r.onload=ev=>{
-        if(tipo==="foto")setF(p=>({...p,foto_url:ev.target.result,foto_nome:file.name}));
-        else setF(p=>({...p,laudo_url:ev.target.result,laudo_nome:file.name}));
-        setUploading(false);
-      };
-      r.readAsDataURL(file);
-    };
-    return React.createElement(Modal,{title:`✏️ Editar OS ${item.num}`,onClose,width:580},
+  // ── EDIT MODAL ──────────────────────────────────────────────
+  var EditOSModal=function(props){
+    var item=props.item;var onClose=props.onClose;
+    var ini=item||{num:"",data:todayStr(),cond:"",tec:TECNICOS[0]?TECNICOS[0].nome:"",prob:PROBS[0]||"",pri:"Média",status:"Aberto",relato:"",obs:"",descricao:""};
+    var [f,setF]=useState(ini);
+    function upd(k){return function(e){setF(function(p){var n={...p};n[k]=e.target.value;return n;});};}
+    function setPri(v){setF(function(p){return{...p,pri:v};});}
+    function setStatus(v){setF(function(p){return{...p,status:v};});}
+    return React.createElement(Modal,{title:item?"Editar OS":"Nova OS",onClose:onClose,width:560},
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
-        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Condomínio"),React.createElement("select",{style:base.sel,value:f.cond||"",onChange:upd("cond")},conds.map(c=>React.createElement("option",{key:c},c)))),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Técnico"),React.createElement("select",{style:base.sel,value:f.tec||"",onChange:upd("tec")},tecsBanco.map(t=>React.createElement("option",{key:t.mat||t.nome,value:t.nome},t.nome)))),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data"),React.createElement("input",{type:"date",style:base.inp,value:f.data||"",onChange:upd("data")})),
-        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Problema"),React.createElement("input",{style:base.inp,value:f.prob||"",onChange:upd("prob")})),
-        React.createElement("div",null,
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Nº OS"),React.createElement("input",{style:base.inp,value:f.num,onChange:upd("num")})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data"),React.createElement("input",{type:"date",style:base.inp,value:f.data,onChange:upd("data")})),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Condomínio"),React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},React.createElement("option",{value:""},"Selecionar..."),conds.map(function(c){return React.createElement("option",{key:c,value:c},c);}))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Técnico"),React.createElement("select",{style:base.sel,value:f.tec,onChange:upd("tec")},TECNICOS.map(function(t){return React.createElement("option",{key:t.mat,value:t.nome},t.nome);}))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Problema"),React.createElement("select",{style:base.sel,value:f.prob,onChange:upd("prob")},PROBS.map(function(p){return React.createElement("option",{key:p},p);}))),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
           React.createElement("label",{style:base.lbl},"Prioridade"),
-          React.createElement("div",{style:{display:"flex",gap:6}},["Alta","Média","Baixa"].map(p=>React.createElement("button",{key:p,style:{...btnStyle(p==="Alta"?C.red:p==="Média"?C.yellow:C.green,f.pri!==p),flex:1,fontSize:11},onClick:()=>setF(x=>({...x,pri:p}))},p)))
-        ),
-        React.createElement("div",null,
-          React.createElement("label",{style:base.lbl},"Status"),
-          React.createElement("div",{style:{display:"flex",gap:6}},["Aberto","Fechado"].map(s=>React.createElement("button",{key:s,style:{...btnStyle(s==="Aberto"?C.red:C.green,f.status!==s),flex:1,fontSize:11},onClick:()=>setF(x=>({...x,status:s,data_fechamento:s==="Fechado"&&!x.data_fechamento?new Date().toISOString().split("T")[0]:x.data_fechamento}))},s)))
-        ),
-        f.status==="Fechado"&&React.createElement("div",null,
-          React.createElement("label",{style:base.lbl},"📅 Data Fechamento"),
-          React.createElement("input",{type:"date",style:base.inp,value:f.data_fechamento||"",onChange:upd("data_fechamento")})
+          React.createElement("div",{style:{display:"flex",gap:6}},
+            ["Alta","Média","Baixa"].map(function(p){return React.createElement("button",{key:p,style:{...btnStyle(priCor(p),f.pri!==p),flex:1,fontSize:11},onClick:function(){setPri(p);}},p);})
+          )
         ),
         React.createElement("div",{style:{gridColumn:"1/-1"}},
-          React.createElement("label",{style:base.lbl},"📝 Relato Técnico"),
-          React.createElement("textarea",{style:{...base.inp,height:80},value:f.relato||"",onChange:upd("relato"),placeholder:"Descreva o que foi feito..."})
-        ),
-        // Foto
-        React.createElement("div",null,
-          React.createElement("label",{style:base.lbl},"📸 Foto"),
-          React.createElement("div",{style:{background:C.bg,border:`1px dashed ${C.borderL}`,borderRadius:8,padding:"10px 12px"}},
-            React.createElement("input",{type:"file",accept:"image/*",id:"os-foto",style:{display:"none"},onChange:e=>handleFile(e,"foto")}),
-            React.createElement("label",{htmlFor:"os-foto",style:{cursor:"pointer",fontSize:12,color:f.foto_url?C.green:C.cyan}},f.foto_url?"✅ "+(f.foto_nome||"Foto anexada"):"📷 Anexar foto"),
-            f.foto_url&&React.createElement("button",{style:{...iBtn(C.dim),marginLeft:8,fontSize:10},onClick:()=>setF(p=>({...p,foto_url:"",foto_nome:""}))
-},"✕")
+          React.createElement("label",{style:base.lbl},"Status"),
+          React.createElement("div",{style:{display:"flex",gap:6}},
+            ["Aberto","Fechado"].map(function(s){return React.createElement("button",{key:s,style:{...btnStyle(corSit(s),f.status!==s),flex:1,fontSize:11},onClick:function(){setStatus(s);}},s);})
           )
         ),
-        // PDF
-        React.createElement("div",null,
-          React.createElement("label",{style:base.lbl},"📄 Laudo PDF"),
-          React.createElement("div",{style:{background:C.bg,border:`1px dashed ${C.borderL}`,borderRadius:8,padding:"10px 12px"}},
-            React.createElement("input",{type:"file",accept:".pdf",id:"os-pdf",style:{display:"none"},onChange:e=>handleFile(e,"pdf")}),
-            React.createElement("label",{htmlFor:"os-pdf",style:{cursor:"pointer",fontSize:12,color:f.laudo_url?C.green:C.red}},f.laudo_url?"✅ "+(f.laudo_nome||"PDF anexado"):"📎 Anexar PDF"),
-            f.laudo_url&&React.createElement("button",{style:{...iBtn(C.dim),marginLeft:8,fontSize:10},onClick:()=>setF(p=>({...p,laudo_url:"",laudo_nome:""}))
-},"✕")
-          )
-        )
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Relato Técnico"),React.createElement("textarea",{style:{...base.inp,height:80},value:f.relato||"",onChange:upd("relato")})),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Observações"),React.createElement("textarea",{style:{...base.inp,height:60},value:f.obs||"",onChange:upd("obs")}))
       ),
-      uploading&&React.createElement("div",{style:{textAlign:"center",color:C.muted,fontSize:12,marginTop:8}},"Carregando arquivo..."),
       React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
         React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
-        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>saveOS(f)},"💾 Salvar")
+        React.createElement("button",{style:btnStyle(C.blue),onClick:function(){saveOS({...f,id:f.id||uid()});}},"\uD83D\uDCBE Salvar")
       )
     );
   };
 
   return React.createElement("div",null,
-    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`}},
+    // Header
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:"1px solid "+C.border}},
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
-        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"◉ Ordens de Serviço"),
-        React.createElement("div",{style:{fontSize:12,color:C.muted}},`Total: ${data.length} OS`)
-      ),
-      React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
-        [{id:"abertas",label:`🔴 Abertas (${osAbertas.length})`},{id:"fechadas",label:`✅ Fechadas (${osFechadas.length})`},{id:"todas",label:`📋 Todas (${data.length})`},{id:"grafico",label:"📊 Gráfico"}].map(t=>
-          React.createElement("button",{key:t.id,style:btnStyle(t.id==="abertas"?C.red:t.id==="fechadas"?C.green:t.id==="grafico"?C.purple:C.blue,subPage!==t.id),onClick:()=>setSubPage(t.id)},t.label)
-        )
-      )
-    ),
-    React.createElement("div",{style:{padding:"20px 24px"}},
-      React.createElement(Grid,{cols:4,mb:16},
-        React.createElement(KPI,{label:"🔴 OS Abertas",value:osAbertas.length,color:C.red}),
-        React.createElement(KPI,{label:"✅ OS Fechadas",value:osFechadas.length,color:C.green}),
-        React.createElement(KPI,{label:"📋 Total",value:data.length,color:C.blue}),
-        React.createElement(KPI,{label:"↺ Reincidências",value:alertasReincidencia.length,color:alertasReincidencia.length>0?C.orange:C.dim})
-      ),
-      // Painel Acompanhamento ao Vivo
-      React.createElement(AcompanhamentoAoVivo,null),
-
-      alertasReincidencia.length>0&&React.createElement("div",{style:{background:C.red+"11",border:`1px solid ${C.red}33`,borderRadius:10,padding:"12px 16px",marginBottom:16}},
-        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:8}},
-          React.createElement("span",{style:{fontSize:18}},"🔴"),
-          React.createElement("span",{style:{fontWeight:700,color:C.red,fontSize:14}},`${alertasReincidencia.length} ALERTA(S) DE REINCIDÊNCIA — PREVENTIVA URGENTE`),
-          React.createElement(Pill,{c:C.red},`${NOMES_MES[parseInt(mesAtual)-1]}/${anoAtual}`)
-        ),
-        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:6}},
-          alertasReincidencia.map((r,i)=>React.createElement("div",{key:i,style:{background:C.surface,border:`1px solid ${C.red}33`,borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
-            React.createElement("div",null,React.createElement("div",{style:{fontWeight:600,fontSize:12}},r.cond),React.createElement("div",{style:{fontSize:11,color:C.muted}},r.prob)),
-            React.createElement(Pill,{c:r.count>=4?C.red:r.count>=2?C.orange:C.yellow},`${r.count} OS`)
-          ))
-        )
-      ),
-      subPage==="grafico"&&React.createElement("div",null,
-        React.createElement(Card,{style:{marginBottom:16}},
-          React.createElement(CardHeader,{title:"OS por Mês"}),
-          React.createElement("div",{style:{overflowX:"auto"}},
-            React.createElement("svg",{width:Math.max(osPorMes.length*60,600),height:180,style:{display:"block"}},
-              React.createElement("defs",null,
-                React.createElement("linearGradient",{id:"gos",x1:0,y1:0,x2:0,y2:1},React.createElement("stop",{offset:"0%",stopColor:C.blue,stopOpacity:0.9}),React.createElement("stop",{offset:"100%",stopColor:C.blue,stopOpacity:0.3})),
-                React.createElement("linearGradient",{id:"gab",x1:0,y1:0,x2:0,y2:1},React.createElement("stop",{offset:"0%",stopColor:C.red,stopOpacity:0.8}),React.createElement("stop",{offset:"100%",stopColor:C.red,stopOpacity:0.2}))
-              ),
-              [0.25,0.5,0.75,1].map(v=>React.createElement("line",{key:v,x1:0,y1:130*(1-v)+10,x2:"100%",y2:130*(1-v)+10,stroke:C.border,strokeWidth:0.5,strokeDasharray:"3,3"})),
-              osPorMes.map((d,i)=>{
-                const bw=32;const gap=Math.max(osPorMes.length*60,600)/osPorMes.length;const x=i*gap+gap/2-bw/2;
-                const bh=(d.total/maxOsMes)*120;const bhA=(d.abertas/maxOsMes)*120;
-                return React.createElement("g",{key:i},
-                  React.createElement("rect",{x,y:130-bh+10,width:bw,height:bh,fill:"url(#gos)",rx:3}),
-                  bhA>0&&React.createElement("rect",{x,y:130-bhA+10,width:bw,height:bhA,fill:"url(#gab)",rx:3,opacity:0.8}),
-                  React.createElement("text",{x:x+bw/2,y:130-bh+6,textAnchor:"middle",fontSize:8,fill:C.text,fontWeight:600},d.total),
-                  React.createElement("text",{x:x+bw/2,y:158,textAnchor:"middle",fontSize:7,fill:C.muted},d.label)
-                );
-              })
-            )
-          )
-        )
-      ),
-      subPage!=="grafico"&&React.createElement("div",null,
-        React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}},
-          React.createElement("input",{style:{...base.inp,width:170},placeholder:"Buscar OS ou cond...",value:busca,onChange:e=>setBusca(e.target.value)}),
-          React.createElement("select",{style:{...base.sel,width:200},value:filtCond,onChange:e=>setFiltCond(e.target.value)},React.createElement("option",{value:""},"Todos condomínios"),...conds.map(c=>React.createElement("option",{key:c,value:c},c))),
-          React.createElement("select",{style:{...base.sel,width:160},value:filtTec,onChange:e=>setFiltTec(e.target.value)},React.createElement("option",{value:""},"Todos técnicos"),...tecsBanco.map(t=>React.createElement("option",{key:t.mat||t.nome,value:t.nome},t.nome))),
-          React.createElement("select",{style:{...base.sel,width:120},value:filtMes,onChange:e=>setFiltMes(e.target.value)},React.createElement("option",{value:""},"Todos meses"),...MESES.map((m,i)=>React.createElement("option",{key:m,value:m},NOMES_MES[i]))),
-          React.createElement("select",{style:{...base.sel,width:90},value:filtAno,onChange:e=>setFiltAno(e.target.value)},React.createElement("option",{value:""},"Todos anos"),...anos.map(a=>React.createElement("option",{key:a,value:a},a))),
-          subPage==="todas"&&React.createElement("select",{style:{...base.sel,width:120},value:filtStatus,onChange:e=>setFiltStatus(e.target.value)},React.createElement("option",{value:"Todos"},"Todos status"),React.createElement("option",{value:"Aberto"},"Aberto"),React.createElement("option",{value:"Fechado"},"Fechado")),
-          temFiltro&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:limparFiltros},"✕ Limpar"),
-          React.createElement("span",{style:{fontSize:12,color:C.dim}},`${filtered.length} registros`)
-        ),
-        loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
         React.createElement("div",null,
-          React.createElement(Card,null,
-            filtered.length===0
-              ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma OS encontrada")
-              :React.createElement(Table,{
-                  cols:["Nº OS","📅 Abertura","📅 Fechamento","Condomínio","📍 Endereço","Técnico","Problema","Prioridade","Status","Relato","Arquivos","Ações"],
-                  rows:paginado.map(d=>[
-                    React.createElement("span",{style:{color:C.cyan,fontWeight:600,cursor:"pointer"},onClick:()=>setDetalheOS(d)},d.num),
-                    React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},fmt(d.data)),
-                    d.data_fechamento
-                      ?React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap",color:C.green}},fmt(d.data_fechamento))
-                      :React.createElement("span",{style:{color:C.dim,fontSize:11}},"—"),
-                    React.createElement("div",{style:{fontSize:11,maxWidth:130,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d.cond),
-                    d._endereco
-                      ?React.createElement("div",{style:{fontSize:10,maxWidth:120,lineHeight:1.5,wordBreak:"break-word",whiteSpace:"normal"}},
-                          React.createElement("div",{style:{color:C.blue,marginBottom:3}},d._endereco),
-                          React.createElement("a",{href:"https://maps.google.com/?q="+encodeURIComponent(d._endereco),target:"_blank",style:{color:C.cyan,fontSize:9,textDecoration:"none",display:"block"}},"🗺 Maps / 🔵 Waze")
-                        )
-                      :React.createElement("span",{style:{color:C.dim,fontSize:11}},"—"),
-                    React.createElement("div",{style:{fontSize:11,maxWidth:100,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d.tec),
-                    React.createElement("div",{style:{fontSize:11,maxWidth:140,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d.prob),
-                    React.createElement(Pill,{c:d.pri==="Alta"?C.red:d.pri==="Média"?C.yellow:C.green},d.pri||"Média"),
-                    React.createElement(Pill,{c:d.status==="Aberto"?C.red:C.green},d.status),
-                    d.relato
-                      ?React.createElement("div",{style:{cursor:"pointer",maxWidth:180},onClick:()=>setDetalheOS(d)},
-                          React.createElement("span",{style:{fontSize:11,color:C.muted,display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"},title:d.relato},d.relato),
-                          React.createElement("span",{style:{color:C.blue,fontSize:9}},"ver +")
-                        )
-                      :React.createElement("span",{style:{color:C.dim,fontSize:11}},"—"),
-                    React.createElement("div",{style:{display:"flex",gap:4}},
-                      d.foto_url&&React.createElement("button",{style:iBtn(C.cyan),onClick:()=>window.open(d.foto_url,"_blank"),title:"Ver foto"},"📸"),
-                      d.laudo_url&&React.createElement("a",{href:d.laudo_url,download:d.laudo_nome||"laudo.pdf",style:{...iBtn(C.red),textDecoration:"none"},title:"Baixar PDF"},"📄")
-                    ),
-                    React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},
-                      React.createElement("button",{style:iBtn(C.blue),onClick:()=>setDetalheOS(d),title:"Ver detalhes"},"👁"),
-                      !somenteLeitura&&React.createElement("button",{style:iBtn(C.green),onClick:()=>setEditOS(d),title:"Editar"},"✏️"),
-                      !somenteLeitura&&d.status==="Aberto"&&React.createElement("button",{style:{...iBtn(C.yellow),fontSize:10},onClick:()=>setModalPend(d),title:"Mover para Pendência"},"⏸"),
-                      !somenteLeitura&&React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id),title:"Excluir"},"🗑")
-                    )
-                  ])
-                })
-          ),
-          totalPags>1&&React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:12}},
-            React.createElement("button",{style:{...iBtn(C.blue),opacity:pagina===1?0.3:1},disabled:pagina===1,onClick:()=>setPagina(p=>p-1)},"← Anterior"),
-            React.createElement("span",{style:{fontSize:12,color:C.muted}},`Pág ${pagina}/${totalPags} — ${(pagina-1)*POR_PAG+1}–${Math.min(pagina*POR_PAG,filtered.length)} de ${filtered.length}`),
-            React.createElement("button",{style:{...iBtn(C.blue),opacity:pagina===totalPags?0.3:1},disabled:pagina===totalPags,onClick:()=>setPagina(p=>p+1)},"Próxima →")
-          )
-        )
+          React.createElement("div",{style:{fontSize:18,fontWeight:700}},"Ordens de Serviço"),
+          React.createElement("div",{style:{fontSize:12,color:C.muted}},data.length+" OS | "+abertas+" abertas | "+fechadas+" fechadas")
+        ),
+        React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:12},onClick:load},"Atualizar")
+      ),
+      // Filtros linha 1
+      React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginBottom:6}},
+        ["Todos","Aberto","Fechado"].map(function(s){
+          return React.createElement("button",{key:s,style:{...btnStyle(s==="Aberto"?C.red:s==="Fechado"?C.green:C.blue,filtStatus!==s),fontSize:12},onClick:function(){setFiltStatus(s);}},s);
+        })
+      ),
+      // Filtros linha 2
+      React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+        React.createElement("input",{style:{...base.inp,width:180},placeholder:"Buscar OS ou cond...",value:busca,onChange:function(e){setBusca(e.target.value);}}),
+        React.createElement("select",{style:{...base.sel,width:150},value:filtTec,onChange:function(e){setFiltTec(e.target.value);}},
+          React.createElement("option",{value:""},"Todos técnicos"),
+          tecs.map(function(t){return React.createElement("option",{key:t,value:t},t);})
+        ),
+        React.createElement("select",{style:{...base.sel,width:90},value:filtAno,onChange:function(e){setFiltAno(e.target.value);}},
+          React.createElement("option",{value:""},"Todos anos"),
+          anos.map(function(a){return React.createElement("option",{key:a,value:a},a);})
+        ),
+        React.createElement("select",{style:{...base.sel,width:100},value:filtMes,onChange:function(e){setFiltMes(e.target.value);}},
+          React.createElement("option",{value:""},"Todos meses"),
+          MESES_N.map(function(m,i){return React.createElement("option",{key:m,value:String(i+1).padStart(2,"0")},m);})
+        ),
+        React.createElement("span",{style:{fontSize:12,color:C.dim,alignSelf:"center"}},filtered.length+" registros")
       )
     ),
-    detalheOS&&React.createElement(Modal,{title:`OS ${detalheOS.num} — ${detalheOS.cond}`,onClose:()=>setDetalheOS(null),width:580},
-      React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"10px 14px",display:"flex",gap:16,flexWrap:"wrap",marginBottom:12}},
+    // Corpo
+    React.createElement("div",{style:{padding:"16px 24px"}},
+      loading
+        ?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.muted}},"Carregando...")
+        :filtered.length===0
+          ?React.createElement(Card,null,React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma OS encontrada"))
+          :React.createElement(Card,null,
+              React.createElement(Table,{
+                cols:["Nº OS","📅 Abertura","📅 Fechamento","Condomínio","📍 Endereço","Técnico","Problema","Prioridade","Status","Ações"],
+                rows:paginado.map(function(d){
+                  return [
+                    React.createElement("span",{style:{color:C.cyan,fontWeight:700,cursor:"pointer"},onClick:function(){setDetalheOS(d);}},d.num),
+                    React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},fmt(d.data)),
+                    d.data_fechamento?React.createElement("span",{style:{fontSize:11,color:C.green,whiteSpace:"nowrap"}},fmt(d.data_fechamento)):React.createElement("span",{style:{color:C.dim}},"—"),
+                    React.createElement("div",{style:{fontSize:12,maxWidth:140,wordBreak:"break-word"}},d.cond),
+                    d._endereco?React.createElement("div",{style:{fontSize:10,maxWidth:130,color:C.blue,wordBreak:"break-word"}},d._endereco):React.createElement("span",{style:{color:C.dim}},"—"),
+                    React.createElement("div",{style:{fontSize:11,maxWidth:90,wordBreak:"break-word"}},d.tec),
+                    React.createElement("div",{style:{fontSize:11,maxWidth:140,wordBreak:"break-word"}},d.prob),
+                    React.createElement(Pill,{c:priCor(d.pri)},d.pri||"—"),
+                    React.createElement(Pill,{c:corSit(d.status)},d.status),
+                    React.createElement("div",{style:{display:"flex",gap:4}},
+                      React.createElement("button",{style:iBtn(C.blue),title:"Ver detalhes",onClick:function(){setDetalheOS(d);}},"\uD83D\uDC41"),
+                      !somenteLeitura&&React.createElement("button",{style:iBtn(C.green),title:"Editar",onClick:function(){setEditOS(d);}},"\u270F\uFE0F"),
+                      !somenteLeitura&&d.status==="Aberto"&&React.createElement("button",{style:iBtn(C.yellow),title:"Mover para Pendência",onClick:function(){setModalPend(d);}},"⏸"),
+                      !somenteLeitura&&React.createElement("button",{style:iBtn(C.red),title:"Excluir",onClick:function(){setConfirmDel(d.id);}},"\uD83D\uDDD1")
+                    )
+                  ];
+                })
+              }),
+              // Paginação
+              totalPags>1&&React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:12,flexWrap:"wrap"}},
+                React.createElement("button",{style:{...iBtn(C.blue),opacity:pagina===1?0.3:1},disabled:pagina===1,onClick:function(){setPagina(function(p){return p-1;});}},"\u2190 Anterior"),
+                React.createElement("span",{style:{fontSize:12,color:C.muted}},"Pág "+pagina+"/"+totalPags+" — "+((pagina-1)*POR_PAG+1)+"–"+Math.min(pagina*POR_PAG,filtered.length)+" de "+filtered.length),
+                React.createElement("button",{style:{...iBtn(C.blue),opacity:pagina===totalPags?0.3:1},disabled:pagina===totalPags,onClick:function(){setPagina(function(p){return p+1;});}},"\u2192 Próxima")
+              )
+            )
+    ),
+    // Detalhe OS
+    detalheOS&&React.createElement(Modal,{title:"OS "+detalheOS.num+" — "+detalheOS.cond,onClose:function(){setDetalheOS(null);},width:560},
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}},
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Técnico"),React.createElement("div",{style:{color:C.cyan,fontWeight:600}},detalheOS.tec)),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Data"),React.createElement("div",null,fmt(detalheOS.data))),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Problema"),React.createElement("div",null,detalheOS.prob)),
-        detalheOS._endereco&&React.createElement("div",{style:{gridColumn:"1/-1"}},
-          React.createElement("label",{style:base.lbl},"📍 Endereço"),
-          React.createElement("div",{style:{color:C.blue,fontSize:13}},detalheOS._endereco),
-          React.createElement("div",{style:{display:"flex",gap:8,marginTop:6}},
-            React.createElement("a",{href:"https://maps.google.com/?q="+encodeURIComponent(detalheOS._endereco),target:"_blank",style:{background:C.blue+"22",border:"1px solid "+C.blue+"44",color:C.blue,borderRadius:8,padding:"4px 12px",fontSize:11,textDecoration:"none",fontWeight:600}},"🗺 Google Maps"),
-            React.createElement("a",{href:"https://waze.com/ul?q="+encodeURIComponent(detalheOS._endereco),target:"_blank",style:{background:C.cyan+"22",border:"1px solid "+C.cyan+"44",color:C.cyan,borderRadius:8,padding:"4px 12px",fontSize:11,textDecoration:"none",fontWeight:600}},"🔵 Waze")
-          )
-        ),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Prioridade"),React.createElement(Pill,{c:detalheOS.pri==="Alta"?C.red:detalheOS.pri==="Média"?C.yellow:C.green},detalheOS.pri||"Média")),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Status"),React.createElement(Pill,{c:detalheOS.status==="Aberto"?C.red:C.green},detalheOS.status))
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Prioridade"),React.createElement(Pill,{c:priCor(detalheOS.pri)},detalheOS.pri||"—")),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Status"),React.createElement(Pill,{c:corSit(detalheOS.status)},detalheOS.status)),
+        detalheOS.data_fechamento&&React.createElement("div",null,React.createElement("label",{style:base.lbl},"Fechamento"),React.createElement("div",{style:{color:C.green}},fmt(detalheOS.data_fechamento)))
       ),
-      React.createElement("label",{style:{...base.lbl,marginBottom:6,display:"block"}},"📝 Relato Técnico"),
-      detalheOS.relato
-        ?React.createElement("div",{style:{background:C.bg,border:`1px solid ${C.blue}33`,borderRadius:8,padding:"14px 16px",fontSize:13,color:C.text,lineHeight:1.8,whiteSpace:"pre-wrap",maxHeight:250,overflowY:"auto"}},detalheOS.relato)
-        :React.createElement("div",{style:{background:C.bg,border:`1px dashed ${C.border}`,borderRadius:8,padding:"20px",textAlign:"center",color:C.dim,fontSize:13}},"Nenhum relato registrado."),
-      detalheOS.foto_url&&React.createElement("div",{style:{marginTop:12}},
-        React.createElement("label",{style:base.lbl},"📸 Foto"),
-        React.createElement("img",{src:detalheOS.foto_url,style:{width:"100%",borderRadius:8,marginTop:4,maxHeight:200,objectFit:"cover"}})
+      detalheOS._endereco&&React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"8px 12px",marginBottom:10}},
+        React.createElement("label",{style:base.lbl},"\uD83D\uDCCD Endereço"),
+        React.createElement("div",{style:{color:C.blue,marginTop:4}},detalheOS._endereco),
+        React.createElement("div",{style:{display:"flex",gap:8,marginTop:6}},
+          React.createElement("a",{href:"https://maps.google.com/?q="+encodeURIComponent(detalheOS._endereco),target:"_blank",style:{...btnStyle(C.blue,true),fontSize:11,width:"auto",padding:"4px 10px",textDecoration:"none"}},"\uD83D\uDDFA Maps"),
+          React.createElement("a",{href:"https://waze.com/ul?q="+encodeURIComponent(detalheOS._endereco),target:"_blank",style:{...btnStyle(C.cyan,true),fontSize:11,width:"auto",padding:"4px 10px",textDecoration:"none"}},"\uD83D\uDD35 Waze")
+        )
       ),
-      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
-        detalheOS.relato&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>navigator.clipboard?.writeText(detalheOS.relato)},"📋 Copiar"),
-        detalheOS.laudo_url&&React.createElement("a",{href:detalheOS.laudo_url,download:detalheOS.laudo_nome||"laudo.pdf",style:{...btnStyle(C.red),textDecoration:"none"}},"📄 Baixar PDF"),
-        React.createElement("button",{style:btnStyle(C.green),onClick:()=>{setDetalheOS(null);setEditOS(detalheOS);}},"✏️ Editar"),
-        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setDetalheOS(null)},"Fechar")
+      detalheOS.relato&&React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"8px 12px",marginBottom:10}},
+        React.createElement("label",{style:base.lbl},"Relato Técnico"),
+        React.createElement("div",{style:{fontSize:12,color:C.muted,marginTop:4,lineHeight:1.6}},detalheOS.relato)
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:12}},
+        !somenteLeitura&&React.createElement("button",{style:btnStyle(C.green),onClick:function(){setDetalheOS(null);setEditOS(detalheOS);}},"\u270F\uFE0F Editar"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:function(){setDetalheOS(null);}},"Fechar")
       )
     ),
-    editOS&&React.createElement(EditOSModal,{item:editOS,onClose:()=>setEditOS(null)}),
-    modalPend&&React.createElement(Modal,{title:"⏸ Mover OS para Pendência",onClose:()=>setModalPend(null),width:500},
-      React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"10px 14px",marginBottom:14}},
-        React.createElement("div",{style:{fontSize:13,fontWeight:600,color:C.cyan,marginBottom:4}},"OS #"+modalPend.num),
+    // Edit Modal
+    editOS&&React.createElement(EditOSModal,{item:editOS,onClose:function(){setEditOS(null);}}),
+    // Modal Pendência
+    modalPend&&React.createElement(Modal,{title:"\u23F8 Mover OS para Pendência",onClose:function(){setModalPend(null);},width:480},
+      React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"10px 14px",marginBottom:12}},
+        React.createElement("div",{style:{fontSize:13,fontWeight:600,color:C.cyan}},"OS #"+modalPend.num),
         React.createElement("div",{style:{fontSize:12,color:C.muted}},modalPend.cond),
-        React.createElement("div",{style:{fontSize:12,color:C.muted,marginTop:2}},modalPend.prob)
+        React.createElement("div",{style:{fontSize:12,color:C.muted}},modalPend.prob)
       ),
-      React.createElement("div",{style:{background:C.yellow+"11",border:"1px solid "+C.yellow+"44",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12,color:C.yellow}},
-        "⚠ A OS será movida para a aba OS em Pendência. O status continuará como Aberto no histórico."
-      ),
+      React.createElement("div",{style:{background:C.yellow+"11",border:"1px solid "+C.yellow+"44",borderRadius:8,padding:"10px",marginBottom:12,fontSize:12,color:C.yellow}},"A OS será registrada na aba Pendências."),
       React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end"}},
-        React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>setModalPend(null)},"Cancelar"),
-        React.createElement("button",{style:btnStyle(C.yellow),onClick:()=>moverParaPendencia(modalPend)},"⏸ Confirmar Pendência")
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:function(){setModalPend(null);}},"Cancelar"),
+        React.createElement("button",{style:btnStyle(C.yellow),onClick:function(){moverParaPendencia(modalPend);}},"\u23F8 Confirmar")
       )
     ),
-    confirmDel&&React.createElement(Confirm,{msg:"Excluir esta OS? Esta ação não pode ser desfeita.",onYes:()=>delOS(confirmDel),onNo:()=>setConfirmDel(null)})
+    confirmDel&&React.createElement(Confirm,{msg:"Excluir esta OS?",onYes:function(){delOS(confirmDel);},onNo:function(){setConfirmDel(null);}})
   );
 }
 
@@ -1504,7 +1402,7 @@ function Dashboard({setTab}){
         ),
         React.createElement("div",{style:{background:C.card,border:`1px solid ${C.blue}44`,borderRadius:12,padding:16,cursor:"pointer"},onClick:()=>setTab("os")},
           React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
-            React.createElement("div",{style:{fontSize:28,fontWeight:800,color:C.blue}},stats.osTotal.toLocaleString("pt-BR")),
+            React.createElement("div",{style:{fontSize:28,fontWeight:800,color:C.blue}},totalReal2026.toLocaleString("pt-BR")),
             React.createElement("span",{style:{fontSize:18}},"📋")
           ),
           React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"Total OS 2026"),
