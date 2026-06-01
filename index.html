@@ -664,7 +664,19 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
   const load=useCallback(async function(){
     setLoading(true);
     const res=await Promise.all([
-      sb.from("os").select("*").or("status.eq.Aberto,data.gte.2026-01-01").order("data",{ascending:false}),
+      (async function(){
+      let all=[];let from=0;const step=1000;
+      while(true){
+        const{data:chunk}=await sb.from("os").select("*")
+          .or("status.eq.Aberto,data.gte.2026-01-01")
+          .order("data",{ascending:false}).range(from,from+step-1);
+        if(!chunk||chunk.length===0)break;
+        all=all.concat(chunk);
+        if(chunk.length<step)break;
+        from+=step;
+      }
+      return{data:all};
+    })(),
       sb.from("condominios").select("nome,endereco,tecnico")
     ]);
     const rows=res[0].data||[];
@@ -1269,7 +1281,19 @@ function Dashboard({setTab}){
         {data:osData},{data:tecData},{data:condData},
         {data:heData},{data:atData},{data:prevData},{data:pedData}
       ]=await Promise.all([
-        sb.from("os").select("num,data,status,cond,tec,prob,pri,relato").or("status.eq.Aberto,data.gte.2026-01-01").order("data",{ascending:false}),
+        (async function(){
+          let all=[];let from=0;const step=1000;
+          while(true){
+            const{data:chunk}=await sb.from("os").select("num,data,status,cond,tec,prob,pri,relato")
+              .or("status.eq.Aberto,data.gte.2026-01-01")
+              .order("data",{ascending:false}).range(from,from+step-1);
+            if(!chunk||chunk.length===0)break;
+            all=all.concat(chunk);
+            if(chunk.length<step)break;
+            from+=step;
+          }
+          return{data:all};
+        })(),
         sb.from("tecnicos").select("id"),
         sb.from("condominios").select("id"),
         sb.from("horas_extras").select("status,total_h"),
@@ -2896,7 +2920,12 @@ function Reincidencias(){
 
   const load=useCallback(async()=>{
     setLoading(true);
-    const{data:rows}=await sb.from("os").select("*").order("data",{ascending:true});
+    let rows=[];let _from=0;
+    while(true){
+      const{data:chunk}=await sb.from("os").select("*").order("data",{ascending:true}).range(_from,_from+999);
+      if(!chunk||chunk.length===0)break;
+      rows=rows.concat(chunk);if(chunk.length<1000)break;_from+=1000;
+    }
     setData(rows||[]);
     setUltimaAtualizacao(new Date());
     setLoading(false);
@@ -3056,7 +3085,18 @@ function SLA(){
     setLoading(true);
     // Buscar apenas OS de 2026 com cruzamento de condomínios
     const [{data:rows},{data:conds}]=await Promise.all([
-      sb.from("os").select("*").gte("data","2026-01-01").order("data",{ascending:false}),
+      (async function(){
+      let all=[];let from=0;const step=1000;
+      while(true){
+        const{data:chunk}=await sb.from("os").select("*")
+          .gte("data","2026-01-01").order("data",{ascending:false}).range(from,from+step-1);
+        if(!chunk||chunk.length===0)break;
+        all=all.concat(chunk);
+        if(chunk.length<step)break;
+        from+=step;
+      }
+      return{data:all};
+    })(),
       sb.from("condominios").select("nome,endereco,tecnico")
     ]);
     const mapEnd={};
