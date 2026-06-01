@@ -1765,26 +1765,41 @@ function Preventivas({onSave}){
       const file=e.target.files[0];
       if(!file)return;
       setErr("");
-      if(file.size>10*1024*1024){setErr("Arquivo muito grande. Máximo 10MB.");return;}
+      if(file.size>5*1024*1024){setErr("Arquivo muito grande. Máximo 5MB.");return;}
       setUploading(true);
+      setErr("⏳ Enviando arquivo...");
       try{
-        const ext=file.name.split(".").pop();
-        const path=tipo+"/"+(f.id||uid())+"_"+Date.now()+"."+ext;
-        const{error:upErr}=await sb.storage.from("preventivas").upload(path,file,{upsert:true});
-        if(upErr)throw upErr;
-        const{data:urlData}=sb.storage.from("preventivas").getPublicUrl(path);
-        const url=urlData.publicUrl;
-        setF(function(p){
-          var n={...p};
-          if(tipo==="laudo")n.laudo_url=url;
-          else n.foto_url=url;
-          return n;
-        });
-        setErr("");
+        const reader=new FileReader();
+        reader.onload=async function(ev){
+          const b64=ev.target.result;
+          const prevId=f.id||uid();
+          const arqId="arq_"+prevId+"_"+tipo+"_"+Date.now();
+          // Salvar na tabela preventivas_arquivos
+          const{error}=await sb.from("preventivas_arquivos").upsert({
+            id:arqId,
+            preventiva_id:prevId,
+            tipo:tipo,
+            nome:file.name,
+            dados:b64
+          });
+          if(error){setErr("Erro ao salvar: "+error.message);setUploading(false);return;}
+          // Salvar URL como referência na preventiva
+          const url="arq://"+arqId;
+          setF(function(p){
+            var n={...p,id:prevId};
+            if(tipo==="laudo"){n.laudo_url=url;n.laudo_nome=file.name;}
+            else{n.foto_url=url;n.foto_nome=file.name;}
+            return n;
+          });
+          setErr("✅ "+file.name+" anexado! Clique em Salvar.");
+          setUploading(false);
+        };
+        reader.onerror=function(){setErr("Erro ao ler arquivo.");setUploading(false);};
+        reader.readAsDataURL(file);
       }catch(err){
-        setErr("Erro no upload: "+err.message);
+        setErr("Erro: "+err.message);
+        setUploading(false);
       }
-      setUploading(false);
     };
     const doSave=function(){save({...f,id:f.id||uid()});};
     return React.createElement(Modal,{title:item?"Editar Preventiva":"Nova Preventiva",onClose,width:620},
@@ -1894,6 +1909,33 @@ function Preventivas({onSave}){
 
 
   const DetalheModal=({item,onClose})=>{
+    const [arqLaudo,setArqLaudo]=useState(null);
+    const [arqFoto,setArqFoto]=useState(null);
+    const [loadArq,setLoadArq]=useState(false);
+    useEffect(function(){
+      async function carregarArquivos(){
+        setLoadArq(true);
+        // Carregar laudo
+        if(item.laudo_url&&item.laudo_url.startsWith("arq://")){
+          const arqId=item.laudo_url.replace("arq://","");
+          const{data}=await sb.from("preventivas_arquivos").select("dados,nome").eq("id",arqId).limit(1);
+          if(data&&data.length>0)setArqLaudo(data[0]);
+        }else if(item.laudo_url){
+          setArqLaudo({dados:item.laudo_url,nome:"laudo.pdf"});
+        }
+        // Carregar foto
+        if(item.foto_url&&item.foto_url.startsWith("arq://")){
+          const arqId=item.foto_url.replace("arq://","");
+          const{data}=await sb.from("preventivas_arquivos").select("dados,nome").eq("id",arqId).limit(1);
+          if(data&&data.length>0)setArqFoto(data[0]);
+        }else if(item.foto_url){
+          setArqFoto({dados:item.foto_url,nome:"foto"});
+        }
+        setLoadArq(false);
+      }
+      carregarArquivos();
+    },[item]);
+
     return React.createElement(Modal,{title:`Preventiva — ${item.cond}`,onClose,width:560},
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}},
         [{l:"1ª Visita",v:fmt(item.primeira_visita)},{l:"Nº Pedido",v:item.num_pedido||"—"},{l:"Retorno",v:fmt(item.retorno)},{l:"Devolução",v:fmt(item.devolucao)},{l:"Equipamentos",v:item.equipamentos||"—"},{l:"Finalizado",v:item.finalizado||"—"},{l:"Laudo Enviado",v:item.laudo||"—"},{l:"Régua IP",v:item.regua_ip||"—"},{l:"Régua OK",v:item.regua_ok||"—"}].map(k=>
@@ -1902,10 +1944,10 @@ function Preventivas({onSave}){
       ),
       item.obs&&React.createElement("div",{style:{marginBottom:12}},React.createElement("label",{style:base.lbl},"Obs"),React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:10,fontSize:13,color:C.muted}},item.obs)),
       React.createElement("div",{style:{display:"flex",gap:10,marginBottom:16}},
-        item.laudo_url&&React.createElement("a",{href:item.laudo_url,target:"_blank",rel:"noopener noreferrer",style:{...btnStyle(C.red),textDecoration:"none",fontSize:12}},"📄 Abrir Laudo PDF"),
-        item.foto_url&&React.createElement("button",{style:btnStyle(C.cyan,true),onClick:()=>window.open(item.foto_url,"_blank")},"📸 Ver Foto")
+        item.laudo_url&&React.createElement("a",{href:arqLaudo?.dados,target:"_blank",rel:"noopener noreferrer",style:{...btnStyle(C.red),textDecoration:"none",fontSize:12}},loadArq?"⏳ Carregando...":"📄 Abrir Laudo PDF"),
+        item.foto_url&&React.createElement("button",{style:btnStyle(C.cyan,true),onClick:function(){if(arqFoto)window.open(arqFoto.dados,"_blank");}},"📸 Ver Foto")
       ),
-      item.foto_url&&React.createElement("img",{src:item.foto_url,style:{width:"100%",borderRadius:8,marginBottom:12},alt:"foto"}),
+      arqFoto&&React.createElement("img",{src:arqFoto.dados,style:{width:"100%",borderRadius:8,marginBottom:12},alt:"foto"}),
       React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end"}},
         React.createElement("button",{style:btnStyle(C.blue),onClick:onClose},"Fechar")
       )
