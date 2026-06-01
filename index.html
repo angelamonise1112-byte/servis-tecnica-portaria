@@ -150,7 +150,7 @@ const base={
   inp:{background:C.surface,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"8px 12px",fontSize:13,width:"100%",outline:"none",fontFamily:"inherit"},
   sel:{background:C.surface,border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"8px 12px",fontSize:13,width:"100%",outline:"none",fontFamily:"inherit",appearance:"none"},
   th:{padding:"8px 12px",textAlign:"left",fontSize:11,letterSpacing:"0.08em",textTransform:"uppercase",color:C.muted,whiteSpace:"nowrap"},
-  td:{padding:"9px 12px",fontSize:13,borderBottom:`1px solid ${C.border}`,verticalAlign:"middle",whiteSpace:"nowrap"},
+  td:{padding:"7px 10px",fontSize:12,borderBottom:`1px solid ${C.border}`,verticalAlign:"top",whiteSpace:"normal"},
   lbl:{fontSize:11,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:700,color:C.muted,marginBottom:5,display:"block"},
 };
 const btnStyle=(color,ghost)=>({background:ghost?"transparent":color,border:`1px solid ${color}`,color:ghost?color:"#fff",borderRadius:8,padding:"7px 14px",fontSize:13,cursor:"pointer",fontFamily:"inherit"});
@@ -832,14 +832,14 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
                 cols:["Nº OS","Abertura","Fechamento","Condomínio","Endereço","Técnico","Problema","Pri","Status","Ações"],
                 rows:paginado.map(function(d){
                   return [
-                    React.createElement("span",{style:{color:C.cyan,fontWeight:700,cursor:"pointer"},onClick:function(){setDetalheOS(d);}},d.num),
+                    React.createElement("span",{style:{color:C.cyan,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"},onClick:function(){setDetalheOS(d);}},d.num),
                     React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},fmt(d.data)),
                     d.data_fechamento?React.createElement("span",{style:{fontSize:11,color:C.green,whiteSpace:"nowrap"}},fmt(d.data_fechamento)):React.createElement("span",{style:{color:C.dim}},"—"),
-                    React.createElement("div",{style:{fontSize:12,maxWidth:140,wordBreak:"break-word"}},d.cond),
-                    d._endereco?React.createElement("div",{style:{fontSize:10,maxWidth:130,color:C.blue,wordBreak:"break-word"}},d._endereco):React.createElement("span",{style:{color:C.dim}},"—"),
-                    React.createElement("div",{style:{fontSize:11,maxWidth:90,wordBreak:"break-word"}},d.tec),
-                    React.createElement("div",{style:{fontSize:11,maxWidth:140,wordBreak:"break-word"}},d.prob),
-                    React.createElement(Pill,{c:priCor(d.pri),style:{fontSize:9,padding:"1px 5px"}},d.pri?d.pri[0]:"?"),
+                    React.createElement("div",{style:{fontSize:11,minWidth:120,maxWidth:160,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d.cond),
+                    d._endereco?React.createElement("div",{style:{fontSize:10,color:C.blue,minWidth:100,maxWidth:140,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d._endereco):React.createElement("span",{style:{color:C.dim}},"—"),
+                    React.createElement("div",{style:{fontSize:11,minWidth:70,maxWidth:100,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d.tec),
+                    React.createElement("div",{style:{fontSize:11,minWidth:120,maxWidth:180,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d.prob),
+                    d.pri?React.createElement(Pill,{c:priCor(d.pri)},d.pri[0]):React.createElement("span",{style:{color:C.dim}},"—"),
                     React.createElement(Pill,{c:corSit(d.status)},d.status),
                     React.createElement("div",{style:{display:"flex",gap:4}},
                       React.createElement("button",{style:iBtn(C.blue),title:"Ver detalhes",onClick:function(){setDetalheOS(d);}},"\uD83D\uDC41"),
