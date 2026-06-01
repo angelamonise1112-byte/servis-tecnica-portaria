@@ -829,7 +829,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
           ?React.createElement(Card,null,React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma OS encontrada"))
           :React.createElement(Card,null,
               React.createElement(Table,{
-                cols:["Nº OS","📅 Abertura","📅 Fechamento","Condomínio","📍 Endereço","Técnico","Problema","Prioridade","Status","Ações"],
+                cols:["Nº OS","Abertura","Fechamento","Condomínio","Endereço","Técnico","Problema","Pri","Status","Ações"],
                 rows:paginado.map(function(d){
                   return [
                     React.createElement("span",{style:{color:C.cyan,fontWeight:700,cursor:"pointer"},onClick:function(){setDetalheOS(d);}},d.num),
@@ -839,7 +839,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
                     d._endereco?React.createElement("div",{style:{fontSize:10,maxWidth:130,color:C.blue,wordBreak:"break-word"}},d._endereco):React.createElement("span",{style:{color:C.dim}},"—"),
                     React.createElement("div",{style:{fontSize:11,maxWidth:90,wordBreak:"break-word"}},d.tec),
                     React.createElement("div",{style:{fontSize:11,maxWidth:140,wordBreak:"break-word"}},d.prob),
-                    React.createElement(Pill,{c:priCor(d.pri)},d.pri||"—"),
+                    React.createElement(Pill,{c:priCor(d.pri),style:{fontSize:9,padding:"1px 5px"}},d.pri?d.pri[0]:"?"),
                     React.createElement(Pill,{c:corSit(d.status)},d.status),
                     React.createElement("div",{style:{display:"flex",gap:4}},
                       React.createElement("button",{style:iBtn(C.blue),title:"Ver detalhes",onClick:function(){setDetalheOS(d);}},"\uD83D\uDC41"),
@@ -1348,7 +1348,7 @@ function Dashboard({setTab}){
       // Total real = soma dos meses do banco
       var totalReal=osPorMes.reduce(function(s,d){return s+d.total;},0);
       setStats({
-        osAbertas:osAb.length,osFechadas:osFech.length,osTotal:totalReal,
+        osAbertas:osAb.length,osFechadas:osFech.length,osTotal:os.length,
         tecnicos:(tecData||[]).length,condominios:(condData||[]).length,
         hePend:he.filter(d=>d.status==="Pendente").length,
         heTotal,heAprov:he.filter(d=>d.status==="Aprovado").length,heRegistros:he.length,
@@ -1376,7 +1376,7 @@ function Dashboard({setTab}){
   },[]);
   const MESES_L=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
   const maxOS=Math.max(...stats.osPorMes.map(d=>d.total),1);
-  const totalReal2026=stats.osPorMes.reduce(function(s,d){return s+d.total;},0);
+  const totalReal2026=stats.osTotal||stats.osPorMes.reduce(function(s,d){return s+d.total;},0);
   const mediaMensal=stats.osPorMes.length>0?Math.round(totalReal2026/stats.osPorMes.length):0;
   const melhorMes=stats.osPorMes.reduce((m,d)=>d.total>m.total?d:m,{total:0,label:"—"});
 
@@ -1406,7 +1406,7 @@ function Dashboard({setTab}){
             React.createElement("span",{style:{fontSize:18}},"📋")
           ),
           React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"Total OS 2026"),
-          React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:4}},`${(stats.osTotal-stats.osAbertas).toLocaleString("pt-BR")} fechadas`)
+          React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:4}},`${stats.osFechadas?stats.osFechadas.toLocaleString("pt-BR"):""} fechadas`)
         ),
         React.createElement("div",{style:{background:C.card,border:`1px solid ${C.cyan}44`,borderRadius:12,padding:16,cursor:"pointer"},onClick:()=>setTab("tecnicos")},
           React.createElement("div",{style:{fontSize:28,fontWeight:800,color:C.cyan}},stats.tecnicos),
