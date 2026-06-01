@@ -733,19 +733,31 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
 
   const saveOS=async function(item){
     try{var bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"os_saved"});bc.close();}catch(e){}
-    const it={...item};
-    // Remover campos virtuais que não existem no banco
-    delete it._endereco;
-    if(!it.data)it.data=todayStr();
-    if(it.status==="Fechado"&&!it.data_fechamento)it.data_fechamento=todayStr();
-    if(it.pri==="Média")it.pri="Media";
+    // Enviar APENAS campos que existem na tabela os
+    const it={
+      id:item.id||uid(),
+      num:item.num||"",
+      data:item.data||todayStr(),
+      cond:item.cond||"",
+      tec:item.tec||"",
+      prob:item.prob||"",
+      pri:item.pri==="Média"?"Media":item.pri||"Media",
+      status:item.status||"Aberto",
+      relato:item.relato||"",
+      obs:item.obs||"",
+      descricao:item.descricao||"",
+      data_fechamento:item.status==="Fechado"?(item.data_fechamento||todayStr()):item.data_fechamento||null,
+      foto_url:item.foto_url||null,
+      laudo_url:item.laudo_url||null,
+      laudo_nome:item.laudo_nome||null,
+    };
     var res;
-    if(it.id&&data.find(function(x){return x.id===it.id;})){
+    if(data.find(function(x){return x.id===it.id;})){
       res=await sb.from("os").update(it).eq("id",it.id);
     }else{
       res=await sb.from("os").insert(it);
     }
-    if(res&&res.error){alert("Erro ao salvar: "+res.error.message);return;}
+    if(res&&res.error){alert("Erro: "+res.error.message);return;}
     setEditOS(null);load();if(onSave)onSave();
   };
 
