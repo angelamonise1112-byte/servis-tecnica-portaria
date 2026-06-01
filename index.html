@@ -1344,7 +1344,8 @@ function Dashboard({setTab}){
         else mapMes[k].fechadas++;
       });
       // Totais reais do banco por mês — sem overrides fixos
-      var osPorMes=Object.values(mapMes).filter(function(d){return d.key>="2026-01";}).sort(function(a,b){return a.key.localeCompare(b.key);});
+      var mesHoje=new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0");
+      var osPorMes=Object.values(mapMes).filter(function(d){return d.key>="2026-01"&&d.key<=mesHoje;}).sort(function(a,b){return a.key.localeCompare(b.key);});
       // Total real = soma dos meses do banco
       var totalReal=osPorMes.reduce(function(s,d){return s+d.total;},0);
       setStats({
