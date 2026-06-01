@@ -228,28 +228,65 @@ function MinhasOS({usuario,onSelectOS}){
   const [condMap,setCondMap]=useState({});
   const [campoMap,setCampoMap]=useState({});
   const [loading,setLoading]=useState(true);
-  const [filtro,setFiltro]=useState("todas");
+  const [filtro,setFiltro]=useState("minhas");
+  const [verTodasAreas,setVerTodasAreas]=useState(false);
+  const [minhasAreas,setMinhasAreas]=useState([]);
+  const [todosCondsArea,setTodosCondsArea]=useState(new Set());
 
   const load=useCallback(async()=>{
     setLoading(true);
     const[{data:os},{data:conds},{data:campo}]=await Promise.all([
       sb.from("os").select("*").eq("status","Aberto").order("data",{ascending:true}),
-      sb.from("condominios").select("nome,endereco"),
+      sb.from("condominios").select("nome,endereco,area_tecnico,tecnico"),
       sb.from("os_campo").select("*")
     ]);
+
+    const nomeTec=(usuario?.nome||"").toLowerCase().trim();
+
+    // 1. Descobrir a área ÚNICA do técnico (P16, P17, P18 ou P19)
+    // A área vem do campo area_tecnico do condomínio onde o técnico está cadastrado
+    let areaDoTec="";
+    for(const c of (conds||[])){
+      const area=(c.area_tecnico||"").trim();
+      const tec=(c.tecnico||"").toLowerCase().trim();
+      if(area&&nomeTec&&tec===nomeTec){
+        areaDoTec=area; // P16, P17, P18 ou P19
+        break;
+      }
+    }
+
+    // 2. Todos os condomínios daquela área específica
+    const condsDaArea=new Set();
+    if(areaDoTec){
+      (conds||[]).forEach(c=>{
+        if((c.area_tecnico||"").trim()===areaDoTec){
+          condsDaArea.add((c.nome||"").toLowerCase());
+        }
+      });
+    }
+
+    setMinhasAreas(areaDoTec?[areaDoTec]:[]);
+    setTodosCondsArea(condsDaArea);
+
     // Mapa de endereços
     const cm={};
     (conds||[]).forEach(c=>{if(c.nome)cm[c.nome.toLowerCase()]=c.endereco||"";});
     function findEnd(nome){
       if(!nome)return"";
       const ex=cm[nome.toLowerCase()];if(ex)return ex;
-      const k=Object.keys(cm).find(k=>k.includes(nome.toLowerCase().slice(0,10))||nome.toLowerCase().includes(k.slice(0,10)));
+      const k=Object.keys(cm).find(function(m){return nome.toLowerCase().startsWith(m.slice(0,8))||m.startsWith(nome.toLowerCase().slice(0,8));});
       return k?cm[k]:"";
     }
     // Mapa de campo
     const fm={};
     (campo||[]).forEach(c=>{fm[c.num]=c;});
-    const merged=(os||[]).map(o=>({...o,endereco:findEnd(o.cond),campo:fm[o.num]||null}));
+
+    // 3. Filtrar: "minhas" = área do técnico, "todas" = todas as áreas
+    const osFiltradas=(condsDaArea.size>0&&!verTodasAreas)
+      ?(os||[]).filter(o=>condsDaArea.has((o.cond||"").toLowerCase()))
+      :(os||[]);
+
+    const merged=osFiltradas.map(o=>({...o,endereco:findEnd(o.cond),campo:fm[o.num]||null,_minha:condsDaArea.has((o.cond||"").toLowerCase())}));
     // Ordenar: SLA vencida > Alta prioridade > demais por horas decorridas
     merged.sort((a,b)=>{
       const ha=calcHorasUteis(a.data);const hb=calcHorasUteis(b.data);
@@ -287,16 +324,18 @@ function MinhasOS({usuario,onSelectOS}){
   },[usuario.nome]);
 
   const minhas=osList.filter(o=>o.tec===usuario.nome);
-  const todas=osList;
+  const daArea=osList.filter(o=>o._minha!==false);
   const emCampo=osList.filter(o=>o.campo&&o.campo.status_campo!=="Aguardando"&&o.campo.status_campo!=="Concluído");
   const vencidas=osList.filter(o=>calcHorasUteis(o.data)>48);
 
-  const listMap={minhas,todas,"em-campo":emCampo,vencidas};
-  const lista=listMap[filtro]||minhas;
+  const areaLabel=minhasAreas.length>0?minhasAreas[0]:"Área";
+  const listMap={"minhas":minhas,"area":daArea,"todas":osList,"em-campo":emCampo,"vencidas":vencidas};
+  const lista=listMap[filtro]||daArea;
 
   const kpis=[
     {id:"minhas",icon:"👤",label:"Minhas",val:minhas.length,c:C.blue},
-    {id:"todas",icon:"📋",label:"Todas",val:todas.length,c:C.muted},
+    {id:"area",icon:"📍",label:areaLabel,val:daArea.length,c:C.cyan},
+    {id:"todas",icon:"🌐",label:"Todas",val:osList.length,c:C.muted},
     {id:"em-campo",icon:"🚗",label:"Em campo",val:emCampo.length,c:C.orange},
     {id:"vencidas",icon:"🚨",label:"Vencidas",val:vencidas.length,c:C.red},
   ];
@@ -307,9 +346,18 @@ function MinhasOS({usuario,onSelectOS}){
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
         React.createElement("div",null,
           React.createElement("div",{style:{fontSize:16,fontWeight:700}},"Ordens de Serviço"),
-          React.createElement("div",{style:{fontSize:11,color:C.muted}},"Ordenadas por urgência")
+          React.createElement("div",{style:{fontSize:11,color:C.muted}},
+            minhasAreas.length>0?"Área: "+minhasAreas[0]:"Ordenadas por urgência"
+          )
         ),
-        React.createElement("button",{style:{background:"none",border:"none",fontSize:22,color:C.muted,cursor:"pointer"},onClick:load},"🔄")
+        React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center"}},
+          minhasAreas.length>0&&React.createElement("button",{
+            style:{background:verTodasAreas?"#1f6feb":"none",border:"1px solid "+(verTodasAreas?"#1f6feb":C.border),
+              color:verTodasAreas?"#fff":C.muted,borderRadius:20,padding:"4px 12px",fontSize:11,cursor:"pointer"},
+            onClick:function(){setVerTodasAreas(function(v){return !v;});setTimeout(load,50);}
+          },verTodasAreas?"🌐 Todas":"📍 Só minha área"),
+          React.createElement("button",{style:{background:"none",border:"none",fontSize:22,color:C.muted,cursor:"pointer"},onClick:load},"🔄")
+        )
       ),
       // KPI chips
       React.createElement("div",{style:{display:"flex",gap:6,overflowX:"auto",paddingBottom:12}},
@@ -355,8 +403,11 @@ function MinhasOS({usuario,onSelectOS}){
               sla&&React.createElement(Badge,{label:sla.label,cor:sla.cor,small:true})
             )
           ),
-          // Condomínio
-          React.createElement("div",{style:{fontSize:14,fontWeight:600,marginBottom:4}},os.cond),
+          // Condomínio + badge área
+          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:4}},
+            React.createElement("div",{style:{fontSize:14,fontWeight:600}},os.cond),
+            !os._minha&&React.createElement("span",{style:{fontSize:9,background:"#8B5CF622",color:"#8B5CF6",borderRadius:10,padding:"2px 7px",fontWeight:600}},"outra área")
+          ),
           // Endereço
           os.endereco&&React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:6}},
             React.createElement("span",{style:{fontSize:13}},"📍"),
