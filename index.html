@@ -1762,24 +1762,23 @@ function Preventivas({onSave}){
     useEffect(function(){if(item)setF({...CAMPOS_PREV,...item});},[item]);
     const upd=function(k){return function(e){setF(function(p){var n={...p};n[k]=e.target.value;return n;});};};
     const handleFile=async function(e,tipo){
-      const file=e.target.files[0];
+      var file=e.target.files[0];
       if(!file)return;
-      setErr("⏳ Enviando arquivo...");
+      setErr("Enviando "+file.name+"...");
       setUploading(true);
-      try{
-        const ext=file.name.split(".").pop();
-        const path=tipo+"/"+(f.id||uid())+"_"+Date.now()+"."+ext;
-        const{data:upData,error:upErr}=await sb.storage.from("preventivas").upload(path,file,{upsert:true});
-        if(upErr){setErr("Erro: "+upErr.message);setUploading(false);return;}
-        const{data:urlData}=sb.storage.from("preventivas").getPublicUrl(path);
-        const url=urlData.publicUrl;
-        setF(function(p){var n={...p};if(tipo==="laudo")n.laudo_url=url;else n.foto_url=url;return n;});
-        setErr("✅ Arquivo enviado! Clique em Salvar.");
-      }catch(e){setErr("Erro: "+e.message);}
+      var ext=file.name.split(".").pop();
+      var prevId=f.id||uid();
+      var path=tipo+"/"+prevId+"_"+Date.now()+"."+ext;
+      var up=await sb.storage.from("preventivas").upload(path,file,{upsert:true});
+      if(up.error){setErr("Erro: "+up.error.message);setUploading(false);return;}
+      var urlRes=sb.storage.from("preventivas").getPublicUrl(path);
+      var url=urlRes.data.publicUrl;
+      if(tipo==="laudo"){setF(function(p){return Object.assign({},p,{laudo_url:url});});}
+      else{setF(function(p){return Object.assign({},p,{foto_url:url});});}
+      setErr("Arquivo enviado! Clique em Salvar.");
       setUploading(false);
     };
-    
-    const doSave=function(){save({...f,id:f.id||uid()});};
+        const doSave=function(){save({...f,id:f.id||uid()});};
     return React.createElement(Modal,{title:item?"Editar Preventiva":"Nova Preventiva",onClose,width:620},
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
         React.createElement("div",{style:{gridColumn:"1/-1"}},
