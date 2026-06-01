@@ -1670,7 +1670,9 @@ function Preventivas({onSave}){
   const STATUS_PREV={"Pendente":{c:C.yellow},"Em andamento":{c:C.blue},"Concluída":{c:C.green},"Cancelada":{c:C.dim}};
   const load=useCallback(async()=>{
     setLoading(true);
-    const{data:rows}=await sb.from("preventivas").select("*").order("cond",{ascending:true});
+    const{data:rows}=await sb.from("preventivas")
+      .select("id,cond,tecnico,primeira_visita,num_pedido,equipamentos,finalizado,retorno,laudo,devolucao,regua_ip,regua_ok,status,obs,foto_url,laudo_url")
+      .order("cond",{ascending:true});
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
