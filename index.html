@@ -759,7 +759,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
     setModalPend(null);if(onSave)onSave();
   };
 
-  function priCor(p){return p==="Alta"?C.red:p==="Média"?C.yellow:C.green;}
+  function priCor(p){return p==="Alta"?C.red:(p==="Média"||p==="Media")?C.yellow:C.green;}
   function corSit(s){return s==="Aberto"?C.red:s==="Fechado"?C.green:C.blue;}
 
   // ── EDIT MODAL ──────────────────────────────────────────────
@@ -768,7 +768,14 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
     var ini=item||{num:"",data:todayStr(),cond:"",tec:TECNICOS[0]?TECNICOS[0].nome:"",prob:PROBS[0]||"",pri:"Média",status:"Aberto",relato:"",obs:"",descricao:""};
     var [f,setF]=useState(ini);
     function upd(k){return function(e){setF(function(p){var n={...p};n[k]=e.target.value;return n;});};}
-    function setPri(v){setF(function(p){return{...p,pri:v};});}
+    function priLabel(v){return v==="Alta"?"Alta":v==="Media"||v==="Média"?"Média":"Baixa";}
+    function priVal(v){return v==="Alta"?"Alta":v==="Media"||v==="Média"?"Media":"Baixa";}
+    function priAtivo(btn,atual){
+      if(btn==="Alta")return atual==="Alta";
+      if(btn==="Média")return atual==="Media"||atual==="Média";
+      return atual==="Baixa";
+    }
+    function setPri(v){setF(function(p){return{...p,pri:priVal(v)};});}
     function setStatus(v){setF(function(p){return{...p,status:v};});}
     return React.createElement(Modal,{title:item?"Editar OS":"Nova OS",onClose:onClose,width:560},
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
@@ -780,7 +787,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
         React.createElement("div",{style:{gridColumn:"1/-1"}},
           React.createElement("label",{style:base.lbl},"Prioridade"),
           React.createElement("div",{style:{display:"flex",gap:6}},
-            ["Alta","Média","Baixa"].map(function(p){return React.createElement("button",{key:p,style:{...btnStyle(priCor(p),f.pri!==p),flex:1,fontSize:11},onClick:function(){setPri(p);}},p);})
+            ["Alta","Média","Baixa"].map(function(p){return React.createElement("button",{key:p,style:{...btnStyle(priCor(p),!priAtivo(p,f.pri)),flex:1,fontSize:11},onClick:function(){setPri(p);}},priLabel(p));})
           )
         ),
         React.createElement("div",{style:{gridColumn:"1/-1"}},
