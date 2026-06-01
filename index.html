@@ -1669,8 +1669,15 @@ function Preventivas({onSave}){
     (!filtTec||d.tecnico===filtTec)
   ),[data,busca,filtStatus,filtTec]);
   const save=async item=>{
-    if(item.id&&data.find(x=>x.id===item.id)){await sb.from("preventivas").update(item).eq("id",item.id);}
-    else{await sb.from("preventivas").insert(item);}
+    // Remover campos que não existem no banco
+    const it={...item};
+    delete it.foto_nome;
+    delete it.laudo_nome;
+    if(it.id&&data.find(x=>x.id===it.id)){
+      await sb.from("preventivas").update(it).eq("id",it.id);
+    }else{
+      await sb.from("preventivas").insert(it);
+    }
     setModal(null);load();if(onSave)onSave();
   };
   const del=async id=>{await sb.from("preventivas").delete().eq("id",id);setConfirmDel(null);load();if(onSave)onSave();};
@@ -1716,7 +1723,7 @@ function Preventivas({onSave}){
   ,[alertasReinc,data]);
 
   const EditModal=({item,onClose})=>{
-    const [f,setF]=useState(item||{cond:CONDS[0],tecnico:"",primeira_visita:"",num_pedido:"",equipamentos:"",finalizado:"",retorno:"",laudo_enviado:"",devolucao:"",regua_ip:"",regua_ok:"",status:"Pendente",laudo_url:"",foto_url:"",obs:""});
+    const [f,setF]=useState(item||{cond:CONDS[0],tecnico:"",primeira_visita:"",num_pedido:"",equipamentos:"",finalizado:"",retorno:"",laudo_enviado:"",devolucao:"",regua_ip:"",regua_ok:"",status:"Pendente",laudo_url:"",laudo_nome:"",foto_url:"",foto_nome:"",obs:""});
     const [uploading,setUploading]=useState(false);
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
     const handleFile=async(e,tipo)=>{
