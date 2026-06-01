@@ -323,7 +323,8 @@ function MinhasOS({usuario,onSelectOS}){
     return()=>clearInterval(t);
   },[usuario.nome]);
 
-  const minhas=osList.filter(o=>o.tec===usuario.nome);
+  // "Minhas" = OS com o nome do técnico OU OS abertas hoje na área dele
+  const minhas=osList.filter(o=>o.tec===usuario.nome||(o._minha&&o.data===todayBrasilia()));
   const daArea=osList.filter(o=>o._minha!==false);
   const emCampo=osList.filter(o=>o.campo&&o.campo.status_campo!=="Aguardando"&&o.campo.status_campo!=="Concluído");
   const vencidas=osList.filter(o=>calcHorasUteis(o.data)>48);
@@ -413,8 +414,9 @@ function MinhasOS({usuario,onSelectOS}){
             React.createElement("span",{style:{fontSize:13}},"📍"),
             React.createElement("span",{style:{fontSize:12,color:C.blue}},os.endereco)
           ),
-          // Problema
-          React.createElement("div",{style:{fontSize:12,color:C.muted,marginBottom:8,lineHeight:1.4}},os.prob),
+          // Problema + Descrição
+          React.createElement("div",{style:{fontSize:12,color:C.muted,marginBottom:os.descricao?4:8,lineHeight:1.4}},os.prob),
+          os.descricao&&React.createElement("div",{style:{fontSize:11,color:C.text,marginBottom:8,lineHeight:1.4,background:C.yellow+"11",borderRadius:6,padding:"4px 8px",borderLeft:"2px solid "+C.yellow}},os.descricao),
           // Footer
           React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
             React.createElement("div",{style:{display:"flex",gap:6}},
@@ -709,7 +711,14 @@ function DetalheOS({os,usuario,onBack}){
             React.createElement("div",{key:i},React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:2}},l),React.createElement("div",{style:{fontSize:13,fontWeight:600}},v))
           )
         ),
-        React.createElement("div",{style:{marginBottom:10}},React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:4}},"🔧 Problema"),React.createElement("div",{style:{fontSize:13,lineHeight:1.5}},os.prob)),
+        React.createElement("div",{style:{marginBottom:10}},
+          React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:4}},"🔧 Problema"),
+          React.createElement("div",{style:{fontSize:13,lineHeight:1.5,fontWeight:600}},os.prob)
+        ),
+        os.descricao&&React.createElement("div",{style:{background:C.yellow+"11",borderRadius:10,padding:"10px 12px",marginBottom:10,border:"1px solid "+C.yellow+"33"}},
+          React.createElement("div",{style:{fontSize:10,color:C.yellow,marginBottom:4}},"📝 Descrição adicional"),
+          React.createElement("div",{style:{fontSize:13,lineHeight:1.6,color:C.text}},os.descricao)
+        ),
         os.endereco&&React.createElement("div",{style:{background:C.blue+"11",borderRadius:10,padding:"10px 12px"}},
           React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:4}},"📍 Endereço"),
           React.createElement("div",{style:{fontSize:13,color:C.blue,fontWeight:600,marginBottom:8}},os.endereco),
