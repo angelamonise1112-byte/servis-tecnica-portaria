@@ -1671,7 +1671,7 @@ function Preventivas({onSave}){
   const load=useCallback(async()=>{
     setLoading(true);
     const{data:rows}=await sb.from("preventivas")
-      .select("id,cond,tecnico,primeira_visita,num_pedido,equipamentos,finalizado,retorno,laudo,devolucao,regua_ip,regua_ok,status,obs,foto_url,laudo_url")
+      .select("id,cond,tecnico,primeira_visita,num_pedido,equipamentos,finalizado,retorno,laudo,laudo_enviado,devolucao,regua_ip,regua_ok,status,obs,foto_url,laudo_url")
       .order("cond",{ascending:true});
     setData(rows||[]);setLoading(false);
   },[]);
@@ -1694,6 +1694,7 @@ function Preventivas({onSave}){
       finalizado:item.finalizado||"",
       retorno:item.retorno||"",
       laudo:item.laudo||"",
+      laudo_enviado:item.laudo_enviado||item.laudo||"",
       devolucao:item.devolucao||"",
       regua_ip:item.regua_ip||"",
       regua_ok:item.regua_ok||"",
@@ -1754,35 +1755,23 @@ function Preventivas({onSave}){
   ,[alertasReinc,data]);
 
   const EditModal=({item,onClose})=>{
-    const [f,setF]=useState(item||{cond:CONDS[0],tecnico:"",primeira_visita:"",num_pedido:"",equipamentos:"",finalizado:"",retorno:"",laudo:"",devolucao:"",regua_ip:"",regua_ok:"",status:"Pendente",laudo_url:"",laudo_nome:"",foto_url:"",foto_nome:"",obs:""});
+    const [f,setF]=useState(item||{cond:CONDS[0],tecnico:"",primeira_visita:"",num_pedido:"",equipamentos:"",finalizado:"",retorno:"",laudo:"",laudo_enviado:"",devolucao:"",regua_ip:"",regua_ok:"",status:"Pendente",laudo_url:"",laudo_nome:"",foto_url:"",foto_nome:"",obs:""});
     const [uploading,setUploading]=useState(false);
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
     const handleFile=async(e,tipo)=>{
       const file=e.target.files[0];
       if(!file)return;
-      // Verificar tamanho (max 5MB)
-      if(file.size>5*1024*1024){setSaveErr("Arquivo muito grande. Máximo 5MB.");return;}
+      if(file.size>3*1024*1024){setSaveErr("⚠ Arquivo muito grande. Máximo 3MB.");return;}
       setUploading(true);
-      try{
-        const ext=file.name.split(".").pop();
-        const path=tipo+"_"+(f.id||uid())+"_"+Date.now()+"."+ext;
-        const{data:up,error:upErr}=await sb.storage.from("preventivas").upload(path,file,{upsert:true});
-        if(upErr)throw upErr;
-        const{data:urlData}=sb.storage.from("preventivas").getPublicUrl(path);
-        const url=urlData?.publicUrl||"";
-        if(tipo==="laudo")setF(p=>({...p,laudo_url:url,laudo_nome:file.name}));
-        else setF(p=>({...p,foto_url:url,foto_nome:file.name}));
-      }catch(err){
-        // Fallback: salvar como base64 se Storage não disponível
-        const reader=new FileReader();
-        reader.onload=ev=>{
-          const b64=ev.target.result;
-          if(tipo==="laudo")setF(p=>({...p,laudo_url:b64,laudo_nome:file.name}));
-          else setF(p=>({...p,foto_url:b64,foto_nome:file.name}));
-        };
-        reader.readAsDataURL(file);
-      }
-      setUploading(false);
+      const reader=new FileReader();
+      reader.onload=function(ev){
+        const b64=ev.target.result;
+        if(tipo==="laudo")setF(function(p){return{...p,laudo_url:b64,laudo_nome:file.name};});
+        else setF(function(p){return{...p,foto_url:b64,foto_nome:file.name};});
+        setUploading(false);
+      };
+      reader.onerror=function(){setSaveErr("Erro ao ler arquivo.");setUploading(false);};
+      reader.readAsDataURL(file);
     };
     return React.createElement(Modal,{title:item?"Editar Preventiva":"Nova Preventiva",onClose,width:580},
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
