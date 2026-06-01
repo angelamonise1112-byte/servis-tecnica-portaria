@@ -1757,12 +1757,14 @@ function Preventivas({onSave}){
   const EditModal=({item,onClose})=>{
     const [f,setF]=useState(item||{cond:CONDS[0],tecnico:"",primeira_visita:"",num_pedido:"",equipamentos:"",finalizado:"",retorno:"",laudo:"",laudo_enviado:"",devolucao:"",regua_ip:"",regua_ok:"",status:"Pendente",laudo_url:"",laudo_nome:"",foto_url:"",foto_nome:"",obs:""});
     const [uploading,setUploading]=useState(false);
+    const [err,setErr]=useState("");
+    useEffect(function(){if(item)setF({...item});},[item]);
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
-    const handleFile=async(e,tipo)=>{
+    const handleFile=function(e,tipo){
       const file=e.target.files[0];
       if(!file)return;
-      if(file.size>3*1024*1024){setSaveErr("⚠ Arquivo muito grande. Máximo 3MB.");return;}
-      setUploading(true);
+      if(file.size>3*1024*1024){setErr("⚠ Arquivo muito grande. Máximo 3MB.");return;}
+      setUploading(true);setErr("");
       const reader=new FileReader();
       reader.onload=function(ev){
         const b64=ev.target.result;
@@ -1770,9 +1772,10 @@ function Preventivas({onSave}){
         else setF(function(p){return{...p,foto_url:b64,foto_nome:file.name};});
         setUploading(false);
       };
-      reader.onerror=function(){setSaveErr("Erro ao ler arquivo.");setUploading(false);};
+      reader.onerror=function(){setErr("Erro ao ler arquivo.");setUploading(false);};
       reader.readAsDataURL(file);
     };
+    const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
     return React.createElement(Modal,{title:item?"Editar Preventiva":"Nova Preventiva",onClose,width:580},
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
         React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},CONDS.map(c=>React.createElement("option",{key:c},c)))),
@@ -1825,7 +1828,7 @@ function Preventivas({onSave}){
         React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
         React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"Salvar")
       ),
-      saveErr&&React.createElement("div",{style:{marginTop:8,color:C.red,fontSize:11,background:C.red+"11",borderRadius:6,padding:"6px 10px"}},saveErr)
+      err&&React.createElement("div",{style:{marginTop:8,color:C.red,fontSize:11,background:C.red+"11",borderRadius:6,padding:"6px 10px"}},err)
     );
   };
 
