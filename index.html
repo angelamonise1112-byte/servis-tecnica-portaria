@@ -1775,7 +1775,6 @@ function Preventivas({onSave}){
       reader.onerror=function(){setErr("Erro ao ler arquivo.");setUploading(false);};
       reader.readAsDataURL(file);
     };
-    const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
     return React.createElement(Modal,{title:item?"Editar Preventiva":"Nova Preventiva",onClose,width:580},
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
         React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},CONDS.map(c=>React.createElement("option",{key:c},c)))),
