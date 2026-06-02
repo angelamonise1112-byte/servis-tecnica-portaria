@@ -5037,332 +5037,386 @@ const RefreshCtx=React.createContext({tick:0,refresh:function(){}});
 function MapaCalor({tecsBanco=TECNICOS}){
   const {tick}=React.useContext(RefreshCtx);
   const [conds,setConds]=useState([]);
-  const [os,setOs]=useState([]);
-  const [prevs,setPrevs]=useState([]);
+  const [osData,setOsData]=useState([]);
+  const [prevData,setPrevData]=useState([]);
   const [loading,setLoading]=useState(true);
-  const [regioes,setRegioes]=useState([]);
-  const [regiaoSel,setRegiaoSel]=useState(null);
-  const [viewMode,setViewMode]=useState("mapa"); // mapa | regioes | distribuicao
+  const [selCond,setSelCond]=useState(null);
+  const [editando,setEditando]=useState(false);
+  const [editF,setEditF]=useState({});
+  const [filtTec,setFiltTec]=useState("");
+  const [filtArea,setFiltArea]=useState("");
+  const [modoSel,setModoSel]=useState(false);
+  const [selMulti,setSelMulti]=useState([]);
+  const [transferTec,setTransferTec]=useState("");
+  const [leafReady,setLeafReady]=useState(!!window.L);
+  const mapInst=React.useRef(null);
+  const markersRef=React.useRef([]);
+  const layersRef=React.useRef([]);
 
-  // Regiões predefinidas do Ceará com coordenadas aproximadas
-  const REGIOES_DEFAULT=[
-    {id:"r1",nome:"Centro/Aldeota",cor:"#3b82f6",tec:"",lat:-3.7318,lng:-38.5267},
-    {id:"r2",nome:"Eusébio/Aquiraz",cor:"#10b981",tec:"",lat:-3.8891,lng:-38.4574},
-    {id:"r3",nome:"Maracanaú",cor:"#f59e0b",tec:"",lat:-3.8766,lng:-38.6257},
-    {id:"r4",nome:"Caucaia",cor:"#ef4444",tec:"",lat:-3.7361,lng:-38.6528},
-    {id:"r5",nome:"Messejana/Sul",cor:"#8b5cf6",tec:"",lat:-3.8234,lng:-38.4981},
-    {id:"r6",nome:"Parangaba/Oeste",cor:"#f97316",tec:"",lat:-3.7891,lng:-38.5891},
-    {id:"r7",nome:"Fortaleza Norte",cor:"#06b6d4",tec:"",lat:-3.7012,lng:-38.5312},
-    {id:"r8",nome:"Outros",cor:"#6b7280",tec:"",lat:-3.7900,lng:-38.5500},
+  const AREA_COR={"P16":"#3b82f6","P17":"#10b981","P18":"#ef4444","P19":"#f97316"};
+  const AREAS=["P16","P17","P18","P19"];
+
+  const GEO=[
+    {k:"aldeota",lat:-3.7318,lng:-38.5027},{k:"meireles",lat:-3.7231,lng:-38.4981},
+    {k:"cocó",lat:-3.7456,lng:-38.4823},{k:"coco",lat:-3.7456,lng:-38.4823},
+    {k:"papicu",lat:-3.7389,lng:-38.4734},{k:"iracema",lat:-3.7234,lng:-38.5189},
+    {k:"centro",lat:-3.7275,lng:-38.5274},{k:"benfica",lat:-3.7456,lng:-38.5234},
+    {k:"messejana",lat:-3.8234,lng:-38.4981},{k:"mondubim",lat:-3.8012,lng:-38.5678},
+    {k:"montese",lat:-3.7678,lng:-38.5512},{k:"parangaba",lat:-3.7823,lng:-38.5601},
+    {k:"caucaia",lat:-3.7361,lng:-38.6528},{k:"maracanaú",lat:-3.8766,lng:-38.6257},
+    {k:"maracanau",lat:-3.8766,lng:-38.6257},{k:"eusébio",lat:-3.8891,lng:-38.4574},
+    {k:"eusebio",lat:-3.8891,lng:-38.4574},{k:"aquiraz",lat:-3.9011,lng:-38.3891},
+    {k:"pacatuba",lat:-3.9867,lng:-38.6189},{k:"antonio bezerra",lat:-3.7456,lng:-38.6012},
+    {k:"dionísio",lat:-3.7512,lng:-38.4889},{k:"joaquim",lat:-3.7456,lng:-38.5089},
+    {k:"varjota",lat:-3.7298,lng:-38.5001},{k:"mucuripe",lat:-3.7234,lng:-38.4723},
+    {k:"beira mar",lat:-3.7189,lng:-38.4956},{k:"guararapes",lat:-3.7645,lng:-38.4956},
+    {k:"fátima",lat:-3.7789,lng:-38.5423},{k:"fatima",lat:-3.7789,lng:-38.5423},
+    {k:"passaré",lat:-3.8345,lng:-38.5123},{k:"passare",lat:-3.8345,lng:-38.5123},
+    {k:"lagoa redonda",lat:-3.8189,lng:-38.4756},{k:"cambeba",lat:-3.8012,lng:-38.4823},
+    {k:"siqueira",lat:-3.8123,lng:-38.5789},{k:"granja",lat:-3.7456,lng:-38.6123},
+    {k:"bezerra",lat:-3.7689,lng:-38.5812},{k:"alagadiço",lat:-3.8001,lng:-38.5234},
+    {k:"paupina",lat:-3.8456,lng:-38.4512},{k:"ancuri",lat:-3.8234,lng:-38.6012},
+    {k:"itaperi",lat:-3.7923,lng:-38.5678},{k:"damas",lat:-3.7567,lng:-38.5423},
+    {k:"aeroporto",lat:-3.7756,lng:-38.5323},{k:"dendê",lat:-3.8001,lng:-38.5456},
+    {k:"dende",lat:-3.8001,lng:-38.5456},{k:"bonsucesso",lat:-3.7823,lng:-38.6012},
+    {k:"maranguape",lat:-3.8934,lng:-38.6823},{k:"pedras",lat:-3.8234,lng:-38.4234},
+    {k:"precabura",lat:-3.8756,lng:-38.4312},{k:"coité",lat:-3.9123,lng:-38.3734},
+    {k:"coite",lat:-3.9123,lng:-38.3734},{k:"floresta",lat:-3.8567,lng:-38.4456},
+    {k:"sapiranga",lat:-3.7623,lng:-38.4567},{k:"edson queiroz",lat:-3.7734,lng:-38.4634},
+    {k:"luciano cavalcante",lat:-3.7823,lng:-38.4812},{k:"salinas",lat:-3.7912,lng:-38.4734},
   ];
 
-  // Palavras-chave por região
-  const REGIAO_KEYS={
-    "r1":["aldeo","meirele","cocó","coco","dionísio","dionisio","beira mar","iracema","centro","papicu","varjota","joaquim","mucuripe"],
-    "r2":["eusébio","eusebio","aquiraz","precabura","coité","serviluz"],
-    "r3":["maracanaú","maracanau","pacatuba","maranguape"],
-    "r4":["caucaia","juraci","juraci","tabuba","iparana","jurema"],
-    "r5":["messejana","guamar","damas","eng velho","aeroporto","paupina","alagadiço","alagadico","mondubim"],
-    "r6":["parangaba","montese","fátima","fatima","rodolfo","dend","autran","vila velha","granja","bonsucesso","siqueira"],
-    "r7":["benfica","antônio","antonio","bezerra","barra","canindezinho","granja"],
-  };
-
-  function detectarRegiao(cond, end){
-    var txt=((cond||"")+" "+(end||"")).toLowerCase();
-    for(var rid in REGIAO_KEYS){
-      var keys=REGIAO_KEYS[rid];
-      for(var i=0;i<keys.length;i++){
-        if(txt.includes(keys[i]))return rid;
+  function getGeo(nome,end){
+    var txt=((nome||"")+" "+(end||"")).toLowerCase();
+    for(var i=0;i<GEO.length;i++){
+      if(txt.includes(GEO[i].k)){
+        return{lat:GEO[i].lat+(Math.random()-0.5)*0.008,lng:GEO[i].lng+(Math.random()-0.5)*0.008};
       }
     }
-    return "r8";
+    return{lat:-3.79+(Math.random()-0.5)*0.1,lng:-38.55+(Math.random()-0.5)*0.1};
   }
 
   const load=useCallback(async function(){
     setLoading(true);
-    var [rc,ros,rp]=await Promise.all([
-      sb.from("condominios").select("nome,endereco,tecnico,area_tecnico").order("nome"),
-      sb.from("os").select("cond,status").or("status.eq.Aberto,data.gte.2026-01-01"),
-      sb.from("preventivas").select("cond,status"),
+    var[rc,ros,rp]=await Promise.all([
+      sb.from("condominios").select("id,nome,endereco,tecnico,area_tecnico").order("nome"),
+      sb.from("os").select("cond,status,data").or("status.eq.Aberto,data.gte.2026-01-01"),
+      sb.from("preventivas").select("cond,status,primeira_visita").order("primeira_visita",{ascending:false}),
     ]);
-    setConds(rc.data||[]);
-    setOs(ros.data||[]);
-    setPrevs(rp.data||[]);
-
-    // Carregar regiões do banco ou usar padrão
-    var rReg=await sb.from("parametros").select("valor").eq("chave","mapa_regioes").limit(1);
-    if(rReg.data&&rReg.data.length>0&&rReg.data[0].valor){
-      try{setRegioes(JSON.parse(rReg.data[0].valor));}catch(e){setRegioes(REGIOES_DEFAULT);}
-    }else{
-      setRegioes(REGIOES_DEFAULT);
-    }
+    var cs=(rc.data||[]).map(function(c){var g=getGeo(c.nome,c.endereco);return{...c,lat:g.lat,lng:g.lng};});
+    setConds(cs);setOsData(ros.data||[]);setPrevData(rp.data||[]);
     setLoading(false);
   },[]);
   useEffect(function(){load();},[load,tick]);
 
-  const salvarRegioes=async function(novasRegioes){
-    await sb.from("parametros").upsert({chave:"mapa_regioes",valor:JSON.stringify(novasRegioes)},{onConflict:"chave"});
-    setRegioes(novasRegioes);
-  };
+  // Carregar Leaflet
+  useEffect(function(){
+    if(window.L){setLeafReady(true);return;}
+    var c=document.createElement("link");c.rel="stylesheet";
+    c.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(c);
+    var s=document.createElement("script");
+    s.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    s.onload=function(){setLeafReady(true);};document.head.appendChild(s);
+  },[]);
 
-  // Calcular dados por região
-  const dadosPorRegiao=useMemo(function(){
-    var map={};
-    regioes.forEach(function(r){map[r.id]={...r,conds:[],osAbertas:0,osFechadas:0,prevPend:0,prevConc:0};});
-    conds.forEach(function(c){
-      var rid=detectarRegiao(c.nome,c.endereco);
-      if(map[rid])map[rid].conds.push(c);
-    });
-    os.forEach(function(o){
-      var cond=conds.find(function(c){return c.nome===o.cond;});
-      if(!cond)return;
-      var rid=detectarRegiao(cond.nome,cond.endereco);
-      if(!map[rid])return;
-      if(o.status==="Aberto")map[rid].osAbertas++;
-      else map[rid].osFechadas++;
-    });
-    prevs.forEach(function(p){
-      var cond=conds.find(function(c){return c.nome===p.cond;});
-      if(!cond)return;
-      var rid=detectarRegiao(cond.nome,cond.endereco);
-      if(!map[rid])return;
-      if(p.status==="Concluída")map[rid].prevConc++;
-      else map[rid].prevPend++;
-    });
-    return map;
-  },[regioes,conds,os,prevs]);
+  // Inicializar / atualizar mapa
+  useEffect(function(){
+    if(!leafReady||loading||conds.length===0)return;
+    var L=window.L;
+    var el=document.getElementById("mapa-calor-div");
+    if(!el)return;
 
-  var maxConds=Math.max.apply(null,Object.values(dadosPorRegiao).map(function(r){return r.conds.length;}));
-  var regionsSorted=regioes.map(function(r){return dadosPorRegiao[r.id]||r;}).sort(function(a,b){return b.conds.length-a.conds.length;});
+    if(!mapInst.current){
+      var m=L.map(el,{center:[-3.79,-38.55],zoom:12,zoomControl:true});
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+        attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a>'
+      }).addTo(m);
+      mapInst.current=m;
+    }
+    var m=mapInst.current;
 
-  // ── RENDER ─────────────────────────────────────────────────
-  return React.createElement("div",null,
-    // Header
-    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:"1px solid "+C.border}},
-      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
-        React.createElement("div",null,
-          React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🗺 Mapa de Calor Operacional"),
-          React.createElement("div",{style:{fontSize:12,color:C.muted}},conds.length+" condomínios · "+regioes.length+" regiões")
+    // Limpar marcadores e camadas anteriores
+    markersRef.current.forEach(function(mk){mk.remove();});
+    markersRef.current=[];
+    layersRef.current.forEach(function(ly){ly.remove();});
+    layersRef.current=[];
+
+    // Camadas de área (polígonos)
+    var POLIGONOS={
+      "P16":[[-3.68,-38.58],[-3.68,-38.44],[-3.78,-38.44],[-3.78,-38.58]],
+      "P17":[[-3.78,-38.52],[-3.78,-38.34],[-3.94,-38.34],[-3.94,-38.52]],
+      "P18":[[-3.78,-38.66],[-3.78,-38.52],[-3.94,-38.52],[-3.94,-38.66]],
+      "P19":[[-3.68,-38.72],[-3.68,-38.58],[-3.83,-38.58],[-3.83,-38.72]],
+    };
+    AREAS.forEach(function(area){
+      if(filtArea&&filtArea!==area)return;
+      var cor=AREA_COR[area]||"#6b7280";
+      var poly=L.polygon(POLIGONOS[area],{
+        color:cor,fillColor:cor,fillOpacity:0.07,weight:2,dashArray:"8 4"
+      }).bindTooltip("<b>Área "+area+"</b>",{permanent:false,direction:"center"});
+      poly.addTo(m);
+      layersRef.current.push(poly);
+    });
+
+    // Filtrar condomínios
+    var cf=conds.filter(function(c){
+      if(filtTec&&c.tecnico!==filtTec)return false;
+      if(filtArea&&c.area_tecnico!==filtArea)return false;
+      return true;
+    });
+
+    cf.forEach(function(c){
+      var cor=AREA_COR[c.area_tecnico]||"#6b7280";
+      var osAb=(osData||[]).filter(function(o){return o.cond===c.nome&&o.status==="Aberto";}).length;
+      var ultPrev=(prevData||[]).find(function(p){return p.cond===c.nome;});
+      var emSel=selMulti.findIndex(function(x){return x.id===c.id;})>=0;
+      var sz=emSel?18:12;
+      var border=emSel?"3px solid #fff":"2px solid rgba(255,255,255,0.8)";
+      var icon=L.divIcon({
+        html:"<div title='"+c.nome+"' style='width:"+sz+"px;height:"+sz+"px;border-radius:50%;"
+          +"background:"+cor+";border:"+border+";box-shadow:0 2px 6px rgba(0,0,0,0.5);"
+          +"cursor:pointer;transition:all .2s'></div>",
+        className:"",iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]
+      });
+      var popup=L.popup({maxWidth:240,closeButton:true}).setContent(
+        "<div style='font-family:Arial,sans-serif;font-size:12px;padding:4px'>"
+        +"<div style='font-weight:700;font-size:13px;color:#1e3a5f;margin-bottom:6px;border-bottom:2px solid "+cor+";padding-bottom:4px'>"+c.nome+"</div>"
+        +"<div style='margin-bottom:3px;color:#555'>📍 "+(c.endereco||"—")+"</div>"
+        +"<div style='margin-bottom:3px'>👷 <b>"+(c.tecnico||"—")+"</b></div>"
+        +"<div style='margin-bottom:3px;color:"+cor+"'>🗺 Área: <b>"+(c.area_tecnico||"—")+"</b></div>"
+        +(osAb>0?"<div style='color:#ef4444;font-weight:700;margin-top:4px'>🚨 "+osAb+" OS abertas</div>":"<div style='color:#059669;margin-top:4px'>✓ Sem OS abertas</div>")
+        +(ultPrev?"<div style='color:#6b7280;font-size:10px;margin-top:3px'>📅 Últ. prev: "+(ultPrev.primeira_visita||"—")+"</div>":"")
+        +"<hr style='margin:6px 0;border:none;border-top:1px solid #eee'>"
+        +"<div style='font-size:10px;color:#999'>Clique no marcador para editar</div>"
+        +"</div>"
+      );
+      var mk=L.marker([c.lat,c.lng],{icon:icon});
+      mk.bindPopup(popup);
+      mk.on("click",function(){
+        if(modoSel){
+          window._toggleMapa&&window._toggleMapa(c);
+        }else{
+          window._selCondMapa&&window._selCondMapa(c,osAb,ultPrev);
+        }
+      });
+      mk.addTo(m);
+      markersRef.current.push(mk);
+    });
+  },[leafReady,loading,conds,osData,prevData,filtTec,filtArea,selMulti]);
+
+  // Callbacks para comunicação mapa↔React
+  useEffect(function(){
+    window._selCondMapa=function(c,osAb,ultPrev){
+      setSelCond({...c,_osAb:osAb||0,_ultPrev:ultPrev});
+      setEditando(false);
+    };
+    window._toggleMapa=function(c){
+      setSelMulti(function(prev){
+        var idx=prev.findIndex(function(x){return x.id===c.id;});
+        if(idx>=0)return prev.filter(function(x){return x.id!==c.id;});
+        return [...prev,c];
+      });
+    };
+    return function(){delete window._selCondMapa;delete window._toggleMapa;};
+  },[]);
+
+  // Stats por área
+  var stats=useMemo(function(){
+    var m={};
+    AREAS.forEach(function(a){m[a]={conds:0,os:0,prevs:0,tecs:new Set()};});
+    conds.forEach(function(c){if(m[c.area_tecnico]){m[c.area_tecnico].conds++;if(c.tecnico)m[c.area_tecnico].tecs.add(c.tecnico);}});
+    osData.filter(function(o){return o.status==="Aberto";}).forEach(function(o){
+      var c=conds.find(function(x){return x.nome===o.cond;});
+      if(c&&m[c.area_tecnico])m[c.area_tecnico].os++;
+    });
+    prevData.forEach(function(p){
+      var c=conds.find(function(x){return x.nome===p.cond;});
+      if(c&&m[c.area_tecnico])m[c.area_tecnico].prevs++;
+    });
+    return m;
+  },[conds,osData,prevData]);
+
+  var maxCarga=Math.max.apply(null,AREAS.map(function(a){return stats[a]?.conds||0;}));
+  var tecsList=[...new Set(conds.map(function(c){return c.tecnico;}).filter(Boolean))].sort();
+
+  async function salvarEdicao(){
+    if(!selCond)return;
+    await sb.from("condominios").update({tecnico:editF.tecnico,area_tecnico:editF.area_tecnico}).eq("id",selCond.id);
+    setEditando(false);setSelCond(null);load();
+  }
+
+  async function transferirSelecionados(){
+    if(!transferTec||selMulti.length===0){alert("Selecione o técnico destino");return;}
+    for(var i=0;i<selMulti.length;i++){
+      await sb.from("condominios").update({tecnico:transferTec}).eq("id",selMulti[i].id);
+    }
+    alert(selMulti.length+" condomínios transferidos para "+transferTec);
+    setSelMulti([]);setTransferTec("");setModoSel(false);load();
+  }
+
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",height:"calc(100vh - 56px)",overflow:"hidden"}},
+    // ── HEADER ──
+    React.createElement("div",{style:{background:C.surface,borderBottom:"1px solid "+C.border,padding:"10px 16px",flexShrink:0}},
+      React.createElement("div",{style:{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}},
+        React.createElement("div",{style:{fontWeight:700,fontSize:15,marginRight:4}},"🗺 Mapa Operacional"),
+        // Filtros
+        React.createElement("select",{style:{...base.sel,width:140,fontSize:11},value:filtTec,onChange:function(e){setFiltTec(e.target.value);}},
+          React.createElement("option",{value:""},"Todos técnicos"),
+          tecsList.map(function(t){return React.createElement("option",{key:t,value:t},t);})
         ),
-        React.createElement("div",{style:{display:"flex",gap:6}},
-          ["mapa","regioes","distribuicao"].map(function(m){
-            var labels={mapa:"🗺 Mapa",regioes:"📊 Regiões",distribuicao:"👷 Distribuição"};
-            return React.createElement("button",{key:m,
-              style:{...btnStyle(C.blue,viewMode!==m),fontSize:11,padding:"6px 12px"},
-              onClick:function(){setViewMode(m);}},labels[m]);
+        React.createElement("select",{style:{...base.sel,width:110,fontSize:11},value:filtArea,onChange:function(e){setFiltArea(e.target.value);}},
+          React.createElement("option",{value:""},"Todas áreas"),
+          AREAS.map(function(a){return React.createElement("option",{key:a,value:a},"Área "+a);})
+        ),
+        React.createElement("button",{
+          style:{...btnStyle(modoSel?C.yellow:C.purple,!modoSel),fontSize:11,padding:"6px 12px"},
+          onClick:function(){setModoSel(function(v){return !v;});setSelMulti([]);}
+        },modoSel?"✕ Cancelar":"☑ Seleção Múltipla"),
+        modoSel&&selMulti.length>0&&React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},
+          React.createElement("span",{style:{fontSize:11,color:C.yellow,fontWeight:700}},selMulti.length+" selecionados"),
+          React.createElement("select",{style:{...base.sel,width:140,fontSize:11},value:transferTec,onChange:function(e){setTransferTec(e.target.value);}},
+            React.createElement("option",{value:""},"Transferir para..."),
+            tecsList.map(function(t){return React.createElement("option",{key:t,value:t},t);})
+          ),
+          React.createElement("button",{style:{...btnStyle(C.green),fontSize:11,padding:"6px 12px"},onClick:transferirSelecionados},"✓ Confirmar Transferência")
+        ),
+        // KPIs por área
+        React.createElement("div",{style:{display:"flex",gap:6,marginLeft:"auto"}},
+          AREAS.map(function(a){
+            var cor=AREA_COR[a];var st=stats[a]||{conds:0,os:0};
+            var carga=maxCarga>0?st.conds/maxCarga:0;
+            return React.createElement("div",{key:a,
+              style:{background:cor+"22",border:"2px solid "+(filtArea===a?cor:cor+"44"),
+                borderRadius:8,padding:"4px 10px",cursor:"pointer",fontSize:10,textAlign:"center"},
+              onClick:function(){setFiltArea(filtArea===a?"":a);}},
+              React.createElement("div",{style:{fontWeight:700,color:cor}},a),
+              React.createElement("div",{style:{color:C.text,fontWeight:700}},st.conds),
+              st.os>0&&React.createElement("div",{style:{color:C.red,fontSize:9}},st.os+" OS")
+            );
           })
         )
       )
     ),
-    React.createElement("div",{style:{padding:"16px 24px"}},
-      loading?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.muted}},"Carregando dados..."):
-
-      viewMode==="mapa"?
-        // ── VISUALIZAÇÃO MAPA ──
-        React.createElement("div",null,
-          // KPIs
-          React.createElement(Grid,{cols:4,mb:16},
-            React.createElement(KPI,{label:"Condomínios",value:conds.length,color:C.blue}),
-            React.createElement(KPI,{label:"Regiões",value:regioes.length,color:C.purple}),
-            React.createElement(KPI,{label:"OS Abertas",value:os.filter(function(o){return o.status==="Aberto";}).length,color:C.red}),
-            React.createElement(KPI,{label:"Preventivas",value:prevs.length,color:C.green})
+    // ── CORPO: MAPA + PAINEL ──
+    React.createElement("div",{style:{display:"flex",flex:1,overflow:"hidden"}},
+      // Mapa
+      React.createElement("div",{style:{flex:1,position:"relative",minHeight:0}},
+        loading||!leafReady
+          ?React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",flexDirection:"column",gap:12,color:C.muted}},
+            React.createElement("div",{style:{fontSize:40}},"🗺"),
+            React.createElement("div",{style:{fontSize:14}},loading?"Carregando dados...":"Carregando mapa...")
+          )
+          :React.createElement("div",{id:"mapa-calor-div",style:{width:"100%",height:"100%"}})
+      ),
+      // Painel lateral
+      React.createElement("div",{style:{width:300,background:C.surface,borderLeft:"1px solid "+C.border,overflowY:"auto",flexShrink:0,display:"flex",flexDirection:"column"}},
+        // Detalhe condomínio
+        selCond&&!editando?React.createElement("div",{style:{padding:14,borderBottom:"1px solid "+C.border}},
+          React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:10}},
+            React.createElement("div",{style:{fontSize:13,fontWeight:700,color:AREA_COR[selCond.area_tecnico]||C.blue,flex:1,paddingRight:8}},selCond.nome),
+            React.createElement("button",{style:iBtn(C.dim),onClick:function(){setSelCond(null);}},"✕")
           ),
-          // Mapa visual (representação por regiões com barras de calor)
-          React.createElement("div",{style:{background:C.card,borderRadius:12,padding:20,marginBottom:16,border:"1px solid "+C.border}},
-            React.createElement("div",{style:{fontSize:14,fontWeight:700,marginBottom:16,display:"flex",alignItems:"center",gap:8}},
-              "🔥 Concentração por Região",
-              React.createElement("span",{style:{fontSize:11,color:C.muted,fontWeight:400}},"— tamanho proporcional à quantidade de condomínios")
+          React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6,marginBottom:12}},
+            [{l:"📍 Endereço",v:selCond.endereco||"—"},
+             {l:"👷 Técnico",v:selCond.tecnico||"—"},
+             {l:"🗺 Área",v:selCond.area_tecnico||"—"},
+             {l:"🚨 OS Abertas",v:selCond._osAb||0},
+             {l:"📅 Últ. Preventiva",v:selCond._ultPrev?.primeira_visita||"—"},
+             {l:"📌 Coordenadas",v:(selCond.lat?.toFixed(4)||"")+" / "+(selCond.lng?.toFixed(4)||"")}]
+            .map(function(k,i){
+              return React.createElement("div",{key:i,style:{background:C.bg,borderRadius:6,padding:"7px 10px"}},
+                React.createElement("div",{style:{fontSize:9,color:C.muted,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}},k.l),
+                React.createElement("div",{style:{fontSize:12,fontWeight:600}},String(k.v))
+              );
+            })
+          ),
+          React.createElement("div",{style:{display:"flex",gap:6}},
+            React.createElement("button",{style:{...btnStyle(C.blue),flex:1,fontSize:11,padding:"7px"},
+              onClick:function(){setEditF({tecnico:selCond.tecnico||"",area_tecnico:selCond.area_tecnico||""});setEditando(true);}
+            },"✏️ Editar"),
+            modoSel&&React.createElement("button",{
+              style:{...btnStyle(selMulti.find(function(x){return x.id===selCond.id;})?C.red:C.purple),flex:1,fontSize:11,padding:"7px"},
+              onClick:function(){window._toggleMapa&&window._toggleMapa(selCond);}
+            },selMulti.find(function(x){return x.id===selCond.id;})?"✕ Remover":"☑ Selecionar")
+          )
+        ):
+        selCond&&editando?React.createElement("div",{style:{padding:14,borderBottom:"1px solid "+C.border}},
+          React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.blue,marginBottom:10}},"✏️ "+selCond.nome),
+          React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:10}},
+            React.createElement("div",null,
+              React.createElement("label",{style:base.lbl},"Técnico"),
+              React.createElement("select",{style:base.sel,value:editF.tecnico||"",onChange:function(e){setEditF(function(p){return{...p,tecnico:e.target.value};});}},
+                React.createElement("option",{value:""},"Selecionar..."),
+                tecsList.map(function(t){return React.createElement("option",{key:t,value:t},t);})
+              )
             ),
-            // Grid visual de regiões com tamanhos proporcionais
-            React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10}},
-              regionsSorted.map(function(r){
-                var pct=maxConds>0?Math.max(10,Math.round(r.conds.length/maxConds*100)):10;
-                var intensidade=Math.min(255,Math.round(r.conds.length/maxConds*255));
-                var isSelected=regiaoSel&&regiaoSel.id===r.id;
-                return React.createElement("div",{key:r.id,
-                  onClick:function(){setRegiaoSel(isSelected?null:r);},
-                  style:{background:r.cor+"22",border:"2px solid "+(isSelected?r.cor:r.cor+"66"),
-                    borderRadius:10,padding:12,cursor:"pointer",position:"relative",
-                    transition:"all .2s",transform:isSelected?"scale(1.03)":"scale(1)"}
-                },
-                  // Barra de calor visual
-                  React.createElement("div",{style:{height:6,background:C.border,borderRadius:3,marginBottom:8,overflow:"hidden"}},
-                    React.createElement("div",{style:{height:"100%",width:pct+"%",background:r.cor,borderRadius:3,transition:"width .5s"}})
-                  ),
-                  React.createElement("div",{style:{fontSize:11,fontWeight:700,color:r.cor,marginBottom:4}},r.nome),
-                  React.createElement("div",{style:{fontSize:24,fontWeight:800,color:C.text,lineHeight:1}},r.conds.length),
-                  React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:6}},"condomínios"),
-                  React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",fontSize:10}},
-                    r.osAbertas>0&&React.createElement("span",{style:{background:C.red+"22",color:C.red,borderRadius:10,padding:"1px 6px"}},r.osAbertas+" OS"),
-                    r.prevPend>0&&React.createElement("span",{style:{background:C.yellow+"22",color:C.yellow,borderRadius:10,padding:"1px 6px"}},r.prevPend+" prev"),
-                    r.tec&&React.createElement("span",{style:{background:C.blue+"22",color:C.blue,borderRadius:10,padding:"1px 6px",marginTop:2}},r.tec.split(" ")[0])
-                  )
+            React.createElement("div",null,
+              React.createElement("label",{style:base.lbl},"Área"),
+              React.createElement("div",{style:{display:"flex",gap:4}},
+                AREAS.map(function(a){
+                  return React.createElement("button",{key:a,
+                    style:{...btnStyle(AREA_COR[a]||C.blue,editF.area_tecnico!==a),flex:1,fontSize:11,padding:"6px 4px"},
+                    onClick:function(){setEditF(function(p){return{...p,area_tecnico:a};});}},a);
+                })
+              )
+            ),
+            React.createElement("div",{style:{display:"flex",gap:6}},
+              React.createElement("button",{style:{...btnStyle(C.blue),flex:1,fontSize:11},onClick:salvarEdicao},"💾 Salvar"),
+              React.createElement("button",{style:{...btnStyle(C.dim,true),flex:1,fontSize:11},onClick:function(){setEditando(false);}},"Cancelar")
+            )
+          )
+        ):null,
+        // Legenda e resumo por área
+        React.createElement("div",{style:{padding:12,flex:1}},
+          React.createElement("div",{style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:8,letterSpacing:.5}},
+            "ÁREAS OPERACIONAIS"
+          ),
+          AREAS.map(function(a){
+            var cor=AREA_COR[a];var st=stats[a]||{conds:0,os:0,prevs:0,tecs:new Set()};
+            var carga=maxCarga>0?Math.round(st.conds/maxCarga*100):0;
+            var cargaCor=carga>75?C.red:carga>50?C.yellow:C.green;
+            var tecs=[...st.tecs];
+            return React.createElement("div",{key:a,
+              style:{background:cor+"11",border:"1px solid "+(filtArea===a?cor:cor+"33"),
+                borderRadius:8,padding:10,marginBottom:8,cursor:"pointer",
+                transition:"all .2s",transform:filtArea===a?"scale(1.01)":"scale(1)"},
+              onClick:function(){setFiltArea(filtArea===a?"":a);}},
+              React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:4}},
+                React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:cor}}),
+                React.createElement("div",{style:{fontWeight:700,color:cor,fontSize:12}},"Área "+a),
+                React.createElement("div",{style:{marginLeft:"auto",fontSize:10,color:cargaCor,fontWeight:700}},carga+"%")
+              ),
+              // Barra de carga
+              React.createElement("div",{style:{height:4,background:C.border,borderRadius:2,overflow:"hidden",marginBottom:6}},
+                React.createElement("div",{style:{height:"100%",width:carga+"%",background:cor,borderRadius:2}})
+              ),
+              React.createElement("div",{style:{fontSize:11,fontWeight:700,marginBottom:2}},st.conds+" condomínios"),
+              tecs.length>0&&React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:3}},"👷 "+tecs.join(", ")),
+              React.createElement("div",{style:{display:"flex",gap:8,fontSize:10}},
+                st.os>0&&React.createElement("span",{style:{color:C.red,fontWeight:600}},st.os+" OS abertas"),
+                st.prevs>0&&React.createElement("span",{style:{color:C.green}},st.prevs+" preventivas")
+              )
+            );
+          }),
+          // Seleção múltipla
+          modoSel&&React.createElement("div",{style:{background:C.yellow+"11",border:"1px solid "+C.yellow+"44",borderRadius:8,padding:10,marginTop:8}},
+            React.createElement("div",{style:{fontSize:11,fontWeight:700,color:C.yellow,marginBottom:4}},
+              "☑ "+selMulti.length+" selecionados"
+            ),
+            selMulti.length>0&&React.createElement("div",{style:{maxHeight:120,overflowY:"auto"}},
+              selMulti.map(function(c){
+                return React.createElement("div",{key:c.id,
+                  style:{fontSize:10,color:C.muted,padding:"2px 0",display:"flex",justifyContent:"space-between"}},
+                  React.createElement("span",null,"• "+c.nome.slice(0,25)),
+                  React.createElement("span",{style:{cursor:"pointer",color:C.red},
+                    onClick:function(){setSelMulti(function(prev){return prev.filter(function(x){return x.id!==c.id;});});}
+                  },"✕")
                 );
               })
             )
-          ),
-          // Detalhe da região selecionada
-          regiaoSel&&dadosPorRegiao[regiaoSel.id]&&React.createElement("div",{
-            style:{background:C.card,borderRadius:12,padding:20,border:"2px solid "+regiaoSel.cor}},
-            React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}},
-              React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
-                React.createElement("div",{style:{width:14,height:14,borderRadius:"50%",background:regiaoSel.cor}}),
-                React.createElement("div",{style:{fontSize:16,fontWeight:700}},regiaoSel.nome),
-                React.createElement(Pill,{c:regiaoSel.cor},dadosPorRegiao[regiaoSel.id].conds.length+" condomínios")
-              ),
-              React.createElement("button",{style:iBtn(C.dim),onClick:function(){setRegiaoSel(null);}},"✕")
-            ),
-            React.createElement(Grid,{cols:4,mb:12},
-              React.createElement(KPI,{label:"Condomínios",value:dadosPorRegiao[regiaoSel.id].conds.length,color:regiaoSel.cor}),
-              React.createElement(KPI,{label:"OS Abertas",value:dadosPorRegiao[regiaoSel.id].osAbertas,color:C.red}),
-              React.createElement(KPI,{label:"Prev. Pendentes",value:dadosPorRegiao[regiaoSel.id].prevPend,color:C.yellow}),
-              React.createElement(KPI,{label:"Prev. Concluídas",value:dadosPorRegiao[regiaoSel.id].prevConc,color:C.green})
-            ),
-            React.createElement("div",{style:{maxHeight:260,overflowY:"auto"}},
-              React.createElement(Table,{
-                cols:["Condomínio","Endereço","Técnico","Área"],
-                rows:dadosPorRegiao[regiaoSel.id].conds.map(function(c){
-                  return [
-                    React.createElement("span",{style:{fontSize:11,fontWeight:600}},c.nome),
-                    React.createElement("span",{style:{fontSize:10,color:C.muted}},c.endereco||"—"),
-                    React.createElement("span",{style:{fontSize:11}},c.tecnico||"—"),
-                    React.createElement("span",{style:{fontSize:11,color:C.cyan}},c.area_tecnico||"—"),
-                  ];
-                })
-              })
-            )
-          )
-        ):
-
-      viewMode==="regioes"?
-        // ── GESTÃO DE REGIÕES ──
-        React.createElement("div",null,
-          React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
-            React.createElement("div",{style:{fontSize:14,fontWeight:700}},"Regiões Operacionais"),
-            React.createElement("button",{style:btnStyle(C.green),
-              onClick:function(){
-                var nome=window.prompt("Nome da nova região:");
-                if(!nome)return;
-                var novas=[...regioes,{id:"r"+(regioes.length+1)+"_"+Date.now(),nome:nome,cor:C.blue,tec:""}];
-                salvarRegioes(novas);
-              }},"＋ Nova Região")
-          ),
-          React.createElement("div",{style:{display:"grid",gap:10}},
-            regionsSorted.map(function(r){
-              var d=dadosPorRegiao[r.id]||r;
-              var carga=maxConds>0?Math.round(r.conds.length/maxConds*100):0;
-              var cargaCor=carga>70?C.red:carga>40?C.yellow:C.green;
-              return React.createElement("div",{key:r.id,
-                style:{background:C.card,borderRadius:10,padding:16,border:"1px solid "+C.border,
-                  borderLeft:"4px solid "+r.cor}},
-                React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}},
-                  React.createElement("div",null,
-                    React.createElement("div",{style:{fontSize:14,fontWeight:700,color:r.cor}},r.nome),
-                    React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},
-                      r.conds.length+" condomínios · "+r.osAbertas+" OS · "+r.prevPend+" prev. pendentes"
-                    )
-                  ),
-                  React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},
-                    React.createElement("div",{style:{fontSize:10,color:cargaCor,fontWeight:700}},carga+"% carga"),
-                    React.createElement("button",{style:{...iBtn(C.dim),fontSize:10},
-                      onClick:function(){
-                        var novo=window.prompt("Novo nome para "+r.nome+":",r.nome);
-                        if(!novo)return;
-                        var novas=regioes.map(function(x){return x.id===r.id?{...x,nome:novo}:x;});
-                        salvarRegioes(novas);
-                      }},"✏️"),
-                    React.createElement("button",{style:{...iBtn(C.red),fontSize:10},
-                      onClick:function(){
-                        if(!window.confirm("Excluir região "+r.nome+"?"))return;
-                        var novas=regioes.filter(function(x){return x.id!==r.id;});
-                        salvarRegioes(novas);
-                      }},"🗑")
-                  )
-                ),
-                // Barra de carga
-                React.createElement("div",{style:{height:6,background:C.border,borderRadius:3,overflow:"hidden"}},
-                  React.createElement("div",{style:{height:"100%",width:carga+"%",background:cargaCor,borderRadius:3,transition:"width .5s"}})
-                )
-              );
-            })
-          ),
-          // Sugestão automática
-          React.createElement("div",{style:{background:C.blue+"11",border:"1px solid "+C.blue+"33",borderRadius:10,padding:16,marginTop:16}},
-            React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.blue,marginBottom:8}},"💡 Análise de Equilíbrio"),
-            React.createElement("div",{style:{fontSize:12,color:C.muted,lineHeight:1.8}},
-              "Média por região: "+Math.round(conds.length/regioes.length)+" condomínios",
-              React.createElement("br"),
-              "Região mais carregada: "+regionsSorted[0]?.nome+" ("+regionsSorted[0]?.conds.length+")",
-              React.createElement("br"),
-              "Região menos carregada: "+regionsSorted[regionsSorted.length-1]?.nome+" ("+regionsSorted[regionsSorted.length-1]?.conds.length+")",
-              Math.max.apply(null,regionsSorted.map(function(r){return r.conds.length;}))>
-              Math.round(conds.length/regioes.length)*1.5&&
-              React.createElement("div",{style:{marginTop:8,color:C.yellow}},
-                "⚠ Distribuição desbalanceada. Considere redistribuir condomínios entre regiões."
-              )
-            )
-          )
-        ):
-
-        // ── DISTRIBUIÇÃO DE TÉCNICOS ──
-        React.createElement("div",null,
-          React.createElement("div",{style:{fontSize:14,fontWeight:700,marginBottom:12}},"👷 Distribuição de Técnicos por Região"),
-          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}},
-            regionsSorted.map(function(r){
-              var d=dadosPorRegiao[r.id]||r;
-              return React.createElement("div",{key:r.id,
-                style:{background:C.card,borderRadius:10,padding:16,border:"1px solid "+C.border,borderTop:"3px solid "+r.cor}},
-                React.createElement("div",{style:{fontSize:13,fontWeight:700,color:r.cor,marginBottom:8}},r.nome),
-                React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:10}},
-                  r.conds.length+" cond · "+r.osAbertas+" OS · "+(r.prevPend+r.prevConc)+" prev"
-                ),
-                React.createElement("label",{style:{...base.lbl,marginBottom:4,display:"block"}},"Técnico Responsável"),
-                React.createElement("select",{
-                  style:{...base.sel,width:"100%"},
-                  value:r.tec||"",
-                  onChange:function(e){
-                    var novas=regioes.map(function(x){return x.id===r.id?{...x,tec:e.target.value}:x;});
-                    salvarRegioes(novas);
-                  }
-                },
-                  React.createElement("option",{value:""},"Nenhum"),
-                  tecsBanco.map(function(t){return React.createElement("option",{key:t.mat,value:t.nome},t.nome);})
-                ),
-                r.tec&&React.createElement("div",{style:{marginTop:8,display:"flex",alignItems:"center",gap:6,fontSize:11,color:C.cyan}},
-                  "✓ Atribuído: ",React.createElement("b",null,r.tec)
-                )
-              );
-            })
-          ),
-          // Resumo técnicos
-          React.createElement("div",{style:{marginTop:16,background:C.card,borderRadius:10,padding:16,border:"1px solid "+C.border}},
-            React.createElement("div",{style:{fontSize:13,fontWeight:700,marginBottom:12}},"📋 Resumo da Distribuição"),
-            React.createElement(Table,{
-              cols:["Técnico","Regiões","Condomínios","OS Abertas","Preventivas"],
-              rows:(function(){
-                var tecMap={};
-                regioes.forEach(function(r){
-                  var d=dadosPorRegiao[r.id]||{conds:[],osAbertas:0,prevPend:0,prevConc:0};
-                  if(!r.tec)return;
-                  if(!tecMap[r.tec])tecMap[r.tec]={regioes:[],conds:0,os:0,prev:0};
-                  tecMap[r.tec].regioes.push(r.nome);
-                  tecMap[r.tec].conds+=d.conds.length;
-                  tecMap[r.tec].os+=d.osAbertas;
-                  tecMap[r.tec].prev+=(d.prevPend||0)+(d.prevConc||0);
-                });
-                return Object.entries(tecMap).map(function(e){
-                  return [
-                    React.createElement("span",{style:{fontWeight:600}},e[0]),
-                    React.createElement("span",{style:{fontSize:10,color:C.muted}},e[1].regioes.join(", ")),
-                    React.createElement("span",{style:{color:C.blue,fontWeight:700}},e[1].conds),
-                    React.createElement("span",{style:{color:C.red}},e[1].os),
-                    React.createElement("span",{style:{color:C.green}},e[1].prev),
-                  ];
-                });
-              })()
-            })
           )
         )
+      )
     )
   );
 }
