@@ -1886,52 +1886,128 @@ function Preventivas({onSave}){
 
 
   const DetalheModal=({item,onClose})=>{
-    const [arqLaudo,setArqLaudo]=useState(null);
-    const [arqFoto,setArqFoto]=useState(null);
-    const [loadArq,setLoadArq]=useState(false);
-    useEffect(function(){
-      async function carregarArquivos(){
-        setLoadArq(true);
-        // Carregar laudo
-        if(item.laudo_url&&item.laudo_url.startsWith("arq://")){
-          const arqId=item.laudo_url.replace("arq://","");
-          const{data}=await sb.from("preventivas_arquivos").select("dados,nome").eq("id",arqId).limit(1);
-          if(data&&data.length>0)setArqLaudo(data[0]);
-        }else if(item.laudo_url){
-          setArqLaudo({dados:item.laudo_url,nome:"laudo.pdf"});
-        }
-        // Carregar foto
-        if(item.foto_url&&item.foto_url.startsWith("arq://")){
-          const arqId=item.foto_url.replace("arq://","");
-          const{data}=await sb.from("preventivas_arquivos").select("dados,nome").eq("id",arqId).limit(1);
-          if(data&&data.length>0)setArqFoto(data[0]);
-        }else if(item.foto_url){
-          setArqFoto({dados:item.foto_url,nome:"foto"});
-        }
-        setLoadArq(false);
-      }
-      carregarArquivos();
-    },[item]);
+    const [docs,setDocs]=useState([]);
+    const [loadDocs,setLoadDocs]=useState(true);
+    const [uploading,setUploading]=useState(false);
+    const [progresso,setProgresso]=useState(0);
+    const [msg,setMsg]=useState("");
+    const [msgTipo,setMsgTipo]=useState("");
 
-    return React.createElement(Modal,{title:`Preventiva — ${item.cond}`,onClose,width:560},
-      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}},
-        [{l:"1ª Visita",v:fmt(item.primeira_visita)},{l:"Nº Pedido",v:item.num_pedido||"—"},{l:"Retorno",v:fmt(item.retorno)},{l:"Devolução",v:fmt(item.devolucao)},{l:"Equipamentos",v:item.equipamentos||"—"},{l:"Finalizado",v:item.finalizado||"—"},{l:"Laudo Enviado",v:item.laudo||"—"},{l:"Régua IP",v:item.regua_ip||"—"},{l:"Régua OK",v:item.regua_ok||"—"}].map(k=>
-          React.createElement("div",{key:k.l},React.createElement("label",{style:base.lbl},k.l),React.createElement("div",{style:{color:C.text,fontSize:13}},k.v))
-        )
+    const carregarDocs=async function(){
+      setLoadDocs(true);
+      var r=await sb.from("preventivas_docs").select("*").eq("preventiva_id",item.id).order("criado_em",{ascending:false});
+      setDocs(r.data||[]);
+      setLoadDocs(false);
+    };
+    useEffect(function(){carregarDocs();},[item.id]);
+
+    const handleUpload=async function(e){
+      var files=Array.from(e.target.files||[]);
+      if(!files.length)return;
+      for(var fi=0;fi<files.length;fi++){
+        var file=files[fi];
+        if(file.size>20*1024*1024){setMsg("Arquivo maior que 20MB: "+file.name);setMsgTipo("err");continue;}
+        setUploading(true);setProgresso(0);
+        setMsg("Enviando "+file.name+"...");setMsgTipo("");
+        var ext=file.name.split(".").pop();
+        var path="docs/"+item.id+"_"+Date.now()+"_"+fi+"."+ext;
+        var prog=0;
+        var timer=setInterval(function(){prog=Math.min(prog+15,90);setProgresso(prog);},300);
+        var up=await sb.storage.from("preventivas").upload(path,file,{upsert:true});
+        clearInterval(timer);setProgresso(100);
+        if(up.error){setMsg("Erro: "+up.error.message);setMsgTipo("err");setUploading(false);setProgresso(0);continue;}
+        var urlRes=sb.storage.from("preventivas").getPublicUrl(path);
+        var url=urlRes.data.publicUrl;
+        await sb.from("preventivas_docs").insert({
+          id:"doc_"+Date.now()+"_"+fi,
+          preventiva_id:item.id,nome:file.name,
+          url:url,tamanho:file.size,
+          usuario:"",criado_em:new Date().toISOString()
+        });
+        setMsg("Arquivo enviado com sucesso!");setMsgTipo("ok");
+        setUploading(false);
+        await carregarDocs();
+      }
+    };
+
+    const excluirDoc=async function(doc){
+      if(!window.confirm("Excluir "+doc.nome+"?"))return;
+      var parts=doc.url.split("/preventivas/");
+      if(parts[1])await sb.storage.from("preventivas").remove([parts[1]]);
+      await sb.from("preventivas_docs").delete().eq("id",doc.id);
+      setMsg("Arquivo excluido.");setMsgTipo("ok");
+      carregarDocs();
+    };
+
+    function fmtSz(b){if(!b)return"";if(b>1024*1024)return(b/1024/1024).toFixed(1)+"MB";return Math.round(b/1024)+"KB";}
+    function fmtDt(iso){if(!iso)return"";return new Date(iso).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"});}
+
+    return React.createElement(Modal,{title:"Preventiva: "+item.cond,onClose,width:700},
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}},
+        [{l:"Tecnico",v:item.tecnico||"--"},{l:"Status",v:item.status||"--"},{l:"1a Visita",v:fmt(item.primeira_visita)},
+         {l:"Retorno",v:fmt(item.retorno)},{l:"Devolucao",v:fmt(item.devolucao)},{l:"No Pedido",v:item.num_pedido||"--"}]
+        .map(function(k,i){
+          return React.createElement("div",{key:i,style:{background:C.bg,borderRadius:8,padding:"8px 10px"}},
+            React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:2}},k.l),
+            React.createElement("div",{style:{fontSize:12,fontWeight:600}},k.v)
+          );
+        })
       ),
-      item.obs&&React.createElement("div",{style:{marginBottom:12}},React.createElement("label",{style:base.lbl},"Obs"),React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:10,fontSize:13,color:C.muted}},item.obs)),
-      React.createElement("div",{style:{display:"flex",gap:10,marginBottom:16}},
-        item.laudo_url&&React.createElement("a",{href:arqLaudo?.dados,target:"_blank",rel:"noopener noreferrer",style:{...btnStyle(C.red),textDecoration:"none",fontSize:12}},loadArq?"⏳ Carregando...":"📄 Abrir Laudo PDF"),
-        item.foto_url&&React.createElement("button",{style:btnStyle(C.cyan,true),onClick:function(){if(arqFoto)window.open(arqFoto.dados,"_blank");}},"📸 Ver Foto")
+      item.obs&&React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12,color:C.muted}},
+        React.createElement("b",{style:{color:C.text}},"Obs: "),item.obs
       ),
-      arqFoto&&React.createElement("img",{src:arqFoto.dados,style:{width:"100%",borderRadius:8,marginBottom:12},alt:"foto"}),
-      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end"}},
+      React.createElement("div",{style:{background:C.bg,borderRadius:10,padding:"14px"}},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
+          React.createElement("div",{style:{fontSize:14,fontWeight:700,color:C.blue}},"Documentos da Preventiva"),
+          React.createElement("div",null,
+            React.createElement("input",{type:"file",accept:".pdf",multiple:true,style:{display:"none"},
+              id:"doc-up-"+item.id,onChange:handleUpload}),
+            React.createElement("label",{htmlFor:"doc-up-"+item.id,
+              style:{background:uploading?C.dim:C.blue,color:"#fff",borderRadius:8,padding:"7px 14px",
+                cursor:"pointer",fontSize:12,fontWeight:600,display:"inline-block"}},
+              uploading?"Enviando...":"+ Anexar PDF"
+            )
+          )
+        ),
+        uploading&&React.createElement("div",{style:{marginBottom:10}},
+          React.createElement("div",{style:{background:C.border,borderRadius:6,height:8,overflow:"hidden",marginBottom:4}},
+            React.createElement("div",{style:{height:"100%",background:C.blue,width:progresso+"%",transition:"width 0.3s",borderRadius:6}})
+          ),
+          React.createElement("div",{style:{fontSize:10,color:C.muted,textAlign:"right"}},progresso+"%")
+        ),
+        msg&&React.createElement("div",{style:{marginBottom:10,fontSize:12,padding:"7px 10px",borderRadius:6,
+          color:msgTipo==="err"?C.red:C.green,background:(msgTipo==="err"?C.red:C.green)+"22"}},msg),
+        loadDocs
+          ?React.createElement("div",{style:{textAlign:"center",color:C.muted,padding:20,fontSize:12}},"Carregando...")
+          :docs.length===0
+            ?React.createElement("div",{style:{textAlign:"center",color:C.dim,padding:20,fontSize:12}},"Nenhum documento. Clique em Anexar PDF.")
+            :React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+              docs.map(function(doc){
+                return React.createElement("div",{key:doc.id,
+                  style:{background:C.card,borderRadius:8,padding:"10px 14px",
+                    display:"flex",alignItems:"center",gap:10,border:"1px solid "+C.border}},
+                  React.createElement("div",{style:{fontSize:20}},"PDF"),
+                  React.createElement("div",{style:{flex:1,minWidth:0}},
+                    React.createElement("div",{style:{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},doc.nome),
+                    React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:2}},
+                      fmtDt(doc.criado_em)+(doc.tamanho?" - "+fmtSz(doc.tamanho):""))
+                  ),
+                  React.createElement("a",{href:doc.url,target:"_blank",
+                    style:{...iBtn(C.blue),textDecoration:"none",padding:"5px 10px",fontSize:11}},"Ver"),
+                  React.createElement("a",{href:doc.url,download:doc.nome,
+                    style:{...iBtn(C.green),textDecoration:"none",padding:"5px 10px",fontSize:11}},"Baixar"),
+                  React.createElement("button",{style:{...iBtn(C.red),padding:"5px 10px",fontSize:11},
+                    onClick:function(){excluirDoc(doc);}},"Excluir")
+                );
+              })
+            )
+      ),
+      React.createElement("div",{style:{display:"flex",justifyContent:"flex-end",marginTop:12}},
         React.createElement("button",{style:btnStyle(C.blue),onClick:onClose},"Fechar")
       )
     );
   };
 
-  const [detalhe,setDetalhe]=useState(null);
 
   return React.createElement("div",null,
     React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
