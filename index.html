@@ -5029,9 +5029,344 @@ const TABS=[
   {id:"parametros",icon:"📋",label:"Parâmetros"},
   {id:"organograma",icon:"🏢",label:"Organograma"},
   {id:"usuarios",icon:"👤",label:"Usuários"},
+  {id:"mapa-calor",icon:"🗺",label:"Mapa de Calor"},
 ];
 
 const RefreshCtx=React.createContext({tick:0,refresh:function(){}});
+
+function MapaCalor({tecsBanco=TECNICOS}){
+  const {tick}=React.useContext(RefreshCtx);
+  const [conds,setConds]=useState([]);
+  const [os,setOs]=useState([]);
+  const [prevs,setPrevs]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [regioes,setRegioes]=useState([]);
+  const [regiaoSel,setRegiaoSel]=useState(null);
+  const [viewMode,setViewMode]=useState("mapa"); // mapa | regioes | distribuicao
+
+  // Regiões predefinidas do Ceará com coordenadas aproximadas
+  const REGIOES_DEFAULT=[
+    {id:"r1",nome:"Centro/Aldeota",cor:"#3b82f6",tec:"",lat:-3.7318,lng:-38.5267},
+    {id:"r2",nome:"Eusébio/Aquiraz",cor:"#10b981",tec:"",lat:-3.8891,lng:-38.4574},
+    {id:"r3",nome:"Maracanaú",cor:"#f59e0b",tec:"",lat:-3.8766,lng:-38.6257},
+    {id:"r4",nome:"Caucaia",cor:"#ef4444",tec:"",lat:-3.7361,lng:-38.6528},
+    {id:"r5",nome:"Messejana/Sul",cor:"#8b5cf6",tec:"",lat:-3.8234,lng:-38.4981},
+    {id:"r6",nome:"Parangaba/Oeste",cor:"#f97316",tec:"",lat:-3.7891,lng:-38.5891},
+    {id:"r7",nome:"Fortaleza Norte",cor:"#06b6d4",tec:"",lat:-3.7012,lng:-38.5312},
+    {id:"r8",nome:"Outros",cor:"#6b7280",tec:"",lat:-3.7900,lng:-38.5500},
+  ];
+
+  // Palavras-chave por região
+  const REGIAO_KEYS={
+    "r1":["aldeo","meirele","cocó","coco","dionísio","dionisio","beira mar","iracema","centro","papicu","varjota","joaquim","mucuripe"],
+    "r2":["eusébio","eusebio","aquiraz","precabura","coité","serviluz"],
+    "r3":["maracanaú","maracanau","pacatuba","maranguape"],
+    "r4":["caucaia","juraci","juraci","tabuba","iparana","jurema"],
+    "r5":["messejana","guamar","damas","eng velho","aeroporto","paupina","alagadiço","alagadico","mondubim"],
+    "r6":["parangaba","montese","fátima","fatima","rodolfo","dend","autran","vila velha","granja","bonsucesso","siqueira"],
+    "r7":["benfica","antônio","antonio","bezerra","barra","canindezinho","granja"],
+  };
+
+  function detectarRegiao(cond, end){
+    var txt=((cond||"")+" "+(end||"")).toLowerCase();
+    for(var rid in REGIAO_KEYS){
+      var keys=REGIAO_KEYS[rid];
+      for(var i=0;i<keys.length;i++){
+        if(txt.includes(keys[i]))return rid;
+      }
+    }
+    return "r8";
+  }
+
+  const load=useCallback(async function(){
+    setLoading(true);
+    var [rc,ros,rp]=await Promise.all([
+      sb.from("condominios").select("nome,endereco,tecnico,area_tecnico").order("nome"),
+      sb.from("os").select("cond,status").or("status.eq.Aberto,data.gte.2026-01-01"),
+      sb.from("preventivas").select("cond,status"),
+    ]);
+    setConds(rc.data||[]);
+    setOs(ros.data||[]);
+    setPrevs(rp.data||[]);
+
+    // Carregar regiões do banco ou usar padrão
+    var rReg=await sb.from("parametros").select("valor").eq("chave","mapa_regioes").limit(1);
+    if(rReg.data&&rReg.data.length>0&&rReg.data[0].valor){
+      try{setRegioes(JSON.parse(rReg.data[0].valor));}catch(e){setRegioes(REGIOES_DEFAULT);}
+    }else{
+      setRegioes(REGIOES_DEFAULT);
+    }
+    setLoading(false);
+  },[]);
+  useEffect(function(){load();},[load,tick]);
+
+  const salvarRegioes=async function(novasRegioes){
+    await sb.from("parametros").upsert({chave:"mapa_regioes",valor:JSON.stringify(novasRegioes)},{onConflict:"chave"});
+    setRegioes(novasRegioes);
+  };
+
+  // Calcular dados por região
+  const dadosPorRegiao=useMemo(function(){
+    var map={};
+    regioes.forEach(function(r){map[r.id]={...r,conds:[],osAbertas:0,osFechadas:0,prevPend:0,prevConc:0};});
+    conds.forEach(function(c){
+      var rid=detectarRegiao(c.nome,c.endereco);
+      if(map[rid])map[rid].conds.push(c);
+    });
+    os.forEach(function(o){
+      var cond=conds.find(function(c){return c.nome===o.cond;});
+      if(!cond)return;
+      var rid=detectarRegiao(cond.nome,cond.endereco);
+      if(!map[rid])return;
+      if(o.status==="Aberto")map[rid].osAbertas++;
+      else map[rid].osFechadas++;
+    });
+    prevs.forEach(function(p){
+      var cond=conds.find(function(c){return c.nome===p.cond;});
+      if(!cond)return;
+      var rid=detectarRegiao(cond.nome,cond.endereco);
+      if(!map[rid])return;
+      if(p.status==="Concluída")map[rid].prevConc++;
+      else map[rid].prevPend++;
+    });
+    return map;
+  },[regioes,conds,os,prevs]);
+
+  var maxConds=Math.max.apply(null,Object.values(dadosPorRegiao).map(function(r){return r.conds.length;}));
+  var regionsSorted=regioes.map(function(r){return dadosPorRegiao[r.id]||r;}).sort(function(a,b){return b.conds.length-a.conds.length;});
+
+  // ── RENDER ─────────────────────────────────────────────────
+  return React.createElement("div",null,
+    // Header
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:"1px solid "+C.border}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
+        React.createElement("div",null,
+          React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🗺 Mapa de Calor Operacional"),
+          React.createElement("div",{style:{fontSize:12,color:C.muted}},conds.length+" condomínios · "+regioes.length+" regiões")
+        ),
+        React.createElement("div",{style:{display:"flex",gap:6}},
+          ["mapa","regioes","distribuicao"].map(function(m){
+            var labels={mapa:"🗺 Mapa",regioes:"📊 Regiões",distribuicao:"👷 Distribuição"};
+            return React.createElement("button",{key:m,
+              style:{...btnStyle(C.blue,viewMode!==m),fontSize:11,padding:"6px 12px"},
+              onClick:function(){setViewMode(m);}},labels[m]);
+          })
+        )
+      )
+    ),
+    React.createElement("div",{style:{padding:"16px 24px"}},
+      loading?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.muted}},"Carregando dados..."):
+
+      viewMode==="mapa"?
+        // ── VISUALIZAÇÃO MAPA ──
+        React.createElement("div",null,
+          // KPIs
+          React.createElement(Grid,{cols:4,mb:16},
+            React.createElement(KPI,{label:"Condomínios",value:conds.length,color:C.blue}),
+            React.createElement(KPI,{label:"Regiões",value:regioes.length,color:C.purple}),
+            React.createElement(KPI,{label:"OS Abertas",value:os.filter(function(o){return o.status==="Aberto";}).length,color:C.red}),
+            React.createElement(KPI,{label:"Preventivas",value:prevs.length,color:C.green})
+          ),
+          // Mapa visual (representação por regiões com barras de calor)
+          React.createElement("div",{style:{background:C.card,borderRadius:12,padding:20,marginBottom:16,border:"1px solid "+C.border}},
+            React.createElement("div",{style:{fontSize:14,fontWeight:700,marginBottom:16,display:"flex",alignItems:"center",gap:8}},
+              "🔥 Concentração por Região",
+              React.createElement("span",{style:{fontSize:11,color:C.muted,fontWeight:400}},"— tamanho proporcional à quantidade de condomínios")
+            ),
+            // Grid visual de regiões com tamanhos proporcionais
+            React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10}},
+              regionsSorted.map(function(r){
+                var pct=maxConds>0?Math.max(10,Math.round(r.conds.length/maxConds*100)):10;
+                var intensidade=Math.min(255,Math.round(r.conds.length/maxConds*255));
+                var isSelected=regiaoSel&&regiaoSel.id===r.id;
+                return React.createElement("div",{key:r.id,
+                  onClick:function(){setRegiaoSel(isSelected?null:r);},
+                  style:{background:r.cor+"22",border:"2px solid "+(isSelected?r.cor:r.cor+"66"),
+                    borderRadius:10,padding:12,cursor:"pointer",position:"relative",
+                    transition:"all .2s",transform:isSelected?"scale(1.03)":"scale(1)"}
+                },
+                  // Barra de calor visual
+                  React.createElement("div",{style:{height:6,background:C.border,borderRadius:3,marginBottom:8,overflow:"hidden"}},
+                    React.createElement("div",{style:{height:"100%",width:pct+"%",background:r.cor,borderRadius:3,transition:"width .5s"}})
+                  ),
+                  React.createElement("div",{style:{fontSize:11,fontWeight:700,color:r.cor,marginBottom:4}},r.nome),
+                  React.createElement("div",{style:{fontSize:24,fontWeight:800,color:C.text,lineHeight:1}},r.conds.length),
+                  React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:6}},"condomínios"),
+                  React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",fontSize:10}},
+                    r.osAbertas>0&&React.createElement("span",{style:{background:C.red+"22",color:C.red,borderRadius:10,padding:"1px 6px"}},r.osAbertas+" OS"),
+                    r.prevPend>0&&React.createElement("span",{style:{background:C.yellow+"22",color:C.yellow,borderRadius:10,padding:"1px 6px"}},r.prevPend+" prev"),
+                    r.tec&&React.createElement("span",{style:{background:C.blue+"22",color:C.blue,borderRadius:10,padding:"1px 6px",marginTop:2}},r.tec.split(" ")[0])
+                  )
+                );
+              })
+            )
+          ),
+          // Detalhe da região selecionada
+          regiaoSel&&dadosPorRegiao[regiaoSel.id]&&React.createElement("div",{
+            style:{background:C.card,borderRadius:12,padding:20,border:"2px solid "+regiaoSel.cor}},
+            React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}},
+              React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+                React.createElement("div",{style:{width:14,height:14,borderRadius:"50%",background:regiaoSel.cor}}),
+                React.createElement("div",{style:{fontSize:16,fontWeight:700}},regiaoSel.nome),
+                React.createElement(Pill,{c:regiaoSel.cor},dadosPorRegiao[regiaoSel.id].conds.length+" condomínios")
+              ),
+              React.createElement("button",{style:iBtn(C.dim),onClick:function(){setRegiaoSel(null);}},"✕")
+            ),
+            React.createElement(Grid,{cols:4,mb:12},
+              React.createElement(KPI,{label:"Condomínios",value:dadosPorRegiao[regiaoSel.id].conds.length,color:regiaoSel.cor}),
+              React.createElement(KPI,{label:"OS Abertas",value:dadosPorRegiao[regiaoSel.id].osAbertas,color:C.red}),
+              React.createElement(KPI,{label:"Prev. Pendentes",value:dadosPorRegiao[regiaoSel.id].prevPend,color:C.yellow}),
+              React.createElement(KPI,{label:"Prev. Concluídas",value:dadosPorRegiao[regiaoSel.id].prevConc,color:C.green})
+            ),
+            React.createElement("div",{style:{maxHeight:260,overflowY:"auto"}},
+              React.createElement(Table,{
+                cols:["Condomínio","Endereço","Técnico","Área"],
+                rows:dadosPorRegiao[regiaoSel.id].conds.map(function(c){
+                  return [
+                    React.createElement("span",{style:{fontSize:11,fontWeight:600}},c.nome),
+                    React.createElement("span",{style:{fontSize:10,color:C.muted}},c.endereco||"—"),
+                    React.createElement("span",{style:{fontSize:11}},c.tecnico||"—"),
+                    React.createElement("span",{style:{fontSize:11,color:C.cyan}},c.area_tecnico||"—"),
+                  ];
+                })
+              })
+            )
+          )
+        ):
+
+      viewMode==="regioes"?
+        // ── GESTÃO DE REGIÕES ──
+        React.createElement("div",null,
+          React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+            React.createElement("div",{style:{fontSize:14,fontWeight:700}},"Regiões Operacionais"),
+            React.createElement("button",{style:btnStyle(C.green),
+              onClick:function(){
+                var nome=window.prompt("Nome da nova região:");
+                if(!nome)return;
+                var novas=[...regioes,{id:"r"+(regioes.length+1)+"_"+Date.now(),nome:nome,cor:C.blue,tec:""}];
+                salvarRegioes(novas);
+              }},"＋ Nova Região")
+          ),
+          React.createElement("div",{style:{display:"grid",gap:10}},
+            regionsSorted.map(function(r){
+              var d=dadosPorRegiao[r.id]||r;
+              var carga=maxConds>0?Math.round(r.conds.length/maxConds*100):0;
+              var cargaCor=carga>70?C.red:carga>40?C.yellow:C.green;
+              return React.createElement("div",{key:r.id,
+                style:{background:C.card,borderRadius:10,padding:16,border:"1px solid "+C.border,
+                  borderLeft:"4px solid "+r.cor}},
+                React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}},
+                  React.createElement("div",null,
+                    React.createElement("div",{style:{fontSize:14,fontWeight:700,color:r.cor}},r.nome),
+                    React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},
+                      r.conds.length+" condomínios · "+r.osAbertas+" OS · "+r.prevPend+" prev. pendentes"
+                    )
+                  ),
+                  React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},
+                    React.createElement("div",{style:{fontSize:10,color:cargaCor,fontWeight:700}},carga+"% carga"),
+                    React.createElement("button",{style:{...iBtn(C.dim),fontSize:10},
+                      onClick:function(){
+                        var novo=window.prompt("Novo nome para "+r.nome+":",r.nome);
+                        if(!novo)return;
+                        var novas=regioes.map(function(x){return x.id===r.id?{...x,nome:novo}:x;});
+                        salvarRegioes(novas);
+                      }},"✏️"),
+                    React.createElement("button",{style:{...iBtn(C.red),fontSize:10},
+                      onClick:function(){
+                        if(!window.confirm("Excluir região "+r.nome+"?"))return;
+                        var novas=regioes.filter(function(x){return x.id!==r.id;});
+                        salvarRegioes(novas);
+                      }},"🗑")
+                  )
+                ),
+                // Barra de carga
+                React.createElement("div",{style:{height:6,background:C.border,borderRadius:3,overflow:"hidden"}},
+                  React.createElement("div",{style:{height:"100%",width:carga+"%",background:cargaCor,borderRadius:3,transition:"width .5s"}})
+                )
+              );
+            })
+          ),
+          // Sugestão automática
+          React.createElement("div",{style:{background:C.blue+"11",border:"1px solid "+C.blue+"33",borderRadius:10,padding:16,marginTop:16}},
+            React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.blue,marginBottom:8}},"💡 Análise de Equilíbrio"),
+            React.createElement("div",{style:{fontSize:12,color:C.muted,lineHeight:1.8}},
+              "Média por região: "+Math.round(conds.length/regioes.length)+" condomínios",
+              React.createElement("br"),
+              "Região mais carregada: "+regionsSorted[0]?.nome+" ("+regionsSorted[0]?.conds.length+")",
+              React.createElement("br"),
+              "Região menos carregada: "+regionsSorted[regionsSorted.length-1]?.nome+" ("+regionsSorted[regionsSorted.length-1]?.conds.length+")",
+              Math.max.apply(null,regionsSorted.map(function(r){return r.conds.length;}))>
+              Math.round(conds.length/regioes.length)*1.5&&
+              React.createElement("div",{style:{marginTop:8,color:C.yellow}},
+                "⚠ Distribuição desbalanceada. Considere redistribuir condomínios entre regiões."
+              )
+            )
+          )
+        ):
+
+        // ── DISTRIBUIÇÃO DE TÉCNICOS ──
+        React.createElement("div",null,
+          React.createElement("div",{style:{fontSize:14,fontWeight:700,marginBottom:12}},"👷 Distribuição de Técnicos por Região"),
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}},
+            regionsSorted.map(function(r){
+              var d=dadosPorRegiao[r.id]||r;
+              return React.createElement("div",{key:r.id,
+                style:{background:C.card,borderRadius:10,padding:16,border:"1px solid "+C.border,borderTop:"3px solid "+r.cor}},
+                React.createElement("div",{style:{fontSize:13,fontWeight:700,color:r.cor,marginBottom:8}},r.nome),
+                React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:10}},
+                  r.conds.length+" cond · "+r.osAbertas+" OS · "+(r.prevPend+r.prevConc)+" prev"
+                ),
+                React.createElement("label",{style:{...base.lbl,marginBottom:4,display:"block"}},"Técnico Responsável"),
+                React.createElement("select",{
+                  style:{...base.sel,width:"100%"},
+                  value:r.tec||"",
+                  onChange:function(e){
+                    var novas=regioes.map(function(x){return x.id===r.id?{...x,tec:e.target.value}:x;});
+                    salvarRegioes(novas);
+                  }
+                },
+                  React.createElement("option",{value:""},"Nenhum"),
+                  tecsBanco.map(function(t){return React.createElement("option",{key:t.mat,value:t.nome},t.nome);})
+                ),
+                r.tec&&React.createElement("div",{style:{marginTop:8,display:"flex",alignItems:"center",gap:6,fontSize:11,color:C.cyan}},
+                  "✓ Atribuído: ",React.createElement("b",null,r.tec)
+                )
+              );
+            })
+          ),
+          // Resumo técnicos
+          React.createElement("div",{style:{marginTop:16,background:C.card,borderRadius:10,padding:16,border:"1px solid "+C.border}},
+            React.createElement("div",{style:{fontSize:13,fontWeight:700,marginBottom:12}},"📋 Resumo da Distribuição"),
+            React.createElement(Table,{
+              cols:["Técnico","Regiões","Condomínios","OS Abertas","Preventivas"],
+              rows:(function(){
+                var tecMap={};
+                regioes.forEach(function(r){
+                  var d=dadosPorRegiao[r.id]||{conds:[],osAbertas:0,prevPend:0,prevConc:0};
+                  if(!r.tec)return;
+                  if(!tecMap[r.tec])tecMap[r.tec]={regioes:[],conds:0,os:0,prev:0};
+                  tecMap[r.tec].regioes.push(r.nome);
+                  tecMap[r.tec].conds+=d.conds.length;
+                  tecMap[r.tec].os+=d.osAbertas;
+                  tecMap[r.tec].prev+=(d.prevPend||0)+(d.prevConc||0);
+                });
+                return Object.entries(tecMap).map(function(e){
+                  return [
+                    React.createElement("span",{style:{fontWeight:600}},e[0]),
+                    React.createElement("span",{style:{fontSize:10,color:C.muted}},e[1].regioes.join(", ")),
+                    React.createElement("span",{style:{color:C.blue,fontWeight:700}},e[1].conds),
+                    React.createElement("span",{style:{color:C.red}},e[1].os),
+                    React.createElement("span",{style:{color:C.green}},e[1].prev),
+                  ];
+                });
+              })()
+            })
+          )
+        )
+    )
+  );
+}
+
 
 function App(){
   const [usuario,setUsuario]=useState(null);
@@ -5132,6 +5467,7 @@ function App(){
       case"reginaldo":return React.createElement(ServicoReginaldo,{onSave:refresh});
       case"demandas":return React.createElement(Demandas,{onSave:refresh});
       case"usuarios":return React.createElement(Usuarios,{usuarioAtual:usuario});
+      case"mapa-calor":return React.createElement(MapaCalor,{tecsBanco});
       case"instalacoes":return React.createElement(Instalacoes,{onSave:refresh});
       case"ranking":return React.createElement(RankingSupervisores,null);
       case"rastreamento":return React.createElement(Rastreamento,null);
