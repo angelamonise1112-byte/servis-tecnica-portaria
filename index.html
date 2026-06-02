@@ -1674,10 +1674,20 @@ function Preventivas({onSave}){
 
   const load=useCallback(async function(){
     setLoading(true);
-    var r=await sb.from("preventivas")
-      .select("id,cond,tecnico,status,primeira_visita,retorno,devolucao,num_pedido,equipamentos,finalizado,laudo,laudo_enviado,regua_ip,regua_ok,obs,foto_url,laudo_url")
-      .order("cond",{ascending:true});
-    setData(r.data||[]);setLoading(false);
+    // Buscar preventivas e contagem de anexos juntos
+    var [rPrev,rDocs]=await Promise.all([
+      sb.from("preventivas")
+        .select("id,cond,tecnico,status,primeira_visita,retorno,devolucao,num_pedido,equipamentos,finalizado,laudo,laudo_enviado,regua_ip,regua_ok,obs,foto_url,laudo_url")
+        .order("cond",{ascending:true}),
+      sb.from("preventivas_docs").select("preventiva_id")
+    ]);
+    var prevs=rPrev.data||[];
+    var docsAll=rDocs.data||[];
+    // Contar anexos por preventiva
+    var contMap={};
+    docsAll.forEach(function(d){contMap[d.preventiva_id]=(contMap[d.preventiva_id]||0)+1;});
+    prevs.forEach(function(p){p._anexos=contMap[p.id]||0;});
+    setData(prevs);setLoading(false);
   },[]);
   useEffect(function(){load();},[load,tick]);
 
@@ -2021,18 +2031,24 @@ function Preventivas({onSave}){
       item.obs&&React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12,lineHeight:1.6}},
         React.createElement("span",{style:{color:C.muted,fontSize:10,fontWeight:700,marginRight:6}},"💬 OBS:"),item.obs
       ),
-      // ── SEÇÃO ANEXOS ──
-      React.createElement("div",{style:{border:"2px solid "+C.border,borderRadius:12,overflow:"hidden"}},
+      // ── CARD DOCUMENTOS NO TOPO ──
+      React.createElement("div",{style:{border:"2px solid "+(docs.length>0?C.blue:C.border),
+        borderRadius:12,overflow:"hidden",
+        boxShadow:docs.length>0?"0 0 0 1px "+C.blue+"33":"none"}},
         // Header dos anexos
-        React.createElement("div",{style:{background:C.surface,padding:"12px 16px",
+        React.createElement("div",{style:{
+          background:docs.length>0?C.blue+"11":C.surface,
+          padding:"12px 16px",
           display:"flex",justifyContent:"space-between",alignItems:"center",
           borderBottom:"1px solid "+C.border}},
           React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
-            React.createElement("span",{style:{fontSize:18}},"📁"),
-            React.createElement("span",{style:{fontWeight:700,fontSize:14}},"Anexos"),
+            React.createElement("span",{style:{fontSize:20}},"📎"),
+            React.createElement("span",{style:{fontWeight:700,fontSize:14}},
+              docs.length>0?"Documentos Anexados":"Anexar Documentos"
+            ),
             !loadDocs&&docs.length>0&&React.createElement("span",{style:{
-              background:C.blue+"22",color:C.blue,borderRadius:10,
-              padding:"2px 8px",fontSize:11,fontWeight:600}},docs.length+" arquivo"+(docs.length>1?"s":""))
+              background:C.blue,color:"#fff",borderRadius:10,
+              padding:"2px 10px",fontSize:12,fontWeight:700}},docs.length)
           ),
           React.createElement("button",{
             onClick:abrirSeletor,
@@ -2186,12 +2202,15 @@ function Preventivas({onSave}){
           ?React.createElement(Card,null,React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma preventiva encontrada"))
           :React.createElement(Card,null,
             React.createElement(Table,{
-              cols:["Condomínio","Técnico","Status","1ª Visita","Retorno","Devolução","Ações"],
+              cols:["Condomínio","Técnico","Status","1ª Visita","Retorno","Anexos","Ações"],
               rows:filtered.map(function(d){
                 var cor=STATUS_COR[d.status]||C.dim;
                 return [
                   React.createElement("div",null,
-                    React.createElement("div",{style:{fontSize:12,fontWeight:600}},d.cond),
+                    React.createElement("div",{style:{fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:6}},
+                      d._anexos>0&&React.createElement("span",{style:{fontSize:10}},"📎"),
+                      d.cond
+                    ),
                     d.num_pedido&&React.createElement("div",{style:{fontSize:10,color:C.dim}},"Pedido: "+d.num_pedido)
                   ),
                   React.createElement("span",{style:{fontSize:12}},d.tecnico||"—"),
@@ -2200,6 +2219,20 @@ function Preventivas({onSave}){
                   React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},fmt(d.primeira_visita)||"—"),
                   React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},fmt(d.retorno)||"—"),
                   React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},fmt(d.devolucao)||"—"),
+                  // Coluna Anexos
+                  React.createElement("div",{
+                    style:{cursor:"pointer",textAlign:"center"},
+                    onClick:function(){setDetalhe(Object.assign({},d));}
+                  },
+                    d._anexos>0
+                      ?React.createElement("div",{style:{display:"inline-flex",alignItems:"center",gap:4,
+                          background:C.blue+"22",border:"1px solid "+C.blue+"44",
+                          borderRadius:20,padding:"3px 10px",cursor:"pointer"}},
+                        React.createElement("span",{style:{fontSize:13}},"📎"),
+                        React.createElement("span",{style:{fontSize:12,fontWeight:700,color:C.blue}},d._anexos)
+                      )
+                      :React.createElement("span",{style:{color:C.dim,fontSize:11}},"—")
+                  ),
                   React.createElement("div",{style:{display:"flex",gap:4}},
                     React.createElement("button",{style:iBtn(C.purple),title:"Ver documentos",
                       onClick:function(){setDetalhe(Object.assign({},d));}},"📁"),
