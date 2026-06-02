@@ -315,16 +315,28 @@ function MinhasOS({usuario,onSelectOS}){
     return()=>{clearInterval(t);window.removeEventListener("focus",onFocus);};
   },[load]);
 
-  // Atualizar localização
+  // Atualizar localização e registrar histórico
   useEffect(()=>{
     if(!navigator.geolocation)return;
     const update=pos=>{
+      const lat=pos.coords.latitude;
+      const lng=pos.coords.longitude;
+      const vel=pos.coords.speed||null;
+      const agora=isoNowBrasilia();
+      // Atualizar posição atual
       sb.from("tecnicos_localizacao").upsert({
         id:"loc_"+usuario.nome.replace(/\s+/g,"_"),
-        tec:usuario.nome,lat:pos.coords.latitude,lng:pos.coords.longitude,
+        tec:usuario.nome,lat:lat,lng:lng,
         status_campo:"Disponível",os_num:null,os_cond:null,
-        atualizado_em:isoNowBrasilia()
+        atualizado_em:agora
       },{onConflict:"tec"});
+      // Registrar no histórico (a cada atualização)
+      sb.from("tecnicos_historico").insert({
+        id:"hist_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),
+        tec:usuario.nome,lat:lat,lng:lng,
+        status_campo:"Disponível",os_num:null,os_cond:null,
+        velocidade:vel,criado_em:agora
+      });
     };
     navigator.geolocation.getCurrentPosition(update);
     const t=setInterval(()=>navigator.geolocation.getCurrentPosition(update),60000);
@@ -555,20 +567,34 @@ function DetalheOS({os,usuario,onBack}){
   useEffect(()=>{
     if(!campo||campo.status_campo==="Aguardando"||campo.status_campo==="Concluído")return;
     const watcher=navigator.geolocation?.watchPosition(pos=>{
+      const lat=pos.coords.latitude,lng=pos.coords.longitude,vel=pos.coords.speed||null,agora=isoNowBrasilia();
       sb.from("tecnicos_localizacao").upsert({
         id:"loc_"+usuario.nome.replace(/\s+/g,"_"),
-        tec:usuario.nome,lat:pos.coords.latitude,lng:pos.coords.longitude,
+        tec:usuario.nome,lat:lat,lng:lng,
         status_campo:campo.status_campo,os_num:os.num,os_cond:os.cond,
-        atualizado_em:isoNowBrasilia()
+        atualizado_em:agora
       },{onConflict:"tec"});
+      sb.from("tecnicos_historico").insert({
+        id:"hist_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),
+        tec:usuario.nome,lat:lat,lng:lng,
+        status_campo:campo.status_campo,os_num:os.num,os_cond:os.cond,
+        velocidade:vel,criado_em:agora
+      });
     },null,{enableHighAccuracy:true,maximumAge:15000});
     const t=setInterval(()=>navigator.geolocation?.getCurrentPosition(pos=>{
+      const lat=pos.coords.latitude,lng=pos.coords.longitude,vel=pos.coords.speed||null,agora=isoNowBrasilia();
       sb.from("tecnicos_localizacao").upsert({
         id:"loc_"+usuario.nome.replace(/\s+/g,"_"),
-        tec:usuario.nome,lat:pos.coords.latitude,lng:pos.coords.longitude,
+        tec:usuario.nome,lat:lat,lng:lng,
         status_campo:campo.status_campo,os_num:os.num,os_cond:os.cond,
-        atualizado_em:isoNowBrasilia()
+        atualizado_em:agora
       },{onConflict:"tec"});
+      sb.from("tecnicos_historico").insert({
+        id:"hist_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),
+        tec:usuario.nome,lat:lat,lng:lng,
+        status_campo:campo.status_campo,os_num:os.num,os_cond:os.cond,
+        velocidade:vel,criado_em:agora
+      });
     }),30000);
     return()=>{if(watcher)navigator.geolocation?.clearWatch(watcher);clearInterval(t);};
   },[campo?.status_campo,usuario.nome,os.num,os.cond]);
