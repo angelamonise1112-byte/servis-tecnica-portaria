@@ -1906,24 +1906,24 @@ function Preventivas({onSave}){
       var files=Array.from(e.target.files||[]);
       if(!files.length)return;
       console.log("handleUpload chamado, files:", files.length, "item.id:", item.id);
-      if(!item.id){setMsg("Erro: preventiva sem ID. Salve a preventiva primeiro.");setMsgTipo("err");return;}
-      var fi=0;
-      function processarProximo(){
-        if(fi>=files.length)return;
-        var file=files[fi];
-        fi++;
+      if(!item.id){setMsg("Erro: preventiva sem ID");setMsgTipo("err");return;}
+      setUploading(true);setProgresso(5);
+      setMsg("Preparando...");setMsgTipo("");
+      // Processar um arquivo por vez usando callbacks (sem async/await)
+      var idx=0;
+      function next(){
+        if(idx>=files.length){setUploading(false);carregarDocs();return;}
+        var file=files[idx];idx++;
         if(file.size>5*1024*1024){
-          setMsg("Arquivo maior que 5MB: "+file.name);setMsgTipo("err");
-          processarProximo();return;
+          setMsg("Arquivo maior que 5MB ignorado: "+file.name);setMsgTipo("err");
+          next();return;
         }
-        setUploading(true);setProgresso(10);
-        setMsg("Lendo "+file.name+"...");setMsgTipo("");
-        var reader=new FileReader();
-        reader.onload=function(ev){
-          setProgresso(50);
+        setMsg("Lendo: "+file.name);setProgresso(30);
+        var r=new FileReader();
+        r.onload=function(ev){
+          setProgresso(70);
           var b64=ev.target.result;
-          var docId="doc_"+Date.now()+"_"+fi;
-          setProgresso(80);
+          var docId="doc_"+Date.now()+"_"+idx;
           sb.from("preventivas_docs").insert({
             id:docId,
             preventiva_id:item.id,
@@ -1932,22 +1932,19 @@ function Preventivas({onSave}){
             tamanho:file.size,
             usuario:"",
             criado_em:new Date().toISOString()
-          }).then(function(r){
-            setProgresso(100);
-            if(r.error){setMsg("Erro: "+r.error.message);setMsgTipo("err");}
-            else{setMsg("Arquivo enviado: "+file.name);setMsgTipo("ok");}
-            setUploading(false);
-            carregarDocs();
-            processarProximo();
+          }).then(function(res){
+            if(res.error){
+              setMsg("Erro banco: "+res.error.message);setMsgTipo("err");
+            }else{
+              setMsg("Enviado: "+file.name);setMsgTipo("ok");setProgresso(100);
+            }
+            next();
           });
         };
-        reader.onerror=function(){
-          setMsg("Erro ao ler arquivo.");setMsgTipo("err");
-          setUploading(false);processarProximo();
-        };
-        reader.readAsDataURL(file);
+        r.onerror=function(){setMsg("Erro FileReader");setMsgTipo("err");next();};
+        r.readAsDataURL(file);
       }
-      processarProximo();
+      next();
     };
         const excluirDoc=async function(doc){
       if(!window.confirm("Excluir "+doc.nome+"?"))return;
