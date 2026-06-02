@@ -1902,36 +1902,54 @@ function Preventivas({onSave}){
     };
     useEffect(function(){carregarDocs();},[item.id]);
 
-    const handleUpload=async function(e){
+    const handleUpload=function(e){
       var files=Array.from(e.target.files||[]);
       if(!files.length)return;
-      for(var fi=0;fi<files.length;fi++){
+      console.log("handleUpload chamado, files:", files.length, "item.id:", item.id);
+      if(!item.id){setMsg("Erro: preventiva sem ID. Salve a preventiva primeiro.");setMsgTipo("err");return;}
+      var fi=0;
+      function processarProximo(){
+        if(fi>=files.length)return;
         var file=files[fi];
-        if(file.size>20*1024*1024){setMsg("Arquivo maior que 20MB: "+file.name);setMsgTipo("err");continue;}
-        setUploading(true);setProgresso(0);
-        setMsg("Enviando "+file.name+"...");setMsgTipo("");
-        var ext=file.name.split(".").pop();
-        var path="docs/"+item.id+"_"+Date.now()+"_"+fi+"."+ext;
-        var prog=0;
-        var timer=setInterval(function(){prog=Math.min(prog+15,90);setProgresso(prog);},300);
-        var up=await sb.storage.from("preventivas").upload(path,file,{upsert:true});
-        clearInterval(timer);setProgresso(100);
-        if(up.error){setMsg("Erro: "+up.error.message);setMsgTipo("err");setUploading(false);setProgresso(0);continue;}
-        var urlRes=sb.storage.from("preventivas").getPublicUrl(path);
-        var url=urlRes.data.publicUrl;
-        await sb.from("preventivas_docs").insert({
-          id:"doc_"+Date.now()+"_"+fi,
-          preventiva_id:item.id,nome:file.name,
-          url:url,tamanho:file.size,
-          usuario:"",criado_em:new Date().toISOString()
-        });
-        setMsg("Arquivo enviado com sucesso!");setMsgTipo("ok");
-        setUploading(false);
-        await carregarDocs();
+        fi++;
+        if(file.size>5*1024*1024){
+          setMsg("Arquivo maior que 5MB: "+file.name);setMsgTipo("err");
+          processarProximo();return;
+        }
+        setUploading(true);setProgresso(10);
+        setMsg("Lendo "+file.name+"...");setMsgTipo("");
+        var reader=new FileReader();
+        reader.onload=function(ev){
+          setProgresso(50);
+          var b64=ev.target.result;
+          var docId="doc_"+Date.now()+"_"+fi;
+          setProgresso(80);
+          sb.from("preventivas_docs").insert({
+            id:docId,
+            preventiva_id:item.id,
+            nome:file.name,
+            url:b64,
+            tamanho:file.size,
+            usuario:"",
+            criado_em:new Date().toISOString()
+          }).then(function(r){
+            setProgresso(100);
+            if(r.error){setMsg("Erro: "+r.error.message);setMsgTipo("err");}
+            else{setMsg("Arquivo enviado: "+file.name);setMsgTipo("ok");}
+            setUploading(false);
+            carregarDocs();
+            processarProximo();
+          });
+        };
+        reader.onerror=function(){
+          setMsg("Erro ao ler arquivo.");setMsgTipo("err");
+          setUploading(false);processarProximo();
+        };
+        reader.readAsDataURL(file);
       }
+      processarProximo();
     };
-
-    const excluirDoc=async function(doc){
+        const excluirDoc=async function(doc){
       if(!window.confirm("Excluir "+doc.nome+"?"))return;
       var parts=doc.url.split("/preventivas/");
       if(parts[1])await sb.storage.from("preventivas").remove([parts[1]]);
@@ -1993,8 +2011,7 @@ function Preventivas({onSave}){
                     React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:2}},
                       fmtDt(doc.criado_em)+(doc.tamanho?" - "+fmtSz(doc.tamanho):""))
                   ),
-                  React.createElement("a",{href:doc.url,target:"_blank",
-                    style:{...iBtn(C.blue),textDecoration:"none",padding:"5px 10px",fontSize:11}},"Ver"),
+                  React.createElement("button",{style:{...iBtn(C.blue),padding:"5px 10px",fontSize:11},onClick:function(){var w=window.open();w.document.write("<iframe src=\""+doc.url+"\" style=\"width:100%;height:100vh;border:none\"></iframe>");}},"Ver"),
                   React.createElement("a",{href:doc.url,download:doc.nome,
                     style:{...iBtn(C.green),textDecoration:"none",padding:"5px 10px",fontSize:11}},"Baixar"),
                   React.createElement("button",{style:{...iBtn(C.red),padding:"5px 10px",fontSize:11},
