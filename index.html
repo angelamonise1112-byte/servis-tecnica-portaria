@@ -1665,12 +1665,12 @@ function Preventivas({onSave}){
   const [loading,setLoading]=useState(true);
   const [busca,setBusca]=useState("");
   const [filtStatus,setFiltStatus]=useState("Todos");
-  const [modal,setModal]=useState(null);   // null | {} | item
+  const [modal,setModal]=useState(null);
   const [detalhe,setDetalhe]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
 
-  const STATUS_OPTS=["Todos","Pendente","Em andamento","Concluída"];
   const STATUS_COR={"Pendente":C.yellow,"Em andamento":C.blue,"Concluída":C.green};
+  const STATUS_OPTS=["Todos","Pendente","Em andamento","Concluída"];
 
   const load=useCallback(async function(){
     setLoading(true);
@@ -1683,24 +1683,20 @@ function Preventivas({onSave}){
 
   const filtered=useMemo(function(){
     return (data||[]).filter(function(d){
-      var matchB=!busca||(d.cond||"").toLowerCase().includes(busca.toLowerCase())||(d.tecnico||"").toLowerCase().includes(busca.toLowerCase());
-      var matchS=filtStatus==="Todos"||d.status===filtStatus;
-      return matchB&&matchS;
+      var mb=!busca||(d.cond||"").toLowerCase().includes(busca.toLowerCase())||(d.tecnico||"").toLowerCase().includes(busca.toLowerCase());
+      var ms=filtStatus==="Todos"||d.status===filtStatus;
+      return mb&&ms;
     });
   },[data,busca,filtStatus]);
 
   const save=async function(item){
-    var it={
-      id:item.id||uid(),cond:item.cond||"",tecnico:item.tecnico||"",
+    var it={id:item.id||uid(),cond:item.cond||"",tecnico:item.tecnico||"",
       primeira_visita:item.primeira_visita||"",num_pedido:item.num_pedido||"",
       equipamentos:item.equipamentos||"",finalizado:item.finalizado||"",
       retorno:item.retorno||"",laudo:item.laudo||"",laudo_enviado:item.laudo_enviado||"",
       devolucao:item.devolucao||"",regua_ip:item.regua_ip||"",regua_ok:item.regua_ok||"",
-      status:item.status||"Pendente",obs:item.obs||"",
-      foto_url:item.foto_url||null,laudo_url:item.laudo_url||null,
-    };
-    var existing=data.find(function(x){return x.id===it.id;});
-    if(existing){await sb.from("preventivas").update(it).eq("id",it.id);}
+      status:item.status||"Pendente",obs:item.obs||"",foto_url:item.foto_url||null,laudo_url:item.laudo_url||null};
+    if(data.find(function(x){return x.id===it.id;})){await sb.from("preventivas").update(it).eq("id",it.id);}
     else{await sb.from("preventivas").insert(it);}
     setModal(null);load();if(onSave)onSave();
   };
@@ -1710,367 +1706,406 @@ function Preventivas({onSave}){
     setConfirmDel(null);load();if(onSave)onSave();
   };
 
-  // ── Relatório PDF ──────────────────────────────────────────
-  const gerarRelatorio=function(lista,statusFiltro){
+  const exportarPDF=function(){
+    var lista=filtered;var statusLabel=filtStatus==="Todos"?"Todas":filtStatus;
     var win=window.open("","_blank");
     var hoje=new Date().toLocaleDateString("pt-BR");
+    var concl=lista.filter(function(d){return d.status==="Concluída";}).length;
+    var pend=lista.filter(function(d){return d.status==="Pendente";}).length;
+    var and=lista.filter(function(d){return d.status==="Em andamento";}).length;
     var rows=lista.map(function(d){
-      var cor=d.status==="Concluída"?"#059669":d.status==="Em andamento"?"#2563eb":"#d97706";
-      return "<tr><td>"+(d.cond||"")+"</td><td>"+(d.tecnico||"")+"</td>"
-        +"<td style='color:"+cor+";font-weight:600'>"+(d.status||"")+"</td>"
+      var cor=d.status==="Concluída"?"#059669":d.status==="Em andamento"?"#1d4ed8":"#b45309";
+      var bg=d.status==="Concluída"?"#f0fdf4":d.status==="Em andamento"?"#eff6ff":"#fffbeb";
+      return "<tr><td style='font-weight:600'>"+(d.cond||"")+"</td><td>"+(d.tecnico||"—")+"</td>"
+        +"<td><span style='background:"+bg+";color:"+cor+";padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700'>"+(d.status||"—")+"</span></td>"
         +"<td>"+(d.primeira_visita?new Date(d.primeira_visita).toLocaleDateString("pt-BR"):"—")+"</td>"
         +"<td>"+(d.retorno?new Date(d.retorno).toLocaleDateString("pt-BR"):"—")+"</td>"
         +"<td>"+(d.devolucao?new Date(d.devolucao).toLocaleDateString("pt-BR"):"—")+"</td>"
-        +"<td>"+(d.num_pedido||"—")+"</td>"
         +"<td>"+(d.obs||"—")+"</td></tr>";
     }).join("");
-    win.document.write("<!DOCTYPE html><html><head><meta charset='UTF-8'>"
-      +"<title>Preventivas — "+statusFiltro+"</title>"
-      +"<style>body{font-family:Arial,sans-serif;font-size:10px;padding:16px}"
-      +"h1{font-size:15px;margin-bottom:4px}p{color:#666;font-size:11px;margin-bottom:12px}"
-      +"table{width:100%;border-collapse:collapse}"
-      +"th{background:#1e3a5f;color:#fff;padding:6px 8px;text-align:left;font-size:9px}"
-      +"td{padding:5px 8px;border-bottom:1px solid #ddd;font-size:9px;vertical-align:top}"
-      +"tr:nth-child(even){background:#f5f5f5}"
-      +"@media print{body{padding:0}}</style></head><body>"
-      +"<h1>Relatório de Preventivas — "+statusFiltro+"</h1>"
-      +"<p>Gerado em "+hoje+" · "+lista.length+" registros</p>"
-      +"<table><thead><tr><th>Condomínio</th><th>Técnico</th><th>Status</th>"
-      +"<th>1ª Visita</th><th>Retorno</th><th>Devolução</th><th>Nº Pedido</th><th>Observações</th>"
-      +"</tr></thead><tbody>"+rows+"</tbody></table>"
-      +"<script>window.onload=function(){window.print();}<\/script>"
-      +"</body></html>");
+    win.document.write("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Preventivas</title>"
+      +"<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;color:#111;padding:24px}"
+      +"h1{font-size:18px;font-weight:700;margin-bottom:2px}h2{font-size:12px;color:#666;font-weight:400;margin-bottom:16px}"
+      +".stats{display:flex;gap:12px;margin-bottom:20px}.stat{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 16px;text-align:center}"
+      +".stat .n{font-size:22px;font-weight:800}.stat .l{font-size:10px;color:#666;margin-top:2px}"
+      +"table{width:100%;border-collapse:collapse;margin-top:8px}"
+      +"th{background:#1e3a5f;color:#fff;padding:8px 10px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.5px}"
+      +"td{padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:9px;vertical-align:top}"
+      +"tr:hover td{background:#f8fafc}@media print{body{padding:0}}</style></head><body>"
+      +"<h1>Relatório de Preventivas — "+statusLabel+"</h1>"
+      +"<h2>Gerado em "+hoje+" · "+lista.length+" registros</h2>"
+      +"<div class='stats'>"
+      +"<div class='stat'><div class='n' style='color:#1e3a5f'>"+lista.length+"</div><div class='l'>Total</div></div>"
+      +"<div class='stat'><div class='n' style='color:#059669'>"+concl+"</div><div class='l'>Concluídas</div></div>"
+      +"<div class='stat'><div class='n' style='color:#1d4ed8'>"+and+"</div><div class='l'>Em andamento</div></div>"
+      +"<div class='stat'><div class='n' style='color:#b45309'>"+pend+"</div><div class='l'>Pendentes</div></div>"
+      +"</div>"
+      +"<table><thead><tr><th>CONDOMÍNIO</th><th>TÉCNICO</th><th>STATUS</th><th>1ª VISITA</th><th>RETORNO</th><th>DEVOLUÇÃO</th><th>OBSERVAÇÕES</th></tr></thead>"
+      +"<tbody>"+rows+"</tbody></table>"
+      +"<script>window.onload=function(){window.print();}<\/script></body></html>");
     win.document.close();
   };
 
-  // ── EditModal ──────────────────────────────────────────────
-  const EditModal=function(props){
+  // ── EDIT MODAL ─────────────────────────────────────────────
+  var EditModal=function(props){
     var item=props.item;var onClose=props.onClose;
-    var ini=item?Object.assign({},item):{
-      cond:"",tecnico:"",primeira_visita:"",num_pedido:"",equipamentos:"",
-      finalizado:"",retorno:"",laudo:"",laudo_enviado:"",devolucao:"",
-      regua_ip:"",regua_ok:"",status:"Pendente",obs:"",foto_url:null,laudo_url:null
-    };
-    var [f,setF]=useState(ini);
-    var [condBusca,setCondBusca]=useState(ini.cond||"");
-    var [showCondList,setShowCondList]=useState(false);
-    var [err,setErr]=useState("");
-
+    var blank={cond:"",tecnico:"",primeira_visita:"",num_pedido:"",equipamentos:"",
+      finalizado:"",retorno:"",laudo:"",laudo_enviado:"",devolucao:"",regua_ip:"",
+      regua_ok:"",status:"Pendente",obs:"",foto_url:null,laudo_url:null};
+    var [f,setF]=useState(item?Object.assign({},item):Object.assign({},blank));
+    var [condQ,setCondQ]=useState(item?item.cond||"":"");
+    var [showDrop,setShowDrop]=useState(false);
+    var [saveErr,setSaveErr]=useState("");
     useEffect(function(){
-      if(item){setF(Object.assign({},item));setCondBusca(item.cond||"");}
+      if(item){var n=Object.assign({},item);setF(n);setCondQ(n.cond||"");}
+      else{setF(Object.assign({},blank));setCondQ("");}
     },[item]);
-
-    var condsFilt=useMemo(function(){
-      if(!condBusca)return CONDS.slice(0,10);
-      return CONDS.filter(function(c){return c.toLowerCase().includes(condBusca.toLowerCase());}).slice(0,10);
-    },[condBusca]);
-
+    var filtConds=useMemo(function(){
+      if(!condQ)return CONDS.slice(0,8);
+      return CONDS.filter(function(c){return c.toLowerCase().includes(condQ.toLowerCase());}).slice(0,10);
+    },[condQ]);
     function upd(k){return function(e){setF(function(p){var n=Object.assign({},p);n[k]=e.target.value;return n;});};}
-    function setStatus(v){setF(function(p){return Object.assign({},p,{status:v});});}
-    function selCond(c){setF(function(p){return Object.assign({},p,{cond:c});});setCondBusca(c);setShowCondList(false);}
+    function selCond(c){setF(function(p){return Object.assign({},p,{cond:c});});setCondQ(c);setShowDrop(false);}
+    function doSave(){if(!f.cond){setSaveErr("Selecione o condomínio");return;}save(Object.assign({},f,{id:f.id||uid()}));}
 
-    function doSave(){
-      if(!f.cond){setErr("Selecione o condomínio");return;}
-      save(Object.assign({},f,{id:f.id||uid()}));
-    }
+    var S={"Pendente":C.yellow,"Em andamento":C.blue,"Concluída":C.green};
 
-    return React.createElement(Modal,{title:item&&item.id?"Editar Preventiva":"Nova Preventiva",onClose:onClose,width:600},
-      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
-        // Condomínio com autocomplete
+    return React.createElement(Modal,{title:(item&&item.id?"Editar":"Nova")+" Preventiva",onClose:onClose,width:620},
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}},
+        // Condomínio autocomplete
         React.createElement("div",{style:{gridColumn:"1/-1",position:"relative"}},
           React.createElement("label",{style:base.lbl},"Condomínio *"),
-          React.createElement("input",{
-            style:{...base.inp,paddingLeft:32},
-            value:condBusca,
-            placeholder:"Digite para buscar...",
-            autoComplete:"off",
-            onChange:function(e){setCondBusca(e.target.value);setF(function(p){return Object.assign({},p,{cond:""});});setShowCondList(true);},
-            onFocus:function(){setShowCondList(true);},
-            onBlur:function(){setTimeout(function(){setShowCondList(false);},200);}
-          }),
-          React.createElement("span",{style:{position:"absolute",left:10,top:13,color:C.muted,fontSize:13}},"🔍"),
-          showCondList&&condsFilt.length>0&&React.createElement("div",{
-            style:{position:"absolute",top:"100%",left:0,right:0,zIndex:99,
-              background:C.card,border:"1px solid "+C.blue,borderRadius:8,
-              maxHeight:200,overflowY:"auto",boxShadow:"0 8px 24px rgba(0,0,0,.5)",marginTop:2}
+          React.createElement("div",{style:{position:"relative"}},
+            React.createElement("input",{
+              style:{...base.inp,paddingLeft:36},value:condQ,placeholder:"Buscar condomínio...",autoComplete:"off",
+              onChange:function(e){setCondQ(e.target.value);setF(function(p){return Object.assign({},p,{cond:""});});setShowDrop(true);},
+              onFocus:function(){setShowDrop(true);},
+              onBlur:function(){setTimeout(function(){setShowDrop(false);},200);}
+            }),
+            React.createElement("span",{style:{position:"absolute",left:12,top:12,color:C.muted,fontSize:14}},"🔍")
+          ),
+          showDrop&&filtConds.length>0&&React.createElement("div",{
+            style:{position:"absolute",top:"100%",left:0,right:0,zIndex:99,background:C.card,
+              border:"1px solid "+C.blue,borderRadius:8,maxHeight:220,overflowY:"auto",
+              boxShadow:"0 8px 32px rgba(0,0,0,.5)",marginTop:2}
           },
-            condsFilt.map(function(c){
+            filtConds.map(function(c){
               return React.createElement("div",{key:c,
-                style:{padding:"9px 14px",cursor:"pointer",fontSize:13,
-                  borderBottom:"1px solid "+C.border,
-                  background:c===f.cond?C.blue+"22":"transparent"},
-                onMouseDown:function(){selCond(c);}
-              },c);
+                style:{padding:"10px 14px",cursor:"pointer",fontSize:13,borderBottom:"1px solid "+C.border,
+                  background:c===f.cond?C.blue+"33":"transparent",color:c===f.cond?C.blue:C.text},
+                onMouseDown:function(){selCond(c);}},
+                c===f.cond&&React.createElement("span",{style:{marginRight:6,color:C.green}},"✓"),c
+              );
             })
           ),
-          f.cond&&React.createElement("div",{style:{fontSize:11,color:C.cyan,marginTop:4}},"✓ "+f.cond)
+          f.cond&&React.createElement("div",{style:{fontSize:11,color:C.cyan,marginTop:4,display:"flex",alignItems:"center",gap:4}},
+            React.createElement("span",{style:{color:C.green}},"✓"),
+            React.createElement("b",null,f.cond),
+            React.createElement("span",{style:{color:C.dim,cursor:"pointer",marginLeft:6},
+              onClick:function(){setF(function(p){return Object.assign({},p,{cond:""});});setCondQ("");}
+            },"(trocar)")
+          )
         ),
         // Técnico
         React.createElement("div",{style:{gridColumn:"1/-1"}},
-          React.createElement("label",{style:base.lbl},"Técnico"),
+          React.createElement("label",{style:base.lbl},"Técnico Responsável"),
           React.createElement("select",{style:base.sel,value:f.tecnico||"",onChange:upd("tecnico")},
-            React.createElement("option",{value:""},"Selecionar..."),
+            React.createElement("option",{value:""},"Selecionar técnico..."),
             TECNICOS.map(function(t){return React.createElement("option",{key:t.mat,value:t.nome},t.nome);})
           )
         ),
-        // Datas
+        // Datas em grid 3 colunas
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"1ª Visita"),React.createElement("input",{type:"date",style:base.inp,value:f.primeira_visita||"",onChange:upd("primeira_visita")})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Retorno"),React.createElement("input",{type:"date",style:base.inp,value:f.retorno||"",onChange:upd("retorno")})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Devolução"),React.createElement("input",{type:"date",style:base.inp,value:f.devolucao||"",onChange:upd("devolucao")})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Nº Pedido"),React.createElement("input",{style:base.inp,value:f.num_pedido||"",onChange:upd("num_pedido")})),
-        // Campos select
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Nº Pedido"),React.createElement("input",{style:base.inp,value:f.num_pedido||"",onChange:upd("num_pedido"),placeholder:"Ex: PED-001"})),
         React.createElement("div",null,
-          React.createElement("label",{style:base.lbl},"Laudo Enviado"),
+          React.createElement("label",{style:base.lbl},"Laudo"),
           React.createElement("select",{style:base.sel,value:f.laudo_enviado||"",onChange:upd("laudo_enviado")},
-            ["","ENVIADO (OK)","PENDENTE","NAO ENVIADO"].map(function(s){return React.createElement("option",{key:s},s);})
-          )
-        ),
+            ["","ENVIADO (OK)","PENDENTE","NAO ENVIADO"].map(function(s){return React.createElement("option",{key:s},s);}))),
         React.createElement("div",null,
           React.createElement("label",{style:base.lbl},"Finalizado"),
           React.createElement("select",{style:base.sel,value:f.finalizado||"",onChange:upd("finalizado")},
-            ["","SIM","NÃO","PARCIAL"].map(function(s){return React.createElement("option",{key:s},s);})
-          )
-        ),
+            ["","SIM","NÃO","PARCIAL"].map(function(s){return React.createElement("option",{key:s},s);}))),
         React.createElement("div",null,
           React.createElement("label",{style:base.lbl},"Régua IP"),
           React.createElement("select",{style:base.sel,value:f.regua_ip||"",onChange:upd("regua_ip")},
-            ["","OK","PENDENTE","N/A"].map(function(s){return React.createElement("option",{key:s},s);})
-          )
-        ),
+            ["","OK","PENDENTE","N/A"].map(function(s){return React.createElement("option",{key:s},s);}))),
         React.createElement("div",null,
           React.createElement("label",{style:base.lbl},"Régua OK"),
           React.createElement("select",{style:base.sel,value:f.regua_ok||"",onChange:upd("regua_ok")},
-            ["","OK","PENDENTE","N/A"].map(function(s){return React.createElement("option",{key:s},s);})
-          )
-        ),
+            ["","OK","PENDENTE","N/A"].map(function(s){return React.createElement("option",{key:s},s);}))),
         React.createElement("div",{style:{gridColumn:"1/-1"}},
           React.createElement("label",{style:base.lbl},"Equipamentos"),
-          React.createElement("textarea",{style:{...base.inp,height:60},value:f.equipamentos||"",onChange:upd("equipamentos")})
-        ),
+          React.createElement("textarea",{style:{...base.inp,height:64},value:f.equipamentos||"",onChange:upd("equipamentos"),placeholder:"Descreva os equipamentos verificados..."})),
         React.createElement("div",{style:{gridColumn:"1/-1"}},
           React.createElement("label",{style:base.lbl},"Observações"),
-          React.createElement("textarea",{style:{...base.inp,height:60},value:f.obs||"",onChange:upd("obs")})
-        ),
-        // Status
+          React.createElement("textarea",{style:{...base.inp,height:64},value:f.obs||"",onChange:upd("obs"),placeholder:"Observações adicionais..."})),
         React.createElement("div",{style:{gridColumn:"1/-1"}},
-          React.createElement("label",{style:base.lbl},"Status"),
+          React.createElement("label",{style:{...base.lbl,marginBottom:8,display:"block"}},"Status"),
           React.createElement("div",{style:{display:"flex",gap:8}},
             ["Pendente","Em andamento","Concluída"].map(function(s){
               return React.createElement("button",{key:s,
-                style:{...btnStyle(STATUS_COR[s]||C.blue,f.status!==s),flex:1,fontSize:11},
-                onClick:function(){setStatus(s);}
-              },s);
-            })
-          )
-        ),
-        err&&React.createElement("div",{style:{gridColumn:"1/-1",color:C.red,fontSize:12,background:C.red+"11",borderRadius:6,padding:"6px 10px"}},err)
+                style:{...btnStyle(S[s]||C.blue,f.status!==s),flex:1,fontSize:11},
+                onClick:function(){setF(function(p){return Object.assign({},p,{status:s});});}},s);}))),
+        saveErr&&React.createElement("div",{style:{gridColumn:"1/-1",color:C.red,fontSize:12,
+          background:C.red+"11",borderRadius:6,padding:"8px 12px"}},"⚠ "+saveErr)
       ),
-      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16,paddingTop:16,borderTop:"1px solid "+C.border}},
         React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
-        React.createElement("button",{style:btnStyle(C.blue),onClick:doSave},"💾 Salvar")
+        React.createElement("button",{style:btnStyle(C.blue),onClick:doSave},"💾 Salvar Preventiva")
       )
     );
   };
 
-  // ── DetalheModal com Documentos ────────────────────────────
-  const DetalheModal=function(props){
+  // ── DETALHE + DOCUMENTOS ───────────────────────────────────
+  var DetalheModal=function(props){
     var item=props.item;var onClose=props.onClose;
     var [docs,setDocs]=useState([]);
     var [loadDocs,setLoadDocs]=useState(true);
-    var [upMsg,setUpMsg]=useState("");
-    var [upMsgTipo,setUpMsgTipo]=useState("");
-    var [progresso,setProgresso]=useState(0);
+    var [upMsg,setUpMsg]=useState({txt:"",tipo:""});
+    var [prog,setProg]=useState(0);
     var [uploading,setUploading]=useState(false);
 
-    function carregarDocs(){
+    function loadDcs(){
       setLoadDocs(true);
-      sb.from("preventivas_docs").select("*").eq("preventiva_id",item.id).order("criado_em",{ascending:false})
+      sb.from("preventivas_docs").select("*").eq("preventiva_id",item.id)
+        .order("criado_em",{ascending:false})
         .then(function(r){setDocs(r.data||[]);setLoadDocs(false);});
     }
-    useEffect(function(){if(item&&item.id)carregarDocs();},[item.id]);
+    useEffect(function(){if(item&&item.id)loadDcs();},[item.id]);
 
-    function handleUpload(e){
-      var files=Array.from(e.target.files||[]);
-      if(!files.length)return;
-      if(!item||!item.id){setUpMsg("Erro: preventiva sem ID");setUpMsgTipo("err");return;}
-      var idx=0;
-      function processNext(){
-        if(idx>=files.length){setUploading(false);carregarDocs();return;}
-        var file=files[idx];idx++;
-        if(file.size>5*1024*1024){
-          setUpMsg(file.name+": maior que 5MB");setUpMsgTipo("err");
-          processNext();return;
+    function abrirSeletor(){
+      var inp=document.createElement("input");
+      inp.type="file";inp.accept=".pdf,application/pdf";inp.multiple=true;
+      inp.onchange=function(e){
+        var files=Array.from(e.target.files||[]);
+        if(!files.length)return;
+        var idx=0;
+        function next(){
+          if(idx>=files.length){setUploading(false);loadDcs();return;}
+          var file=files[idx];idx++;
+          if(file.size>5*1024*1024){
+            setUpMsg({txt:"⚠ "+file.name+": máximo 5MB",tipo:"err"});next();return;
+          }
+          setUploading(true);setProg(10);
+          setUpMsg({txt:"📖 Lendo "+file.name+"...",tipo:""});
+          var reader=new FileReader();
+          reader.onload=function(ev){
+            setProg(60);
+            setUpMsg({txt:"💾 Salvando "+file.name+"...",tipo:""});
+            sb.from("preventivas_docs").insert({
+              id:"doc_"+Date.now()+"_"+idx,
+              preventiva_id:item.id,nome:file.name,
+              url:ev.target.result,tamanho:file.size,
+              usuario:"",criado_em:new Date().toISOString()
+            }).then(function(r){
+              if(r.error){setUpMsg({txt:"❌ Erro: "+r.error.message,tipo:"err"});}
+              else{setProg(100);setUpMsg({txt:"✅ "+file.name+" anexado!",tipo:"ok"});}
+              next();
+            });
+          };
+          reader.onerror=function(){setUpMsg({txt:"❌ Erro ao ler arquivo",tipo:"err"});next();};
+          reader.readAsDataURL(file);
         }
-        setUploading(true);setProgresso(20);
-        setUpMsg("Lendo: "+file.name+"...");setUpMsgTipo("");
-        var reader=new FileReader();
-        reader.onload=function(ev){
-          setProgresso(60);
-          sb.from("preventivas_docs").insert({
-            id:"doc_"+Date.now()+"_"+idx,
-            preventiva_id:item.id,
-            nome:file.name,
-            url:ev.target.result,
-            tamanho:file.size,
-            usuario:"",
-            criado_em:new Date().toISOString()
-          }).then(function(r){
-            if(r.error){setUpMsg("Erro: "+r.error.message);setUpMsgTipo("err");}
-            else{setProgresso(100);setUpMsg("✅ "+file.name+" salvo!");setUpMsgTipo("ok");}
-            processNext();
-          });
-        };
-        reader.onerror=function(){setUpMsg("Erro ao ler arquivo");setUpMsgTipo("err");processNext();};
-        reader.readAsDataURL(file);
-      }
-      processNext();
-    }
-
-    function excluirDoc(doc){
-      if(!window.confirm("Excluir "+doc.nome+"?"))return;
-      sb.from("preventivas_docs").delete().eq("id",doc.id).then(function(){carregarDocs();});
-    }
-
-    function verPDF(url){
-      var w=window.open("","_blank");
-      if(!w)return;
-      w.document.write("<html><body style='margin:0'><iframe src='"+url+"' style='width:100%;height:100vh;border:none'></iframe></body></html>");
-      w.document.close();
+        next();
+      };
+      document.body.appendChild(inp);
+      inp.click();
+      document.body.removeChild(inp);
     }
 
     function fmtSz(b){if(!b)return"";if(b>1024*1024)return(b/1024/1024).toFixed(1)+"MB";return Math.round(b/1024)+"KB";}
     function fmtDt(iso){if(!iso)return"";return new Date(iso).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"});}
 
-    return React.createElement(Modal,{title:"Preventiva: "+item.cond,onClose:onClose,width:680},
-      // Info grid
-      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}},
-        [{l:"Técnico",v:item.tecnico||"—"},{l:"Status",v:item.status||"—"},{l:"1ª Visita",v:fmt(item.primeira_visita)},
-         {l:"Retorno",v:fmt(item.retorno)},{l:"Devolução",v:fmt(item.devolucao)},{l:"Nº Pedido",v:item.num_pedido||"—"}]
+    var cor=STATUS_COR[item.status]||C.dim;
+
+    return React.createElement(Modal,{title:"Preventiva — "+item.cond,onClose:onClose,width:700},
+      // Status banner
+      React.createElement("div",{style:{background:cor+"11",border:"1px solid "+cor+"44",borderRadius:10,
+        padding:"10px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:10}},
+        React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:cor,flexShrink:0}}),
+        React.createElement("span",{style:{fontWeight:700,color:cor}}),
+        React.createElement("span",{style:{color:cor,fontWeight:700,fontSize:14}},item.status||"—"),
+        React.createElement("span",{style:{color:C.muted,fontSize:12,marginLeft:"auto"}},item.cond)
+      ),
+      // Grid informações
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:1,background:C.border,borderRadius:10,overflow:"hidden",marginBottom:16}},
+        [{l:"Técnico",v:item.tecnico||"—",icon:"👷"},{l:"1ª Visita",v:fmt(item.primeira_visita),icon:"📅"},
+         {l:"Retorno",v:fmt(item.retorno),icon:"🔄"},{l:"Devolução",v:fmt(item.devolucao),icon:"📦"},
+         {l:"Nº Pedido",v:item.num_pedido||"—",icon:"🔢"},{l:"Laudo",v:item.laudo_enviado||item.laudo||"—",icon:"📋"},
+         {l:"Finalizado",v:item.finalizado||"—",icon:"✅"},{l:"Régua IP",v:item.regua_ip||"—",icon:"🔌"},
+         {l:"Régua OK",v:item.regua_ok||"—",icon:"⚡"}]
         .map(function(k,i){
-          return React.createElement("div",{key:i,style:{background:C.bg,borderRadius:8,padding:"8px 10px"}},
-            React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:2}},k.l),
-            React.createElement("div",{style:{fontSize:12,fontWeight:600}},k.v)
+          return React.createElement("div",{key:i,style:{background:C.card,padding:"12px 14px"}},
+            React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:4}},k.icon+" "+k.l),
+            React.createElement("div",{style:{fontSize:13,fontWeight:600}},k.v)
           );
         })
       ),
-      item.obs&&React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:12}},
-        React.createElement("b",null,"Obs: "),item.obs
+      item.equipamentos&&React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"10px 14px",marginBottom:12}},
+        React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:4}},"🔧 EQUIPAMENTOS"),
+        React.createElement("div",{style:{fontSize:12,lineHeight:1.6}},item.equipamentos)
+      ),
+      item.obs&&React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"10px 14px",marginBottom:12}},
+        React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:4}},"💬 OBSERVAÇÕES"),
+        React.createElement("div",{style:{fontSize:12,lineHeight:1.6}},item.obs)
       ),
       // Documentos
-      React.createElement("div",{style:{background:C.bg,borderRadius:10,padding:14}},
-        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
-          React.createElement("div",{style:{fontSize:14,fontWeight:700,color:C.blue}},"📁 Documentos (PDF)"),
-          React.createElement("div",null,
-            React.createElement("input",{type:"file",accept:".pdf,application/pdf",multiple:true,
-              style:{display:"none"},id:"up-"+item.id,onChange:handleUpload}),
-            React.createElement("label",{
-              htmlFor:"up-"+item.id,
-              style:{background:uploading?C.dim:C.blue,color:"#fff",borderRadius:8,
-                padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:600,
-                display:"inline-block",opacity:uploading?0.7:1}
-            },uploading?"⏳ Enviando...":"＋ Anexar PDF")
-          )
-        ),
-        uploading&&React.createElement("div",{style:{marginBottom:10}},
-          React.createElement("div",{style:{background:C.border,borderRadius:6,height:8,overflow:"hidden",marginBottom:4}},
-            React.createElement("div",{style:{height:"100%",background:C.blue,width:progresso+"%",transition:"width 0.4s",borderRadius:6}})
+      React.createElement("div",{style:{border:"1px solid "+C.border,borderRadius:12,overflow:"hidden"}},
+        React.createElement("div",{style:{background:C.surface,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid "+C.border}},
+          React.createElement("div",{style:{fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:8}},
+            React.createElement("span",null,"📁"),
+            React.createElement("span",null,"Documentos da Preventiva"),
+            docs.length>0&&React.createElement("span",{style:{background:C.blue+"22",color:C.blue,borderRadius:10,padding:"1px 8px",fontSize:11}},docs.length)
           ),
-          React.createElement("div",{style:{fontSize:10,color:C.muted,textAlign:"right"}},progresso+"%")
+          React.createElement("button",{
+            style:{background:uploading?C.dim:C.blue,color:"#fff",border:"none",borderRadius:8,
+              padding:"7px 16px",cursor:"pointer",fontSize:12,fontWeight:600,opacity:uploading?0.7:1},
+            disabled:uploading,onClick:abrirSeletor
+          },uploading?"⏳ Enviando...":"＋ Anexar PDF")
         ),
-        upMsg&&React.createElement("div",{style:{marginBottom:10,fontSize:12,padding:"7px 10px",borderRadius:6,
-          color:upMsgTipo==="err"?C.red:C.green,background:(upMsgTipo==="err"?C.red:C.green)+"22"}},upMsg),
+        // Progresso
+        uploading&&React.createElement("div",{style:{padding:"10px 16px",borderBottom:"1px solid "+C.border}},
+          React.createElement("div",{style:{background:C.border,borderRadius:6,height:6,overflow:"hidden",marginBottom:6}},
+            React.createElement("div",{style:{height:"100%",background:C.blue,width:prog+"%",transition:"width 0.3s",borderRadius:6}})
+          ),
+          React.createElement("div",{style:{fontSize:11,color:C.muted,textAlign:"center"}},upMsg.txt)
+        ),
+        // Mensagem
+        !uploading&&upMsg.txt&&React.createElement("div",{style:{padding:"8px 16px",borderBottom:"1px solid "+C.border,fontSize:12,
+          color:upMsg.tipo==="err"?C.red:upMsg.tipo==="ok"?C.green:C.muted,
+          background:(upMsg.tipo==="err"?C.red:upMsg.tipo==="ok"?C.green:C.muted)+"11"}},upMsg.txt),
+        // Lista docs
         loadDocs
-          ?React.createElement("div",{style:{textAlign:"center",color:C.muted,padding:20,fontSize:12}},"Carregando...")
+          ?React.createElement("div",{style:{padding:24,textAlign:"center",color:C.muted,fontSize:12}},"Carregando documentos...")
           :docs.length===0
-            ?React.createElement("div",{style:{textAlign:"center",color:C.dim,padding:20,fontSize:12}},
-              "Nenhum documento. Clique em Anexar PDF.")
-            :React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
-              docs.map(function(doc){
+            ?React.createElement("div",{style:{padding:32,textAlign:"center",color:C.dim}},
+              React.createElement("div",{style:{fontSize:32,marginBottom:8}},"📂"),
+              React.createElement("div",{style:{fontSize:13,fontWeight:600,marginBottom:4}},"Nenhum documento"),
+              React.createElement("div",{style:{fontSize:11,color:C.dim}},"Clique em Anexar PDF para adicionar")
+            )
+            :React.createElement("div",null,
+              docs.map(function(doc,i){
                 return React.createElement("div",{key:doc.id,
-                  style:{background:C.card,borderRadius:8,padding:"10px 14px",
-                    display:"flex",alignItems:"center",gap:10,border:"1px solid "+C.border}},
-                  React.createElement("div",{style:{fontSize:22}},"📄"),
+                  style:{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",
+                    borderBottom:i<docs.length-1?"1px solid "+C.border:"none",
+                    transition:"background 0.15s"},
+                  onMouseEnter:function(e){e.currentTarget.style.background=C.surface;},
+                  onMouseLeave:function(e){e.currentTarget.style.background="transparent";}
+                },
+                  React.createElement("div",{style:{width:36,height:36,background:C.red+"22",borderRadius:8,
+                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}},"📄"),
                   React.createElement("div",{style:{flex:1,minWidth:0}},
                     React.createElement("div",{style:{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},doc.nome),
                     React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:2}},
                       fmtDt(doc.criado_em)+(doc.tamanho?" · "+fmtSz(doc.tamanho):""))
                   ),
-                  React.createElement("button",{style:{...iBtn(C.blue),padding:"5px 10px",fontSize:11},
-                    onClick:function(){verPDF(doc.url);}},"👁 Ver"),
-                  React.createElement("button",{style:{...iBtn(C.red),padding:"5px 10px",fontSize:11},
-                    onClick:function(){excluirDoc(doc);}},"🗑")
+                  React.createElement("div",{style:{display:"flex",gap:6,flexShrink:0}},
+                    React.createElement("button",{
+                      style:{background:C.blue+"22",color:C.blue,border:"1px solid "+C.blue+"44",
+                        borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600},
+                      onClick:function(){
+                        var w=window.open("","_blank");
+                        if(w){w.document.write("<html><body style='margin:0;background:#000'><iframe src='"+doc.url+"' style='width:100%;height:100vh;border:none'></iframe></body></html>");w.document.close();}
+                      }},"👁 Ver"),
+                    React.createElement("button",{
+                      style:{background:C.red+"22",color:C.red,border:"1px solid "+C.red+"44",
+                        borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600},
+                      onClick:function(){
+                        if(!window.confirm("Excluir "+doc.nome+"?"))return;
+                        sb.from("preventivas_docs").delete().eq("id",doc.id).then(function(){loadDcs();});
+                      }},"🗑")
+                  )
                 );
               })
             )
       ),
-      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:12}},
-        React.createElement("button",{style:btnStyle(C.green),onClick:function(){onClose();setModal(item);}
-},"✏️ Editar"),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16,paddingTop:16,borderTop:"1px solid "+C.border}},
+        React.createElement("button",{style:btnStyle(C.green,true),onClick:function(){onClose();setModal(Object.assign({},item));}},"✏️ Editar"),
         React.createElement("button",{style:btnStyle(C.blue),onClick:onClose},"Fechar")
       )
     );
   };
 
-  // ── RENDER ────────────────────────────────────────────────
+  // ── KPIs ──────────────────────────────────────────────────
+  var total=data.length;
+  var concl=data.filter(function(d){return d.status==="Concluída";}).length;
+  var pend=data.filter(function(d){return d.status==="Pendente";}).length;
+  var andamento=data.filter(function(d){return d.status==="Em andamento";}).length;
+
   return React.createElement("div",null,
     // Header
     React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:"1px solid "+C.border}},
-      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
         React.createElement("div",null,
           React.createElement("div",{style:{fontSize:18,fontWeight:700}},"◈ Preventivas"),
-          React.createElement("div",{style:{fontSize:12,color:C.muted}},filtered.length+" de "+data.length+" registros")
+          React.createElement("div",{style:{fontSize:12,color:C.muted}},filtered.length+" registros exibidos")
         ),
         React.createElement("div",{style:{display:"flex",gap:8}},
-          React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:12},
-            onClick:function(){gerarRelatorio(filtered,filtStatus==="Todos"?"Todas":filtStatus);}},"📄 Exportar PDF"),
-          React.createElement("button",{style:btnStyle(C.blue),onClick:function(){setModal({});}},"+ Nova")
+          React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:12,padding:"8px 14px"},
+            onClick:exportarPDF},"📄 Exportar PDF"),
+          React.createElement("button",{style:{...btnStyle(C.blue),padding:"8px 14px"},
+            onClick:function(){setModal({});}},"＋ Nova Preventiva")
         )
       ),
       // Filtros
-      React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
-        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar condomínio ou técnico...",
-          value:busca,onChange:function(e){setBusca(e.target.value);}}),
+      React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}},
+        React.createElement("div",{style:{position:"relative",flex:1,minWidth:180}},
+          React.createElement("input",{style:{...base.inp,paddingLeft:34,margin:0},
+            placeholder:"Buscar condomínio ou técnico...",value:busca,
+            onChange:function(e){setBusca(e.target.value);}}),
+          React.createElement("span",{style:{position:"absolute",left:10,top:12,color:C.muted,fontSize:13}},"🔍")
+        ),
         STATUS_OPTS.map(function(s){
+          var c=s==="Todos"?C.blue:STATUS_COR[s]||C.blue;
           return React.createElement("button",{key:s,
-            style:{...btnStyle(s==="Todos"?C.blue:STATUS_COR[s]||C.blue,filtStatus!==s),fontSize:11,padding:"6px 12px"},
-            onClick:function(){setFiltStatus(s);}
-          },s);
+            style:{...btnStyle(c,filtStatus!==s),fontSize:11,padding:"8px 12px",whiteSpace:"nowrap"},
+            onClick:function(){setFiltStatus(s);}},s);
         })
       )
     ),
-    // Lista
-    React.createElement("div",{style:{padding:"16px 24px"}},
+    // KPIs
+    React.createElement("div",{style:{padding:"16px 24px 0"}},
+      React.createElement(Grid,{cols:4,mb:12},
+        React.createElement(KPI,{label:"Total",value:total,color:C.blue}),
+        React.createElement(KPI,{label:"✅ Concluídas",value:concl,color:C.green}),
+        React.createElement(KPI,{label:"🔵 Em andamento",value:andamento,color:C.blue}),
+        React.createElement(KPI,{label:"⏳ Pendentes",value:pend,color:C.yellow})
+      )
+    ),
+    // Tabela
+    React.createElement("div",{style:{padding:"8px 24px 24px"}},
       loading
         ?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.muted}},"Carregando...")
         :filtered.length===0
           ?React.createElement(Card,null,React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhuma preventiva encontrada"))
-          :React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}},
-            filtered.map(function(d){
-              var cor=STATUS_COR[d.status]||C.dim;
-              return React.createElement("div",{key:d.id,
-                style:{background:C.card,borderRadius:12,padding:16,border:"1px solid "+C.border,
-                  borderLeft:"4px solid "+cor,cursor:"pointer"},
-                onClick:function(){setDetalhe(d);}
-              },
-                React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}},
-                  React.createElement("div",{style:{fontSize:14,fontWeight:700,flex:1}},d.cond),
-                  React.createElement(Pill,{c:cor},d.status||"—")
-                ),
-                React.createElement("div",{style:{fontSize:12,color:C.muted,marginBottom:6}},d.tecnico||"—"),
-                React.createElement("div",{style:{display:"flex",gap:12,fontSize:11,color:C.dim,marginBottom:10}},
-                  d.primeira_visita&&React.createElement("span",null,"📅 "+fmt(d.primeira_visita)),
-                  d.retorno&&React.createElement("span",null,"🔄 "+fmt(d.retorno))
-                ),
-                React.createElement("div",{style:{display:"flex",gap:6,justifyContent:"flex-end"},
-                  onClick:function(e){e.stopPropagation();}},
-                  React.createElement("button",{style:iBtn(C.purple),title:"Documentos",
-                    onClick:function(e){e.stopPropagation();setDetalhe(d);}},"📁"),
-                  React.createElement("button",{style:iBtn(C.blue),title:"Editar",
-                    onClick:function(e){e.stopPropagation();setModal(Object.assign({},d));}},"✏️"),
-                  React.createElement("button",{style:iBtn(C.red),title:"Excluir",
-                    onClick:function(e){e.stopPropagation();setConfirmDel(d.id);}},"🗑")
-                )
-              );
+          :React.createElement(Card,null,
+            React.createElement(Table,{
+              cols:["Condomínio","Técnico","Status","1ª Visita","Retorno","Devolução","Ações"],
+              rows:filtered.map(function(d){
+                var cor=STATUS_COR[d.status]||C.dim;
+                return [
+                  React.createElement("div",null,
+                    React.createElement("div",{style:{fontSize:12,fontWeight:600}},d.cond),
+                    d.num_pedido&&React.createElement("div",{style:{fontSize:10,color:C.dim}},"Pedido: "+d.num_pedido)
+                  ),
+                  React.createElement("span",{style:{fontSize:12}},d.tecnico||"—"),
+                  React.createElement("span",{style:{background:cor+"22",color:cor,borderRadius:20,
+                    padding:"3px 10px",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}},d.status||"—"),
+                  React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},fmt(d.primeira_visita)||"—"),
+                  React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},fmt(d.retorno)||"—"),
+                  React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},fmt(d.devolucao)||"—"),
+                  React.createElement("div",{style:{display:"flex",gap:4}},
+                    React.createElement("button",{style:iBtn(C.purple),title:"Ver documentos",
+                      onClick:function(){setDetalhe(Object.assign({},d));}},"📁"),
+                    React.createElement("button",{style:iBtn(C.blue),title:"Editar",
+                      onClick:function(){setModal(Object.assign({},d));}},"✏️"),
+                    React.createElement("button",{style:iBtn(C.red),title:"Excluir",
+                      onClick:function(){setConfirmDel(d.id);}},"🗑")
+                  )
+                ];
+              })
             })
           )
     ),
