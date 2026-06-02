@@ -2020,8 +2020,8 @@ function Preventivas({onSave}){
             ["","SIM","NÃO","PARCIAL"].map(function(s){return React.createElement("option",{key:s},s);}))),
         React.createElement("div",null,
           React.createElement("label",{style:base.lbl},"Régua IP"),
-          React.createElement("select",{style:base.sel,value:f.regua_ip||"",onChange:upd("regua_ip")},
-            ["","OK","PENDENTE","N/A"].map(function(s){return React.createElement("option",{key:s},s);}))),
+          React.createElement("input",{type:"number",min:"1",max:"48",style:base.inp,value:f.regua_ip||"",onChange:upd("regua_ip"),placeholder:"Nº portas (8, 16, 24)"})
+        ),
         React.createElement("div",null,
           React.createElement("label",{style:base.lbl},"Régua OK"),
           React.createElement("select",{style:base.sel,value:f.regua_ok||"",onChange:upd("regua_ok")},
