@@ -1773,7 +1773,7 @@ function Preventivas({onSave}){
     // Buscar preventivas e contagem de anexos juntos
     var [rPrev,rDocs]=await Promise.all([
       sb.from("preventivas")
-        .select("id,cond,tecnico,status,primeira_visita,retorno,devolucao,num_pedido,equipamentos,finalizado,laudo,laudo_enviado,regua_ip,regua_ok,obs,foto_url,laudo_url")
+        .select("id,cond,tecnico,status,primeira_visita,retorno,devolucao,num_pedido,equipamentos,finalizado,laudo,laudo_enviado,regua_ip,regua_ok,obs,foto_url,laudo_url,regua_ip_dados")
         .order("cond",{ascending:true}),
       sb.from("preventivas_docs").select("preventiva_id")
     ]);
@@ -1801,7 +1801,8 @@ function Preventivas({onSave}){
       equipamentos:item.equipamentos||"",finalizado:item.finalizado||"",
       retorno:item.retorno||"",laudo:item.laudo||"",laudo_enviado:item.laudo_enviado||"",
       devolucao:item.devolucao||"",regua_ip:item.regua_ip||"",regua_ok:item.regua_ok||"",
-      status:item.status||"Pendente",obs:item.obs||"",foto_url:item.foto_url||null,laudo_url:item.laudo_url||null};
+      status:item.status||"Pendente",obs:item.obs||"",foto_url:item.foto_url||null,laudo_url:item.laudo_url||null,
+      regua_ip_dados:item.regua_ip_dados||null};
     if(data.find(function(x){return x.id===it.id;})){await sb.from("preventivas").update(it).eq("id",it.id);}
     else{await sb.from("preventivas").insert(it);}
     setModal(null);load();if(onSave)onSave();
@@ -1822,12 +1823,20 @@ function Preventivas({onSave}){
       var cor=d.status==="Concluída"?"#059669":d.status==="Em andamento"?"#1d4ed8":"#b45309";
       var bg=d.status==="Concluída"?"#f0fdf4":d.status==="Em andamento"?"#eff6ff":"#fffbeb";
       var anex=d._anexos>0?"<span style='background:#dbeafe;color:#1d4ed8;border-radius:10px;padding:1px 7px;font-size:8px;font-weight:700'>📎 "+d._anexos+"</span>":"—";
+      var reguaHTML="—";
+      if(d.regua_ip_dados){try{
+        var ps=JSON.parse(d.regua_ip_dados);
+        reguaHTML=ps.filter(function(p){return p.equipamento;}).map(function(p){
+          return p.porta+":"+p.equipamento+(p.status&&p.status!=="OK"?" ("+p.status+")":"");
+        }).join(", ")||"—";
+      }catch(e){}}
       return "<tr><td style='font-weight:600'>"+(d.cond||"")+"</td><td>"+(d.tecnico||"—")+"</td>"
         +"<td><span style='background:"+bg+";color:"+cor+";padding:2px 8px;border-radius:10px;font-size:8px;font-weight:700'>"+(d.status||"—")+"</span></td>"
         +"<td>"+(d.primeira_visita?new Date(d.primeira_visita).toLocaleDateString("pt-BR"):"—")+"</td>"
         +"<td>"+(d.retorno?new Date(d.retorno).toLocaleDateString("pt-BR"):"—")+"</td>"
         +"<td>"+(d.devolucao?new Date(d.devolucao).toLocaleDateString("pt-BR"):"—")+"</td>"
         +"<td>"+(d.obs||"—")+"</td>"
+        +"<td style='font-size:8px'>"+reguaHTML+"</td>"
         +"<td>"+anex+"</td></tr>";
     }).join("");
     var stats="<div class='stats'>"
@@ -1838,13 +1847,93 @@ function Preventivas({onSave}){
       +"</div>";
     var tabela="<table><thead><tr>"
       +"<th>CONDOMÍNIO</th><th>TÉCNICO</th><th>STATUS</th>"
-      +"<th>1ª VISITA</th><th>RETORNO</th><th>DEVOLUÇÃO</th><th>OBSERVAÇÕES</th><th>ANEXOS</th>"
+      +"<th>1ª VISITA</th><th>RETORNO</th><th>DEVOLUÇÃO</th><th>OBSERVAÇÕES</th><th>RÉGUA IP</th><th>ANEXOS</th>"
       +"</tr></thead><tbody>"+rows+"</tbody></table>";
     servisRelatorioPDF(
       "Relatório de Preventivas — "+statusLabel,
       stats+tabela,
       "",
       "Status: "+statusLabel+" · "+lista.length+" registros"+(busca?" · Busca: "+busca:"")
+    );
+  };
+
+  // ── RÉGUA IP EDITOR ────────────────────────────────────────
+  var EQUIP_SUGESTOES=["DVR","NVR","Switch","Controladora","Nobreak","Conversor","Rádio","AP Wi-Fi","Câmera IP","Intercom","Servidor","Reserva","—"];
+  var ReguaIPEditor=function(props){
+    var value=props.value;var onChange=props.onChange;
+    var portas=useMemo(function(){
+      if(value){try{return JSON.parse(value);}catch(e){}}
+      return Array.from({length:8},function(_,i){return{porta:i+1,equipamento:"",status:"OK",obs:""};});
+    },[value]);
+    function atualizar(idx,campo,val){
+      var novas=portas.map(function(p,i){return i===idx?Object.assign({},p,{[campo]:val}):p;});
+      onChange(JSON.stringify(novas));
+    }
+    function addPorta(){
+      var novas=[...portas,{porta:portas.length+1,equipamento:"",status:"OK",obs:""}];
+      onChange(JSON.stringify(novas));
+    }
+    function remPorta(idx){
+      var novas=portas.filter(function(_,i){return i!==idx;}).map(function(p,i){return Object.assign({},p,{porta:i+1});});
+      onChange(JSON.stringify(novas));
+    }
+    return React.createElement("div",{style:{border:"1px solid "+C.border,borderRadius:8,overflow:"hidden"}},
+      React.createElement("table",{style:{width:"100%",borderCollapse:"collapse"}},
+        React.createElement("thead",null,
+          React.createElement("tr",{style:{background:C.surface}},
+            ["Porta","Equipamento","Status","Observação",""].map(function(h,i){
+              return React.createElement("th",{key:i,style:{padding:"7px 10px",fontSize:10,fontWeight:700,color:C.muted,textAlign:"left",borderBottom:"1px solid "+C.border,textTransform:"uppercase",letterSpacing:.3}},h);
+            })
+          )
+        ),
+        React.createElement("tbody",null,
+          portas.map(function(p,i){
+            return React.createElement("tr",{key:i,style:{background:i%2===0?C.card:C.card2}},
+              React.createElement("td",{style:{padding:"6px 10px",fontSize:12,fontWeight:700,color:C.cyan,width:40}},p.porta),
+              React.createElement("td",{style:{padding:"4px 6px"}},
+                React.createElement("input",{
+                  list:"equip-list",
+                  style:{...base.inp,fontSize:11,padding:"4px 8px"},
+                  value:p.equipamento||"",
+                  placeholder:"Equipamento...",
+                  onChange:function(e){atualizar(i,"equipamento",e.target.value);}
+                }),
+                React.createElement("datalist",{id:"equip-list"},
+                  EQUIP_SUGESTOES.map(function(s){return React.createElement("option",{key:s,value:s});})
+                )
+              ),
+              React.createElement("td",{style:{padding:"4px 6px",width:120}},
+                React.createElement("select",{
+                  style:{...base.sel,fontSize:11,padding:"4px 8px"},
+                  value:p.status||"OK",
+                  onChange:function(e){atualizar(i,"status",e.target.value);}
+                },
+                  ["OK","Problema","Reserva","Offline"].map(function(s){
+                    return React.createElement("option",{key:s},s);
+                  })
+                )
+              ),
+              React.createElement("td",{style:{padding:"4px 6px"}},
+                React.createElement("input",{
+                  style:{...base.inp,fontSize:11,padding:"4px 8px"},
+                  value:p.obs||"",placeholder:"Obs...",
+                  onChange:function(e){atualizar(i,"obs",e.target.value);}
+                })
+              ),
+              React.createElement("td",{style:{padding:"4px 6px",width:30}},
+                React.createElement("button",{style:{...iBtn(C.red),padding:"3px 6px",fontSize:10},
+                  onClick:function(){remPorta(i);}
+                },"✕")
+              )
+            );
+          })
+        )
+      ),
+      React.createElement("div",{style:{padding:"8px 10px",background:C.surface,borderTop:"1px solid "+C.border}},
+        React.createElement("button",{style:{...btnStyle(C.blue,true),fontSize:11,padding:"5px 12px"},
+          onClick:addPorta
+        },"＋ Adicionar Porta")
+      )
     );
   };
 
@@ -1943,6 +2032,14 @@ function Preventivas({onSave}){
         React.createElement("div",{style:{gridColumn:"1/-1"}},
           React.createElement("label",{style:base.lbl},"Observações"),
           React.createElement("textarea",{style:{...base.inp,height:64},value:f.obs||"",onChange:upd("obs"),placeholder:"Observações adicionais..."})),
+        // ── RÉGUA IP ──
+        React.createElement("div",{style:{gridColumn:"1/-1"}},
+          React.createElement("label",{style:{...base.lbl,marginBottom:8,display:"block"}},"🔌 Régua IP — Mapeamento de Portas"),
+          React.createElement(ReguaIPEditor,{
+            value:f.regua_ip_dados,
+            onChange:function(dados){setF(function(p){return Object.assign({},p,{regua_ip_dados:dados});});}
+          })
+        ),
         React.createElement("div",{style:{gridColumn:"1/-1"}},
           React.createElement("label",{style:{...base.lbl,marginBottom:8,display:"block"}},"Status"),
           React.createElement("div",{style:{display:"flex",gap:8}},
@@ -2123,6 +2220,41 @@ function Preventivas({onSave}){
       item.obs&&React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12,lineHeight:1.6}},
         React.createElement("span",{style:{color:C.muted,fontSize:10,fontWeight:700,marginRight:6}},"💬 OBS:"),item.obs
       ),
+      // Régua IP
+      item.regua_ip_dados&&(function(){
+        var portas=[];try{portas=JSON.parse(item.regua_ip_dados);}catch(e){return null;}
+        if(!portas.length)return null;
+        return React.createElement("div",{style:{marginBottom:14}},
+          React.createElement("div",{style:{fontSize:12,fontWeight:700,color:C.cyan,marginBottom:8,display:"flex",alignItems:"center",gap:6}},
+            "🔌 Régua IP",
+            React.createElement("span",{style:{fontSize:10,color:C.muted,fontWeight:400}},portas.length+" portas mapeadas")
+          ),
+          React.createElement("div",{style:{border:"1px solid "+C.border,borderRadius:8,overflow:"hidden"}},
+            React.createElement("table",{style:{width:"100%",borderCollapse:"collapse"}},
+              React.createElement("thead",null,
+                React.createElement("tr",{style:{background:C.surface}},
+                  ["Porta","Equipamento","Status","Observação"].map(function(h,i){
+                    return React.createElement("th",{key:i,style:{padding:"6px 10px",fontSize:10,fontWeight:700,color:C.muted,textAlign:"left",borderBottom:"1px solid "+C.border,textTransform:"uppercase"}},h);
+                  })
+                )
+              ),
+              React.createElement("tbody",null,
+                portas.map(function(p,i){
+                  var sc=p.status==="OK"?C.green:p.status==="Problema"?C.red:p.status==="Offline"?C.yellow:C.dim;
+                  return React.createElement("tr",{key:i,style:{background:i%2===0?C.card:C.card2}},
+                    React.createElement("td",{style:{padding:"6px 10px",fontWeight:700,color:C.cyan,fontSize:12}},p.porta),
+                    React.createElement("td",{style:{padding:"6px 10px",fontSize:12,fontWeight:600}},p.equipamento||"—"),
+                    React.createElement("td",{style:{padding:"6px 10px"}},
+                      React.createElement("span",{style:{background:sc+"22",color:sc,borderRadius:10,padding:"2px 8px",fontSize:10,fontWeight:700}},p.status||"OK")
+                    ),
+                    React.createElement("td",{style:{padding:"6px 10px",fontSize:11,color:C.muted}},p.obs||"—")
+                  );
+                })
+              )
+            )
+          )
+        );
+      })(),
       // ── CARD DOCUMENTOS NO TOPO ──
       React.createElement("div",{style:{border:"2px solid "+(docs.length>0?C.blue:C.border),
         borderRadius:12,overflow:"hidden",
