@@ -511,6 +511,8 @@ function NovaOS({setTab,onSave}){
   const [busca,setBusca]=useState("");
   const [showList,setShowList]=useState(false);
   const [condsBanco,setCondsBanco]=useState(CONDS);
+  const [areaSel,setAreaSel]=useState("");
+  const [areasDB,setAreasDB]=useState([]);
 
   useEffect(function(){
     sb.from("areas_responsaveis").select("*").order("area")
