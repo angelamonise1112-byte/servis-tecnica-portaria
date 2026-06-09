@@ -513,6 +513,8 @@ function NovaOS({setTab,onSave}){
   const [condsBanco,setCondsBanco]=useState(CONDS);
 
   useEffect(function(){
+    sb.from("areas_responsaveis").select("*").order("area")
+      .then(function(r){setAreasDB(r.data||[]);});
     sb.from("condominios").select("nome").order("nome",{ascending:true})
       .then(function(r){
         if(r.data&&r.data.length>0)setCondsBanco(r.data.map(function(c){return c.nome;}).filter(Boolean));
@@ -529,6 +531,12 @@ function NovaOS({setTab,onSave}){
     setBusca(nome);
     setShowList(false);
   }
+
+  const selecionarArea=function(area){
+    setAreaSel(area);
+    var ar=areasDB.find(function(a){return a.area===area;});
+    if(ar&&ar.tecnico)setTec(ar.tecnico);
+  };
 
   const submit=async function(){
     setErro("");
@@ -610,9 +618,31 @@ function NovaOS({setTab,onSave}){
           ),
           // Técnico
           React.createElement("div",{style:{gridColumn:"1/-1"}},
+            React.createElement("label",{style:base.lbl},"Área Operacional"),
+            React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}},
+              React.createElement("button",{
+                style:{...btnStyle(C.dim,areaSel!==""),fontSize:11,padding:"5px 12px"},
+                onClick:function(){setAreaSel("");}},"Livre"),
+              areasDB.map(function(a){
+                var cors={P16:C.blue,P17:C.green,P18:C.orange,P19:"#8b5cf6"};
+                var isA=areaSel===a.area;var cor=cors[a.area]||C.blue;
+                return React.createElement("button",{key:a.area,
+                  style:{...btnStyle(cor,!isA),fontSize:11,padding:"5px 12px"},
+                  onClick:function(){selecionarArea(a.area);}
+                },a.area+" — "+a.tecnico);
+              })
+            )
+          ),
+          React.createElement("div",null,
             React.createElement("label",{style:base.lbl},"Tecnico"),
-            React.createElement("select",{style:base.sel,value:tec,onChange:function(e){setTec(e.target.value);}},
+            React.createElement("select",{style:{...base.sel,opacity:areaSel?0.7:1},value:tec,
+              onChange:function(e){setTec(e.target.value);},
+              disabled:false
+            },
               TECNICOS.map(function(t){return React.createElement("option",{key:t.mat,value:t.nome},t.nome);})
+            ),
+            areaSel&&React.createElement("div",{style:{fontSize:10,color:C.blue,marginTop:3}},
+              "🔗 Vinculado à área "+areaSel+" — altere em Gestão de Áreas"
             )
           ),
           // Prioridade
@@ -5354,6 +5384,169 @@ function Login({onLogin}){
   );
 }
 
+// ── GESTÃO DE ÁREAS E RESPONSÁVEIS ──────────────────────────
+function GestaoAreas({usuario}){
+  const {tick,refresh}=React.useContext(RefreshCtx);
+  const [areas,setAreas]=useState([]);
+  const [tecs,setTecs]=useState([]);
+  const [logs,setLogs]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [editArea,setEditArea]=useState(null);
+  const [novoTec,setNovoTec]=useState("");
+  const [saving,setSaving]=useState(false);
+  const [msg,setMsg]=useState(null);
+
+  var isAdmin=(usuario?.nivel||"").toLowerCase()==="admin"||
+              (usuario?.nivel||"").toLowerCase()==="gestor";
+
+  const load=useCallback(async function(){
+    setLoading(true);
+    var[rA,rT,rL]=await Promise.all([
+      sb.from("areas_responsaveis").select("*").order("area"),
+      sb.from("tecnicos").select("nome,mat").order("nome"),
+      sb.from("areas_audit_log").select("*").order("data_hora",{ascending:false}).limit(50),
+    ]);
+    setAreas(rA.data||[]);
+    setTecs(rT.data||[]);
+    setLogs(rL.data||[]);
+    setLoading(false);
+  },[tick]);
+  useEffect(function(){load();},[load]);
+
+  const salvarAlteracao=async function(){
+    if(!novoTec){setMsg({txt:"Selecione um técnico.",tipo:"err"});return;}
+    if(!isAdmin){setMsg({txt:"Você não possui permissão para alterar o técnico responsável desta área.",tipo:"err"});return;}
+    setSaving(true);
+    var area=editArea;
+    var anterior=area.tecnico;
+    // Atualizar área
+    var r1=await sb.from("areas_responsaveis").update({
+      tecnico:novoTec,
+      tecnico_anterior:anterior,
+      atualizado_por:usuario?.nome||"admin",
+      atualizado_em:new Date().toISOString(),
+    }).eq("id",area.id);
+    if(r1.error){setMsg({txt:"Erro: "+r1.error.message,tipo:"err"});setSaving(false);return;}
+    // Log de auditoria
+    await sb.from("areas_audit_log").insert({
+      id:"log_"+Date.now(),
+      area:area.area,
+      tecnico_anterior:anterior,
+      tecnico_novo:novoTec,
+      usuario:usuario?.nome||"admin",
+      data_hora:new Date().toISOString(),
+    });
+    setMsg({txt:"✅ Área "+area.area+" atualizada: "+anterior+" → "+novoTec,tipo:"ok"});
+    setEditArea(null);setNovoTec("");setSaving(false);
+    load();refresh();
+  };
+
+  var AREA_COR={P16:C.blue,P17:C.green,P18:C.orange,P19:"#8b5cf6"};
+
+  return React.createElement("div",{style:{height:"100%",overflowY:"auto"}},
+    // Header
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",borderBottom:"1px solid "+C.border,position:"sticky",top:0,zIndex:10}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+        React.createElement("div",null,
+          React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🔧 Gestão de Áreas e Responsáveis"),
+          React.createElement("div",{style:{fontSize:12,color:C.muted}},"Vínculo fixo entre áreas operacionais e técnicos responsáveis")
+        ),
+        !isAdmin&&React.createElement("div",{style:{background:C.yellow+"22",border:"1px solid "+C.yellow+"44",borderRadius:8,padding:"6px 14px",fontSize:11,color:C.yellow}},
+          "⚠ Somente Admin pode editar"
+        )
+      )
+    ),
+
+    React.createElement("div",{style:{padding:"20px 24px"}},
+
+      // Cards de áreas
+      React.createElement("div",{style:{marginBottom:24}},
+        React.createElement("div",{style:{fontSize:14,fontWeight:700,marginBottom:14,color:C.text}},"📍 Áreas Operacionais"),
+        loading
+          ?React.createElement("div",{style:{color:C.muted,textAlign:"center",padding:40}},"Carregando...")
+          :React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}},
+              areas.map(function(a){
+                var cor=AREA_COR[a.area]||C.blue;
+                var ini=(a.tecnico||"?").split(" ").slice(0,2).map(function(w){return w[0]||"";}).join("").toUpperCase();
+                var isEdit=editArea&&editArea.id===a.id;
+                return React.createElement("div",{key:a.id,style:{background:C.card,borderRadius:14,padding:18,border:"1px solid "+(isEdit?cor:C.border),borderTop:"4px solid "+cor,transition:"border .2s"}},
+                  // Header do card
+                  React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}},
+                    React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+                      React.createElement("div",{style:{background:cor,color:"#fff",borderRadius:10,padding:"6px 14px",fontSize:14,fontWeight:800}},a.area),
+                      React.createElement("div",{style:{fontSize:12,color:C.muted}},"Área Operacional")
+                    ),
+                    isAdmin&&React.createElement("button",{
+                      style:{background:isEdit?C.dim+"22":cor+"22",color:isEdit?C.dim:cor,border:"1px solid "+(isEdit?C.dim:cor)+"44",borderRadius:8,padding:"5px 12px",fontSize:11,cursor:"pointer",fontWeight:600},
+                      onClick:function(){
+                        if(isEdit){setEditArea(null);setNovoTec("");}
+                        else{setEditArea(a);setNovoTec(a.tecnico);}
+                      }
+                    },isEdit?"✕ Cancelar":"✏️ Editar")
+                  ),
+                  // Técnico atual
+                  React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12,marginBottom:isEdit?14:0}},
+                    React.createElement("div",{style:{width:44,height:44,borderRadius:"50%",background:cor+"22",border:"2px solid "+cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:cor,flexShrink:0}},ini),
+                    React.createElement("div",null,
+                      React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.text}},a.tecnico),
+                      React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:2}},"Técnico Responsável"),
+                      a.atualizado_em&&React.createElement("div",{style:{fontSize:9,color:C.dim,marginTop:1}},
+                        "Atualizado: "+new Date(a.atualizado_em).toLocaleDateString("pt-BR")
+                        +(a.atualizado_por?" por "+a.atualizado_por:"")
+                      )
+                    )
+                  ),
+                  // Form edição
+                  isEdit&&React.createElement("div",{style:{borderTop:"1px solid "+C.border,paddingTop:12}},
+                    React.createElement("label",{style:{...base.lbl,marginBottom:6,display:"block"}},"Novo técnico responsável:"),
+                    React.createElement("select",{style:{...base.sel,marginBottom:8},value:novoTec,onChange:function(e){setNovoTec(e.target.value);}},
+                      React.createElement("option",{value:""},"Selecionar..."),
+                      tecs.map(function(t){return React.createElement("option",{key:t.mat||t.nome,value:t.nome},t.nome);})
+                    ),
+                    React.createElement("button",{
+                      style:{...btnStyle(cor),fontSize:12,width:"100%",opacity:saving?0.7:1},
+                      disabled:saving,onClick:salvarAlteracao
+                    },saving?"Salvando...":"✅ Confirmar Alteração")
+                  )
+                );
+              })
+          ),
+        msg&&React.createElement("div",{style:{marginTop:12,background:(msg.tipo==="ok"?C.green:C.red)+"22",border:"1px solid "+(msg.tipo==="ok"?C.green:C.red)+"44",borderRadius:8,padding:"10px 16px",fontSize:12,color:msg.tipo==="ok"?C.green:C.red,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+          React.createElement("span",null,msg.txt),
+          React.createElement("button",{style:{background:"none",border:"none",color:"inherit",cursor:"pointer",fontSize:16},onClick:function(){setMsg(null);}},"✕")
+        )
+      ),
+
+      // Log de auditoria
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:14,fontWeight:700,marginBottom:12,color:C.text}},"📋 Log de Auditoria"),
+        logs.length===0
+          ?React.createElement("div",{style:{color:C.dim,fontSize:12,padding:20,textAlign:"center",background:C.card,borderRadius:10}},
+              "Nenhuma alteração registrada ainda."
+            )
+          :React.createElement(Card,null,
+              React.createElement(Table,{
+                cols:["Data/Hora","Área","Técnico Anterior","Novo Técnico","Realizado por"],
+                rows:logs.map(function(l){
+                  var cor=AREA_COR[l.area]||C.blue;
+                  return [
+                    React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},
+                      new Date(l.data_hora).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo"})
+                    ),
+                    React.createElement("span",{style:{background:cor,color:"#fff",borderRadius:8,padding:"2px 10px",fontWeight:700,fontSize:11}},l.area),
+                    React.createElement("span",{style:{fontSize:11,color:C.red}},l.tecnico_anterior||"—"),
+                    React.createElement("span",{style:{fontSize:11,color:C.green,fontWeight:600}},l.tecnico_novo||"—"),
+                    React.createElement("span",{style:{fontSize:11}},l.usuario||"—"),
+                  ];
+                })
+              })
+            )
+      )
+    )
+  );
+}
+
+
 // ── APP ───────────────────────────────────────────────────────
 const TABS=[
   {id:"dashboard",icon:"▦",label:"Dashboard"},
@@ -5379,6 +5572,7 @@ const TABS=[
   {id:"organograma",icon:"🏢",label:"Organograma"},
   {id:"usuarios",icon:"👤",label:"Usuários"},
   {id:"mapa-calor",icon:"🗺",label:"Mapa de Calor"},
+  {id:"gestao-areas",icon:"🔧",label:"Gestão de Áreas"},
 ];
 
 const RefreshCtx=React.createContext({tick:0,refresh:function(){}});
@@ -5854,6 +6048,7 @@ function App(){
       case"rastreamento":return React.createElement(Rastreamento,null);
       case"parametros":return React.createElement(Parametros,null);
       case"organograma":return React.createElement(Organograma,null);
+      case"gestao-areas":return React.createElement(GestaoAreas,{usuario});
       default:return React.createElement(ModuloEmBreve,{nome:TABS.find(t=>t.id===tab)?.label||tab});
     }
   };
