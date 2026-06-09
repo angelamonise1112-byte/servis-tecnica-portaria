@@ -2559,7 +2559,18 @@ function Condominios({onSave}){
   const comTec=data.filter(d=>d.tecnico).length;
   const EditModal=({item,onClose})=>{
     const [f,setF]=useState(item||{nome:"",endereco:"",tecnico:"",area_tecnico:"",obs:""});
+    const [areasDB,setAreasDB]=useState([]);
+    useEffect(function(){
+      sb.from("areas_responsaveis").select("*").order("area")
+        .then(function(r){setAreasDB(r.data||[]);});
+    },[]);
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+    // Ao mudar área, preenche técnico automaticamente
+    const updArea=function(e){
+      var area=e.target.value;
+      var ar=areasDB.find(function(a){return a.area===area;});
+      setF(function(p){return{...p,area_tecnico:area,tecnico:ar?ar.tecnico:p.tecnico};});
+    };
     return React.createElement(Modal,{title:item?.id?"Editar Condomínio":"Novo Condomínio",onClose,width:520},
       React.createElement("div",{style:{display:"grid",gap:12}},
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Nome *"),React.createElement("input",{style:base.inp,value:f.nome,onChange:upd("nome")})),
@@ -2573,7 +2584,7 @@ function Condominios({onSave}){
         ),
         React.createElement("div",null,
           React.createElement("label",{style:base.lbl},"🗂 Divisão de Área"),
-          React.createElement("select",{style:base.sel,value:f.area_tecnico||"",onChange:upd("area_tecnico")},
+          React.createElement("select",{style:base.sel,value:f.area_tecnico||"",onChange:updArea},
             React.createElement("option",{value:""},"Selecionar área..."),
             React.createElement("optgroup",{label:"── Supervisor 1 (P16 e P17) ──"},
               React.createElement("option",{value:"P16"},"P16"),
