@@ -4887,15 +4887,35 @@ function Organograma(){
     function update(v){setVal(v);try{localStorage.setItem("org_nome_"+key,v);}catch(e){}}
     return [val,update];
   }
-  var [nmSup1,setNmSup1]=useName("sup1","Supervisor 1");
-  var [nmSup2,setNmSup2]=useName("sup2","Supervisor 2");
+  var [nmSup1,setNmSup1]=useName("sup1","Iranilson");
+  var [nmSup2,setNmSup2]=useName("sup2","Amilton");
   var [nmSupInst,setNmSupInst]=useName("sup_inst","Supervisor Instalação");
-  var [nmTecA,setNmTecA]=useName("tec_area_a","Técnico P16");
-  var [nmTecB,setNmTecB]=useName("tec_area_b","Técnico P17");
-  var [nmTecC,setNmTecC]=useName("tec_area_c","Técnico P18");
-  var [nmTecD,setNmTecD]=useName("tec_area_d","Técnico P19");
+  var [nmTecA,setNmTecA]=useName("tec_area_a","Wilton");
+  var [nmTecB,setNmTecB]=useName("tec_area_b","Felipe");
+  var [nmTecC,setNmTecC]=useName("tec_area_c","John");
+  var [nmTecD,setNmTecD]=useName("tec_area_d","Pedro");
   var [nmPrev1,setNmPrev1]=useName("tec_prev1","Técnico Preventiva 1");
   var [nmPrev2,setNmPrev2]=useName("tec_prev2","Técnico Preventiva 2");
+  var [nmPlD1CE,setNmPlD1CE]=useName("pl_d1_ce","Plantonista 1");
+  var [nmPlD2CE,setNmPlD2CE]=useName("pl_d2_ce","Plantonista 2");
+  var [nmPlD3CE,setNmPlD3CE]=useName("pl_d3_ce","Plantonista 3");
+  var [nmPlD4CE,setNmPlD4CE]=useName("pl_d4_ce","Plantonista 4");
+  var [nmPlN1CE,setNmPlN1CE]=useName("pl_n1_ce","Herlon");
+  var [nmPlN2CE,setNmPlN2CE]=useName("pl_n2_ce","Mauricio");
+  var [nmFerCE,setNmFerCE]=useName("ferista_ce","Ferista");
+  var [nmPl1PI,setNmPl1PI]=useName("pl1_pi","Plantonista 1");
+  var [nmPl2PI,setNmPl2PI]=useName("pl2_pi","Plantonista 2");
+  var [nmPl3PI,setNmPl3PI]=useName("pl3_pi","Plantonista 3");
+  var [nmPl4PI,setNmPl4PI]=useName("pl4_pi","Plantonista 4");
+  var [nmFerPI,setNmFerPI]=useName("ferista_pi","Ferista");
+  var [nmPl1MA,setNmPl1MA]=useName("pl1_ma","Plantonista 1");
+  var [nmPl2MA,setNmPl2MA]=useName("pl2_ma","Plantonista 2");
+  var [nmPl3MA,setNmPl3MA]=useName("pl3_ma","Plantonista 3");
+  var [nmPl4MA,setNmPl4MA]=useName("pl4_ma","Plantonista 4");
+  var [nmFerMA,setNmFerMA]=useName("ferista_ma","Ferista");
+  var [nmAngela,setNmAngela]=useName("angela","Ângela Monise");
+  var [nmWesley,setNmWesley]=useName("wesley","Wesley");
+  var [nmSupInst,setNmSupInst]=useName("sup_inst","Supervisor Instalação");
 
   useEffect(function(){
     sb.from("condominios").select("nome,endereco,area_tecnico,tecnico").order("nome",{ascending:true})
@@ -5120,7 +5140,7 @@ function Organograma(){
       );
     }
     return React.createElement("div",null,
-      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:28}},CoordBox("angela","Ângela Monise","Coordenadora Administrativa","do Setor Técnico"),CoordBox("wesley","Wesley","Coordenador Técnico",null)),
+      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:28}},CoordBox("angela",nmAngela,"Coordenadora Administrativa","do Setor Técnico"),CoordBox("wesley",nmWesley,"Coordenador Técnico",null)),
       V(24),H(420),
       React.createElement("div",{style:{display:"flex",width:420,justifyContent:"space-between",margin:"0 auto"}},V(22),V(22),V(22)),
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start"}},
@@ -5131,12 +5151,17 @@ function Organograma(){
         React.createElement("div",{style:{textAlign:"center",marginBottom:16}},React.createElement("span",{style:{background:"#f97316",color:"#fff",fontSize:11,fontWeight:800,padding:"5px 22px",borderRadius:20,letterSpacing:2}},"APOIO OPERACIONAL")),
         React.createElement("div",{style:{background:laranja.bg,border:"2px solid "+laranja.border,borderRadius:12,padding:"16px",maxWidth:700,margin:"0 auto"}},
           Bdg(laranja,"PLANTONISTAS 12x36"),
-          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}},
-            PlantonBox("pl_d1_ce","Plantonista 1","Diurno — Moto",laranja),PlantonBox("pl_d2_ce","Plantonista 2","Diurno — Carro",laranja),PlantonBox("pl_d3_ce","Plantonista 3","Diurno — Moto",laranja),PlantonBox("pl_d4_ce","Plantonista 4","Diurno — Carro",laranja)
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:8}},
+            PlantonBox("pl_d1_ce",nmPlD1CE,"Diurno — Moto",laranja),PlantonBox("pl_d2_ce",nmPlD2CE,"Diurno — Carro",laranja),PlantonBox("pl_d3_ce",nmPlD3CE,"Diurno — Moto",laranja),PlantonBox("pl_d4_ce",nmPlD4CE,"Diurno — Carro",laranja)
+          ),
+          Bdg({border:"#7c3aed",bg:"#7c3aed22",text:"#7c3aed"},"🌙 PLANTONISTAS NOTURNOS"),
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:12}},
+            PlantonBox("pl_n1_ce",nmPlN1CE,"Noturno",{border:"#7c3aed",bg:"#7c3aed22",text:"#7c3aed"}),
+            PlantonBox("pl_n2_ce",nmPlN2CE,"Noturno",{border:"#7c3aed",bg:"#7c3aed22",text:"#7c3aed"})
           ),
           ApoioRow(["⚡ Emergências","📞 Chamados fora do horário","🤝 Apoio às equipes","🔍 Apoio em preventivas"],laranja),
           React.createElement("div",{style:{marginTop:10}}),Bdg(roxo,"TÉCNICO FERISTA"),
-          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6}},PlantonBox("ferista_ce","Ferista","Cobertura",roxo),ApoioRow(["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","📋 Apoio em demandas"],roxo))
+          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6}},PlantonBox("ferista_ce",nmFerCE,"Cobertura",roxo),ApoioRow(["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","📋 Apoio em demandas"],roxo))
         )
       )
     );
@@ -5144,7 +5169,7 @@ function Organograma(){
 
   function OrgPiaui(){
     return React.createElement("div",null,
-      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:28}},CoordBox("angela","Ângela Monise","Coordenadora Administrativa","do Setor Técnico"),CoordBox("wesley","Wesley","Coordenador Técnico",null)),
+      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:28}},CoordBox("angela",nmAngela,"Coordenadora Administrativa","do Setor Técnico"),CoordBox("wesley",nmWesley,"Coordenador Técnico",null)),
       V(24),H(200),V(22),
       React.createElement("div",{style:{display:"flex",justifyContent:"center"}},FilialBox("coord_pi","Coordenador Filial PI",amarelo)),
       V(22),H(160),V(18),
@@ -5156,10 +5181,10 @@ function Organograma(){
         React.createElement("div",{style:{textAlign:"center",marginBottom:16}},React.createElement("span",{style:{background:"#f97316",color:"#fff",fontSize:11,fontWeight:800,padding:"5px 22px",borderRadius:20,letterSpacing:2}},"APOIO OPERACIONAL")),
         React.createElement("div",{style:{background:laranja.bg,border:"2px solid "+laranja.border,borderRadius:12,padding:"16px",maxWidth:500,margin:"0 auto"}},
           Bdg(laranja,"4 TÉCNICOS PLANTONISTAS 24h"),
-          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}},PlantonBox("pl1_pi","Plantonista 1","24h",laranja),PlantonBox("pl2_pi","Plantonista 2","24h",laranja),PlantonBox("pl3_pi","Plantonista 3","24h",laranja),PlantonBox("pl4_pi","Plantonista 4","24h",laranja)),
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}},PlantonBox("pl1_pi",nmPl1PI,"24h",laranja),PlantonBox("pl2_pi",nmPl2PI,"24h",laranja),PlantonBox("pl3_pi",nmPl3PI,"24h",laranja),PlantonBox("pl4_pi",nmPl4PI,"24h",laranja)),
           ApoioRow(["⚡ Emergências","📞 Chamados fora do horário","🤝 Apoio às equipes","🔍 Apoio em preventivas","🏖️ Férias","🏥 Afastamentos","📋 Demandas"],laranja),
           React.createElement("div",{style:{marginTop:10}}),Bdg(roxo,"TÉCNICO FERISTA"),
-          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6}},PlantonBox("ferista_pi","Ferista","Cobertura PI",roxo),ApoioRow(["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","🔍 Apoio em preventivas","📋 Apoio em demandas"],roxo))
+          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6}},PlantonBox("ferista_pi",nmFerPI,"Cobertura PI",roxo),ApoioRow(["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","🔍 Apoio em preventivas","📋 Apoio em demandas"],roxo))
         )
       )
     );
@@ -5167,7 +5192,7 @@ function Organograma(){
 
   function OrgMaranhao(){
     return React.createElement("div",null,
-      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:28}},CoordBox("angela","Ângela Monise","Coordenadora Administrativa","do Setor Técnico"),CoordBox("wesley","Wesley","Coordenador Técnico",null)),
+      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:28}},CoordBox("angela",nmAngela,"Coordenadora Administrativa","do Setor Técnico"),CoordBox("wesley",nmWesley,"Coordenador Técnico",null)),
       V(24),H(180),V(22),
       React.createElement("div",{style:{display:"flex",justifyContent:"center"}},FilialBox("coord_ma","Coordenador Filial MA",amarelo)),
       V(22),H(160),V(18),
@@ -5193,10 +5218,10 @@ function Organograma(){
         React.createElement("div",{style:{textAlign:"center",marginBottom:16}},React.createElement("span",{style:{background:"#f97316",color:"#fff",fontSize:11,fontWeight:800,padding:"5px 22px",borderRadius:20,letterSpacing:2}},"APOIO OPERACIONAL")),
         React.createElement("div",{style:{background:laranja.bg,border:"2px solid "+laranja.border,borderRadius:12,padding:"16px",maxWidth:580,margin:"0 auto"}},
           Bdg(laranja,"4 TÉCNICOS PLANTONISTAS 24h"),
-          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}},PlantonBox("pl1_ma","Plantonista 1","24h",laranja),PlantonBox("pl2_ma","Plantonista 2","24h",laranja),PlantonBox("pl3_ma","Plantonista 3","24h",laranja),PlantonBox("pl4_ma","Plantonista 4","24h",laranja)),
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}},PlantonBox("pl1_ma",nmPl1MA,"24h",laranja),PlantonBox("pl2_ma",nmPl2MA,"24h",laranja),PlantonBox("pl3_ma",nmPl3MA,"24h",laranja),PlantonBox("pl4_ma",nmPl4MA,"24h",laranja)),
           ApoioRow(["⚡ Emergências","📞 Chamados fora do horário","🤝 Apoio às equipes","🔍 Apoio em preventivas","🏖️ Férias","🏥 Afastamentos","📋 Demandas represadas"],laranja),
           React.createElement("div",{style:{marginTop:10}}),Bdg(roxo,"TÉCNICO FERISTA"),
-          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6}},PlantonBox("ferista_ma","Ferista","Cobertura MA",roxo),ApoioRow(["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","🔍 Apoio em preventivas","📋 Apoio em demandas"],roxo))
+          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6}},PlantonBox("ferista_ma",nmFerMA,"Cobertura MA",roxo),ApoioRow(["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","🔍 Apoio em preventivas","📋 Apoio em demandas"],roxo))
         )
       )
     );
