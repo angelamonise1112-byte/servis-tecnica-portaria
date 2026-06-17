@@ -6458,6 +6458,34 @@ function MapaCalor({tecsBanco=TECNICOS}){
 }
 
 
+const TABS=[
+  {id:"dashboard",icon:"▦",label:"Dashboard"},
+  {id:"nova-os",icon:"＋",label:"Nova OS"},
+  {id:"os",icon:"◉",label:"Ordens de Serviço"},
+  {id:"preventivas",icon:"◈",label:"Preventivas"},
+  {id:"reincidencias",icon:"↺",label:"Reincidências"},
+  {id:"sla",icon:"◈",label:"SLA & Operação"},
+  {id:"os-pendencia",icon:"⚠",label:"OS em Pendência"},
+  {id:"instalacoes",icon:"🔨",label:"Instalações"},
+  {id:"tecnicos",icon:"◎",label:"Técnicos"},
+  {id:"condominios",icon:"▣",label:"Condomínios"},
+  {id:"atestados",icon:"🏥",label:"Atestados",badge:"at"},
+  {id:"horas-extras",icon:"⏱",label:"Horas Extras",badge:"he"},
+  {id:"problemas",icon:"▲",label:"Problemas"},
+  {id:"ranking",icon:"🏆",label:"Ranking"},
+  {id:"rastreamento",icon:"📍",label:"Rastreamento"},
+  {id:"mapa-calor",icon:"🗺",label:"Mapa de Calor"},
+  {id:"particularidades",icon:"🏷",label:"Particularidades"},
+  {id:"reginaldo",icon:"🔧",label:"Serviço Reginaldo"},
+  {id:"pedidos",icon:"🛒",label:"Pedidos"},
+  {id:"demandas",icon:"📌",label:"Demandas Adm.",badge:"new"},
+  {id:"parametros",icon:"📋",label:"Parâmetros"},
+  {id:"organograma",icon:"🏢",label:"Organograma"},
+  {id:"gestao-areas",icon:"🔧",label:"Gestão de Áreas"},
+  {id:"usuarios",icon:"👤",label:"Usuários"},
+];
+
+
 function App(){
   const [usuario,setUsuario]=useState(null);
   const [refreshTick,setRefreshTick]=useState(0);
