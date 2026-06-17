@@ -6598,11 +6598,597 @@ const TABS=[
   {id:"organograma",icon:"🏢",label:"Organograma"},
   {id:"gestao-areas",icon:"🔧",label:"Gestão de Áreas"},
   {id:"usuarios",icon:"👤",label:"Usuários"},
+  {id:"calendario",icon:"📅",label:"Calendário"},
+  {id:"produtividade",icon:"⚡",label:"Produtividade"},
 ];
 
 
 const RefreshCtx=React.createContext({tick:0,refresh:function(){}});
 const RegionalCtx=React.createContext({regional:"CE",setRegional:function(){}});
+
+
+// ── CALENDÁRIO INTELIGENTE ──────────────────────────────────
+function Calendario({usuario}){
+  const {tick,refresh}=React.useContext(RefreshCtx);
+  const hoje=new Date();
+  const [mesAtual,setMesAtual]=useState(hoje.getMonth());
+  const [anoAtual,setAnoAtual]=useState(hoje.getFullYear());
+  const [eventos,setEventos]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modal,setModal]=useState(null);
+  const [diaModal,setDiaModal]=useState(null);
+  const [detalhe,setDetalhe]=useState(null);
+
+  const TIPOS={
+    vistoria:   {label:"Vistoria",       icon:"🔍", cor:"#3b82f6"},
+    preventiva: {label:"Preventiva",     icon:"◈",  cor:"#10b981"},
+    contrato:   {label:"Renovação",      icon:"📄", cor:"#f97316"},
+    ferias:     {label:"Férias",         icon:"🏖", cor:"#8b5cf6"},
+    treinamento:{label:"Treinamento",    icon:"📚", cor:"#ec4899"},
+    os:         {label:"OS Programada",  icon:"🔧", cor:"#ef4444"},
+    outro:      {label:"Outro",          icon:"📌", cor:"#6b7280"},
+  };
+
+  const load=useCallback(async function(){
+    setLoading(true);
+    var mesStr=String(mesAtual+1).padStart(2,"0");
+    var anoStr=String(anoAtual);
+    var dataIni=anoStr+"-"+mesStr+"-01";
+    var ultimoDia=new Date(anoAtual,mesAtual+1,0).getDate();
+    var dataFim=anoStr+"-"+mesStr+"-"+String(ultimoDia).padStart(2,"0");
+
+    var [rEv,rPrev,rAt]=await Promise.all([
+      sb.from("calendario_eventos").select("*").gte("data",dataIni).lte("data",dataFim).order("data"),
+      sb.from("preventivas").select("id,cond,tecnico,primeira_visita,retorno,status").not("primeira_visita","is",null).gte("primeira_visita",dataIni).lte("primeira_visita",dataFim),
+      sb.from("atestados").select("id,tec,status,retorno").not("retorno","is",null).gte("retorno",dataIni).lte("retorno",dataFim),
+    ]);
+
+    var evs=rEv.data||[];
+
+    // Adicionar preventivas automaticamente
+    (rPrev.data||[]).forEach(function(p){
+      evs.push({
+        id:"prev_"+p.id,
+        titulo:"Preventiva — "+p.cond,
+        data:p.primeira_visita,
+        tipo:"preventiva",
+        tecnico:p.tecnico,
+        cond:p.cond,
+        status:p.status||"agendado",
+        _auto:true,
+      });
+    });
+
+    // Adicionar retornos de atestados
+    (rAt.data||[]).forEach(function(a){
+      evs.push({
+        id:"at_"+a.id,
+        titulo:"Retorno — "+a.tec,
+        data:a.retorno,
+        tipo:"outro",
+        tecnico:a.tec,
+        status:"agendado",
+        _auto:true,
+      });
+    });
+
+    setEventos(evs);
+    setLoading(false);
+  },[mesAtual,anoAtual,tick]);
+
+  useEffect(function(){load();},[load]);
+
+  const save=async function(item){
+    var it={...item,criado_por:usuario?.nome||""};
+    var res;
+    if(eventos.find(function(e){return e.id===it.id&&!e._auto;})){
+      res=await sb.from("calendario_eventos").update(it).eq("id",it.id);
+    }else{
+      it.id="ev_"+Date.now();
+      it.criado_em=new Date().toISOString();
+      res=await sb.from("calendario_eventos").insert(it);
+    }
+    if(res&&res.error){alert("Erro: "+res.error.message);return;}
+    setModal(null);load();
+  };
+
+  const del=async function(id){
+    await sb.from("calendario_eventos").delete().eq("id",id);
+    setDetalhe(null);load();
+  };
+
+  // Construir grid do mês
+  var primeiroDia=new Date(anoAtual,mesAtual,1).getDay();
+  var ultimoDia=new Date(anoAtual,mesAtual+1,0).getDate();
+  var DIAS_SEMANA=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+  var MESES_LABEL=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+  function getEventosDia(dia){
+    var dataStr=anoAtual+"-"+String(mesAtual+1).padStart(2,"0")+"-"+String(dia).padStart(2,"0");
+    return eventos.filter(function(e){return e.data===dataStr;});
+  }
+
+  function isHoje(dia){
+    return dia===hoje.getDate()&&mesAtual===hoje.getMonth()&&anoAtual===hoje.getFullYear();
+  }
+
+  // Contadores por tipo no mês
+  var contadores={};
+  Object.keys(TIPOS).forEach(function(t){contadores[t]=eventos.filter(function(e){return e.tipo===t;}).length;});
+
+  // ── MODAL NOVO EVENTO ──
+  const ModalEvento=function({item,diaInicial,onClose}){
+    var ini={
+      id:"",titulo:"",
+      data:diaInicial||anoAtual+"-"+String(mesAtual+1).padStart(2,"0")+"-01",
+      data_fim:"",tipo:"vistoria",descricao:"",tecnico:"",cond:"",status:"agendado",cor:""
+    };
+    var [f,setF]=useState(item||ini);
+    var upd=function(k){return function(e){setF(function(p){var n={...p};n[k]=e.target.value;return n;});};};
+    var tipo=TIPOS[f.tipo]||TIPOS.outro;
+    return React.createElement(Modal,{title:item?"✏️ Editar Evento":"📅 Novo Evento",onClose,width:500},
+      React.createElement("div",{style:{display:"grid",gap:12}},
+        // Tipo
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Tipo de Evento"),
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginTop:4}},
+            Object.entries(TIPOS).map(function(e){
+              var isA=f.tipo===e[0];
+              return React.createElement("button",{key:e[0],
+                style:{background:isA?e[1].cor+"33":"transparent",color:isA?e[1].cor:C.muted,
+                  border:"2px solid "+(isA?e[1].cor:C.border),borderRadius:8,
+                  padding:"7px 4px",cursor:"pointer",fontSize:10,fontWeight:isA?700:400,textAlign:"center"},
+                onClick:function(){setF(function(p){return{...p,tipo:e[0]};});}
+              },e[1].icon+" "+e[1].label);
+            })
+          )
+        ),
+        // Título
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Título *"),
+          React.createElement("input",{style:base.inp,value:f.titulo,onChange:upd("titulo"),placeholder:"Ex: Vistoria Condomínio ABC"})
+        ),
+        // Datas
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
+          React.createElement("div",null,
+            React.createElement("label",{style:base.lbl},"Data *"),
+            React.createElement("input",{type:"date",style:base.inp,value:f.data,onChange:upd("data")})
+          ),
+          React.createElement("div",null,
+            React.createElement("label",{style:base.lbl},"Data fim (opcional)"),
+            React.createElement("input",{type:"date",style:base.inp,value:f.data_fim||"",onChange:upd("data_fim")})
+          )
+        ),
+        // Técnico e Cond
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
+          React.createElement("div",null,
+            React.createElement("label",{style:base.lbl},"Técnico"),
+            React.createElement("input",{style:base.inp,value:f.tecnico||"",onChange:upd("tecnico"),placeholder:"Nome do técnico"})
+          ),
+          React.createElement("div",null,
+            React.createElement("label",{style:base.lbl},"Condomínio"),
+            React.createElement("input",{style:base.inp,value:f.cond||"",onChange:upd("cond"),placeholder:"Nome do condomínio"})
+          )
+        ),
+        // Status
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Status"),
+          React.createElement("div",{style:{display:"flex",gap:6}},
+            ["agendado","em andamento","concluído","cancelado"].map(function(s){
+              var isA=f.status===s;
+              var cors={agendado:C.blue,"em andamento":C.yellow,concluído:C.green,cancelado:C.red};
+              return React.createElement("button",{key:s,
+                style:{...btnStyle(cors[s]||C.blue,!isA),fontSize:10,padding:"5px 10px",flex:1},
+                onClick:function(){setF(function(p){return{...p,status:s};});}
+              },s);
+            })
+          )
+        ),
+        // Descrição
+        React.createElement("div",null,
+          React.createElement("label",{style:base.lbl},"Descrição"),
+          React.createElement("textarea",{style:{...base.inp,height:60},value:f.descricao||"",onChange:upd("descricao"),placeholder:"Detalhes..."})
+        )
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+        React.createElement("button",{style:btnStyle(tipo.cor),onClick:function(){if(!f.titulo||!f.data){alert("Título e data obrigatórios.");return;}save(f);}},"💾 Salvar")
+      )
+    );
+  };
+
+  // ── DETALHE DO DIA ──
+  const ModalDia=function({dia,evs,onClose}){
+    var dataStr=anoAtual+"-"+String(mesAtual+1).padStart(2,"0")+"-"+String(dia).padStart(2,"0");
+    return React.createElement(Modal,{title:"📅 "+dia+" de "+MESES_LABEL[mesAtual],onClose,width:480},
+      evs.length===0
+        ?React.createElement("div",{style:{textAlign:"center",padding:24,color:C.dim}},"Nenhum evento neste dia")
+        :React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+            evs.map(function(ev){
+              var tipo=TIPOS[ev.tipo]||TIPOS.outro;
+              var stCor={agendado:C.blue,"em andamento":C.yellow,concluído:C.green,cancelado:C.red};
+              return React.createElement("div",{key:ev.id,style:{background:C.bg,borderRadius:10,padding:12,borderLeft:"4px solid "+tipo.cor}},
+                React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
+                  React.createElement("div",null,
+                    React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.text,marginBottom:4}},tipo.icon+" "+ev.titulo),
+                    ev.tecnico&&React.createElement("div",{style:{fontSize:11,color:C.dim}},"👷 "+ev.tecnico),
+                    ev.cond&&React.createElement("div",{style:{fontSize:11,color:C.dim}},"🏦 "+ev.cond),
+                    ev.descricao&&React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:4}},ev.descricao)
+                  ),
+                  React.createElement("div",{style:{display:"flex",gap:4,flexShrink:0}},
+                    React.createElement("span",{style:{fontSize:9,background:(stCor[ev.status]||C.blue)+"22",color:stCor[ev.status]||C.blue,borderRadius:8,padding:"2px 7px",fontWeight:600}},ev.status||"agendado"),
+                    !ev._auto&&React.createElement("button",{style:{...iBtn(C.blue),padding:"3px 7px",fontSize:10},onClick:function(){onClose();setModal(ev);}},"✏️"),
+                    !ev._auto&&React.createElement("button",{style:{...iBtn(C.red),padding:"3px 7px",fontSize:10},onClick:function(){if(window.confirm("Excluir?"))del(ev.id);}},"🗑")
+                  )
+                )
+              );
+            })
+          ),
+      React.createElement("div",{style:{marginTop:14,paddingTop:12,borderTop:"1px solid "+C.border}},
+        React.createElement("button",{style:btnStyle(C.blue),onClick:function(){onClose();setModal({data:dataStr});}},
+          "+ Adicionar evento neste dia"
+        )
+      )
+    );
+  };
+
+  return React.createElement("div",{style:{height:"100%",display:"flex",flexDirection:"column"}},
+    // Header
+    React.createElement("div",{style:{background:C.surface,padding:"14px 24px",borderBottom:"1px solid "+C.border,flexShrink:0}},
+      // Nav mês
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+          React.createElement("button",{style:{...btnStyle(C.dim,true),padding:"6px 12px"},onClick:function(){
+            if(mesAtual===0){setMesAtual(11);setAnoAtual(function(a){return a-1;});}
+            else setMesAtual(function(m){return m-1;});
+          }},"‹"),
+          React.createElement("div",{style:{fontSize:18,fontWeight:800,minWidth:200,textAlign:"center"}},
+            MESES_LABEL[mesAtual]+" "+anoAtual
+          ),
+          React.createElement("button",{style:{...btnStyle(C.dim,true),padding:"6px 12px"},onClick:function(){
+            if(mesAtual===11){setMesAtual(0);setAnoAtual(function(a){return a+1;});}
+            else setMesAtual(function(m){return m+1;});
+          }},"›"),
+          React.createElement("button",{style:{...btnStyle(C.blue,true),fontSize:11,padding:"6px 12px"},onClick:function(){setMesAtual(hoje.getMonth());setAnoAtual(hoje.getFullYear());}},"Hoje")
+        ),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:function(){setModal({});}},"+ Novo Evento")
+      ),
+      // Legenda tipos + contadores
+      React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+        Object.entries(TIPOS).map(function(e){
+          var cnt=contadores[e[0]]||0;
+          return React.createElement("div",{key:e[0],style:{display:"flex",alignItems:"center",gap:4,background:e[1].cor+"18",border:"1px solid "+e[1].cor+"33",borderRadius:20,padding:"3px 10px"}},
+            React.createElement("span",{style:{fontSize:12}},e[1].icon),
+            React.createElement("span",{style:{fontSize:10,color:e[1].cor,fontWeight:600}},e[1].label),
+            cnt>0&&React.createElement("span",{style:{background:e[1].cor,color:"#fff",borderRadius:10,padding:"0 5px",fontSize:9,fontWeight:700}},cnt)
+          );
+        })
+      )
+    ),
+
+    // Grid calendário
+    React.createElement("div",{style:{flex:1,overflowY:"auto",padding:"0 24px 24px"}},
+      loading
+        ?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.muted}},"⏳ Carregando...")
+        :React.createElement("div",null,
+            // Dias da semana
+            React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:2,marginTop:16}},
+              DIAS_SEMANA.map(function(d){
+                return React.createElement("div",{key:d,style:{textAlign:"center",fontSize:11,fontWeight:700,color:C.muted,padding:"6px 0"}},d);
+              })
+            ),
+            // Grid dias
+            React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}},
+              // Células vazias antes do primeiro dia
+              Array(primeiroDia).fill(null).map(function(_,i){
+                return React.createElement("div",{key:"v"+i,style:{minHeight:90,background:C.bg+"44",borderRadius:8}});
+              }),
+              // Dias do mês
+              Array(ultimoDia).fill(null).map(function(_,i){
+                var dia=i+1;
+                var evsDia=getEventosDia(dia);
+                var isHj=isHoje(dia);
+                var isWeekend=new Date(anoAtual,mesAtual,dia).getDay()===0||new Date(anoAtual,mesAtual,dia).getDay()===6;
+                return React.createElement("div",{key:dia,
+                  style:{
+                    minHeight:90,background:isHj?C.blue+"22":isWeekend?C.surface:C.card,
+                    borderRadius:8,padding:6,cursor:"pointer",
+                    border:"1px solid "+(isHj?C.blue:C.border),
+                    transition:"background .15s"
+                  },
+                  onClick:function(){setDiaModal(dia);},
+                  onMouseEnter:function(e){if(!isHj)e.currentTarget.style.background=C.blue+"11";},
+                  onMouseLeave:function(e){if(!isHj)e.currentTarget.style.background=isWeekend?C.surface:C.card;}
+                },
+                  // Número do dia
+                  React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}},
+                    React.createElement("div",{style:{
+                      width:24,height:24,borderRadius:"50%",
+                      background:isHj?C.blue:"transparent",
+                      color:isHj?"#fff":isWeekend?C.muted:C.text,
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:12,fontWeight:isHj?700:400
+                    }},dia),
+                    evsDia.length>0&&React.createElement("div",{style:{fontSize:9,color:C.muted}},evsDia.length+"ev")
+                  ),
+                  // Eventos do dia (max 3)
+                  React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:2}},
+                    evsDia.slice(0,3).map(function(ev){
+                      var tipo=TIPOS[ev.tipo]||TIPOS.outro;
+                      return React.createElement("div",{key:ev.id,
+                        style:{background:tipo.cor+"33",borderRadius:4,padding:"2px 5px",fontSize:9,color:tipo.cor,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}
+                      },tipo.icon+" "+ev.titulo);
+                    }),
+                    evsDia.length>3&&React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"right"}},"+"+(evsDia.length-3)+" mais")
+                  )
+                );
+              })
+            )
+          )
+    ),
+
+    // Modais
+    modal!==null&&React.createElement(ModalEvento,{item:modal&&modal.id?modal:null,diaInicial:modal&&modal.data?modal.data:null,onClose:function(){setModal(null);}}),
+    diaModal!==null&&React.createElement(ModalDia,{dia:diaModal,evs:getEventosDia(diaModal),onClose:function(){setDiaModal(null);}})
+  );
+}
+
+
+// ── PRODUTIVIDADE DIÁRIA ────────────────────────────────────
+function ProdutividadeDiaria({usuario}){
+  const {tick,refresh}=React.useContext(RefreshCtx);
+  const [dados,setDados]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [agora,setAgora]=useState(new Date());
+  const [tecSel,setTecSel]=useState(null);
+
+  const hoje=new Date();
+  const hojeStr=todayStr();
+  const hojeLabel=hoje.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"});
+
+  // Atualizar relógio a cada minuto
+  useEffect(function(){
+    var t=setInterval(function(){setAgora(new Date());},60000);
+    return function(){clearInterval(t);};
+  },[]);
+
+  const load=useCallback(async function(){
+    setLoading(true);
+    var [rTec,rOs,rLoc,rPrev]=await Promise.all([
+      sb.from("tecnicos").select("id,nome,mat,status,foto_url").order("nome"),
+      sb.from("os").select("num,data,status,cond,tec,prob,data_fechamento").eq("data",hojeStr),
+      sb.from("tecnicos_localizacao").select("*").order("atualizado_em",{ascending:false}),
+      sb.from("preventivas").select("id,cond,tecnico,status,primeira_visita").eq("primeira_visita",hojeStr),
+    ]);
+
+    var tecs=rTec.data||[];
+    var osHoje=rOs.data||[];
+    var locs=rLoc.data||[];
+    var prevHoje=rPrev.data||[];
+
+    // Mapa de localização por técnico
+    var locMap={};
+    locs.forEach(function(l){locMap[l.tec]=l;});
+
+    // OS fechadas hoje (data_fechamento = hoje)
+    var [rFech]=await Promise.all([
+      sb.from("os").select("num,cond,tec,data_fechamento,prob").eq("data_fechamento",hojeStr),
+    ]);
+    var fechHoje=rFech.data||[];
+
+    // Enriquecer técnicos
+    var tecsData=tecs.map(function(t){
+      var loc=locMap[t.nome]||locMap[t.mat]||null;
+      var osAbertas=osHoje.filter(function(o){return o.tec===t.nome&&o.status==="Aberto";});
+      var osFech=fechHoje.filter(function(o){return o.tec===t.nome;});
+      var prevTec=prevHoje.filter(function(p){return p.tecnico===t.nome;});
+      var emCampo=loc&&loc.status_campo==="em_campo";
+      var ultimaAtt=loc?new Date(loc.atualizado_em):null;
+      var minAtras=ultimaAtt?Math.round((agora-ultimaAtt)/60000):null;
+      return {
+        ...t,loc,osAbertas,osFech,prevTec,
+        emCampo,minAtras,
+        status_display:emCampo?"🟢 Em campo":t.status==="Inativo"?"⚫ Inativo":"🔵 Disponível",
+      };
+    }).filter(function(t){return t.status!=="Inativo";});
+
+    setDados({
+      tecs:tecsData,
+      osHoje,fechHoje,prevHoje,
+      emCampo:tecsData.filter(function(t){return t.emCampo;}).length,
+      disponiveis:tecsData.filter(function(t){return !t.emCampo;}).length,
+      osFechadasHoje:fechHoje.length,
+      osAbertasHoje:osHoje.filter(function(o){return o.status==="Aberto";}).length,
+      prevHoje:prevHoje.length,
+      prevConclHoje:prevHoje.filter(function(p){return p.status==="Concluída";}).length,
+    });
+    setLoading(false);
+  },[hojeStr,tick]);
+
+  useEffect(function(){load();},[load]);
+
+  if(loading||!dados)return React.createElement("div",{style:{textAlign:"center",padding:80,color:C.muted}},"⏳ Carregando...");
+
+  var d=dados;
+
+  function gerarPDFProd(){
+    if(!dados)return;
+    try{
+      var d2=dados;
+      var dataFormatada=hoje.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+      var kpisHtml=servisKPIs([
+        {l:"Técnicos na Rua",v:d2.emCampo},
+        {l:"Disponíveis",v:d2.disponiveis},
+        {l:"OS Finalizadas",v:d2.osFechadasHoje},
+        {l:"Preventivas Hoje",v:d2.prevConclHoje+"/"+d2.prevHoje},
+        {l:"Pendentes",v:d2.osAbertasHoje},
+      ]);
+      var linhasEquipe=d2.tecs.map(function(t){return [t.nome,t.emCampo?"🟢 Em campo":"🔵 Disponível",String(t.osFech.length),String(t.osAbertas.length),String(t.prevTec.length)];});
+      var corpo=kpisHtml+"<div class='section-title'>👷 Equipe</div>"+servisTabela(["Técnico","Status","OS Concluid.","OS Abertas","Preventi."],linhasEquipe);
+      if(d2.osAbertasHoje>0){
+        var lp=d2.osHoje.filter(function(o){return o.status==="Aberto";}).map(function(o){var h=Math.round((agora-new Date(o.data+"T00:00:00"))/3600000);return [o.num,o.cond,o.tec||"—",o.prob||"—",h+"h"];});
+        corpo+="<div class='section-title' style='margin-top:16px'>🔴 Chamados Pendentes</div>"+servisTabela(["Nº OS","Condomínio","Técnico","Problema","Aberta há"],lp);
+      }
+      if(d2.osFechadasHoje>0){
+        var lf=d2.fechHoje.map(function(o){return [o.num,o.cond,o.tec||"—",o.prob||"—"];});
+        corpo+="<div class='section-title' style='margin-top:16px'>✅ OS Concluídas</div>"+servisTabela(["Nº OS","Condomínio","Técnico","Problema"],lf);
+      }
+      servisRelatorioPDF("Relatório de Produtividade Diária",corpo,window._servisUser||"","Data: "+dataFormatada,"CE");
+    }catch(e){alert("Erro: "+e.message);}
+  }
+
+  return React.createElement("div",{style:{height:"100%",overflowY:"auto",background:C.bg}},
+
+    // ── HEADER ──
+    React.createElement("div",{style:{background:"linear-gradient(135deg,#0d1f3c,#1a3a6b)",padding:"16px 28px",borderBottom:"1px solid "+C.border}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+        React.createElement("div",null,
+          React.createElement("div",{style:{fontSize:18,fontWeight:800,color:"#fff"}},"⚡ Produtividade Diária"),
+          React.createElement("div",{style:{fontSize:12,color:"#8899bb",marginTop:2}},hojeLabel+" · "+agora.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}))
+        ),
+        React.createElement("div",{style:{display:"flex",gap:6}},
+          React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:11,padding:"7px 14px"},onClick:function(){gerarPDFProd();}},
+            "📄 Relatório PDF"
+          ),
+          React.createElement("button",{style:{...btnStyle(C.blue,true),fontSize:11,padding:"7px 14px"},onClick:load},"↺ Atualizar")
+        )
+      )
+    ),
+
+    React.createElement("div",{style:{padding:"20px 28px"}},
+
+      // ── KPIs PRINCIPAIS ──
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12,marginBottom:24}},
+        // Técnicos na rua
+        React.createElement("div",{style:{background:C.card,borderRadius:14,padding:16,border:"1px solid "+C.green+"44",borderTop:"3px solid "+C.green,textAlign:"center"}},
+          React.createElement("div",{style:{fontSize:40,marginBottom:4}},"🟢"),
+          React.createElement("div",{style:{fontSize:32,fontWeight:900,color:C.green,lineHeight:1}},d.emCampo),
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:4}},"Técnicos na Rua"),
+          React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:2}},"em campo agora")
+        ),
+        // Técnicos disponíveis
+        React.createElement("div",{style:{background:C.card,borderRadius:14,padding:16,border:"1px solid "+C.blue+"44",borderTop:"3px solid "+C.blue,textAlign:"center"}},
+          React.createElement("div",{style:{fontSize:40,marginBottom:4}},"🔵"),
+          React.createElement("div",{style:{fontSize:32,fontWeight:900,color:C.blue,lineHeight:1}},d.disponiveis),
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:4}},"Disponíveis"),
+          React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:2}},"aguardando chamados")
+        ),
+        // OS fechadas hoje
+        React.createElement("div",{style:{background:C.card,borderRadius:14,padding:16,border:"1px solid "+C.green+"44",borderTop:"3px solid "+C.green,textAlign:"center"}},
+          React.createElement("div",{style:{fontSize:40,marginBottom:4}},"✅"),
+          React.createElement("div",{style:{fontSize:32,fontWeight:900,color:C.green,lineHeight:1}},d.osFechadasHoje),
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:4}},"OS Finalizadas Hoje"),
+          React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:2}},"concluídas em "+hojeStr.split("-").reverse().join("/")
+          )
+        ),
+        // Vistorias hoje
+        React.createElement("div",{style:{background:C.card,borderRadius:14,padding:16,border:"1px solid "+C.cyan+"44",borderTop:"3px solid "+C.cyan,textAlign:"center"}},
+          React.createElement("div",{style:{fontSize:40,marginBottom:4}},"◈"),
+          React.createElement("div",{style:{fontSize:32,fontWeight:900,color:C.cyan,lineHeight:1}},d.prevConclHoje+"/"+d.prevHoje),
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:4}},"Preventivas Hoje"),
+          React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:2}},"realizadas / programadas")
+        ),
+        // Chamados pendentes
+        React.createElement("div",{style:{background:C.card,borderRadius:14,padding:16,border:"1px solid "+(d.osAbertasHoje>0?C.red:C.green)+"44",borderTop:"3px solid "+(d.osAbertasHoje>0?C.red:C.green),textAlign:"center"}},
+          React.createElement("div",{style:{fontSize:40,marginBottom:4}},d.osAbertasHoje>0?"🔴":"✅"),
+          React.createElement("div",{style:{fontSize:32,fontWeight:900,color:d.osAbertasHoje>0?C.red:C.green,lineHeight:1}},d.osAbertasHoje),
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:4}},"Chamados Pendentes"),
+          React.createElement("div",{style:{fontSize:10,color:d.osAbertasHoje>0?C.red:C.green,marginTop:2}},d.osAbertasHoje===0?"Tudo em dia!":"aguardando atendimento")
+        )
+      ),
+
+      // ── GRID DE TÉCNICOS ──
+      React.createElement("div",{style:{marginBottom:20}},
+        React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:12}},"👷 Status da Equipe"),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10}},
+          d.tecs.map(function(t){
+            var emCampo=t.emCampo;
+            var cor=emCampo?C.green:C.blue;
+            var ini=(t.nome||"?").split(" ").slice(0,2).map(function(w){return w[0]||"";}).join("").toUpperCase();
+            return React.createElement("div",{key:t.id,
+              style:{background:C.card,borderRadius:12,padding:14,border:"1px solid "+(emCampo?C.green:C.border),cursor:"pointer",transition:"all .15s"},
+              onClick:function(){setTecSel(tecSel===t.id?null:t.id);},
+              onMouseEnter:function(e){e.currentTarget.style.borderColor=cor;},
+              onMouseLeave:function(e){e.currentTarget.style.borderColor=emCampo?C.green:C.border;}
+            },
+              // Avatar + status
+              React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:10}},
+                React.createElement("div",{style:{position:"relative"}},
+                  t.foto_url
+                    ?React.createElement("img",{src:t.foto_url,style:{width:40,height:40,borderRadius:"50%",objectFit:"cover",border:"2px solid "+cor}})
+                    :React.createElement("div",{style:{width:40,height:40,borderRadius:"50%",background:cor+"33",border:"2px solid "+cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:cor}},ini),
+                  React.createElement("div",{style:{position:"absolute",bottom:0,right:0,width:10,height:10,borderRadius:"50%",background:emCampo?C.green:C.blue,border:"2px solid "+C.card}})
+                ),
+                React.createElement("div",{style:{flex:1,minWidth:0}},
+                  React.createElement("div",{style:{fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},t.nome),
+                  React.createElement("div",{style:{fontSize:10,color:cor,fontWeight:600}},t.status_display)
+                )
+              ),
+              // Métricas do dia
+              React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}},
+                [{l:"Abertas",v:t.osAbertas.length,c:C.yellow},{l:"Fechadas",v:t.osFech.length,c:C.green},{l:"Preventi.",v:t.prevTec.length,c:C.cyan}].map(function(k){
+                  return React.createElement("div",{key:k.l,style:{background:C.bg,borderRadius:8,padding:"6px 4px",textAlign:"center"}},
+                    React.createElement("div",{style:{fontSize:16,fontWeight:800,color:k.c}},k.v),
+                    React.createElement("div",{style:{fontSize:9,color:C.dim}},k.l)
+                  );
+                })
+              ),
+              // OS do técnico hoje (expandido)
+              tecSel===t.id&&t.osFech.length>0&&React.createElement("div",{style:{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.border}},
+                React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:6,fontWeight:600}},"OS concluídas hoje:"),
+                t.osFech.map(function(o){
+                  return React.createElement("div",{key:o.num,style:{fontSize:10,color:C.text,padding:"3px 0",borderBottom:"1px solid "+C.border+"22"}},
+                    React.createElement("span",{style:{color:C.cyan,fontWeight:700}},"#"+o.num)," — "+o.cond
+                  );
+                })
+              )
+            );
+          })
+        )
+      ),
+
+      // ── OS ABERTAS HOJE ──
+      d.osAbertasHoje>0&&React.createElement("div",{style:{marginBottom:20}},
+        React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:12}},"🔴 Chamados Pendentes Hoje ("+d.osAbertasHoje+")"),
+        React.createElement(Card,null,
+          React.createElement(Table,{
+            cols:["Nº OS","Condomínio","Técnico","Problema","Prioridade","Aberta há"],
+            rows:d.osHoje.filter(function(o){return o.status==="Aberto";}).map(function(o){
+              var h=Math.round((agora-new Date(o.data+"T00:00:00"))/3600000);
+              var priCor=o.pri==="Alta"?C.red:o.pri==="Media"?C.yellow:C.green;
+              return [
+                React.createElement("span",{style:{color:C.cyan,fontWeight:700,fontSize:11}},o.num),
+                React.createElement("span",{style:{fontSize:11}},o.cond),
+                React.createElement("span",{style:{fontSize:11}},o.tec||"—"),
+                React.createElement("span",{style:{fontSize:11}},o.prob||"—"),
+                o.pri?React.createElement("span",{style:{background:priCor+"22",color:priCor,borderRadius:10,padding:"1px 8px",fontSize:10,fontWeight:600}},o.pri==="Media"?"Média":o.pri):"—",
+                React.createElement("span",{style:{color:h>4?C.red:C.yellow,fontWeight:700,fontSize:11}},h+"h"),
+              ];
+            })
+          })
+        )
+      ),
+
+      // ── OS CONCLUÍDAS HOJE ──
+      d.osFechadasHoje>0&&React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:12}},"✅ OS Concluídas Hoje ("+d.osFechadasHoje+")"),
+        React.createElement(Card,null,
+          React.createElement(Table,{
+            cols:["Nº OS","Condomínio","Técnico","Problema"],
+            rows:d.fechHoje.map(function(o){
+              return [
+                React.createElement("span",{style:{color:C.cyan,fontWeight:700,fontSize:11}},o.num),
+                React.createElement("span",{style:{fontSize:11}},o.cond),
+                React.createElement("span",{style:{fontSize:11}},o.tec||"—"),
+                React.createElement("span",{style:{fontSize:11}},o.prob||"—"),
+              ];
+            })
+          })
+        )
+      )
+    )
+  );
+}
 
 
 function App(){
@@ -6710,6 +7296,8 @@ function App(){
       case"rastreamento":return React.createElement(Rastreamento,null);
       case"parametros":return React.createElement(Parametros,null);
       case"organograma":return React.createElement(Organograma,null);
+      case"calendario":return React.createElement(Calendario,{usuario});
+      case"produtividade":return React.createElement(ProdutividadeDiaria,{usuario});
       case"gestao-areas":return React.createElement(GestaoAreas,{usuario});
       default:return React.createElement(ModuloEmBreve,{nome:TABS.find(t=>t.id===tab)?.label||tab});
     }
