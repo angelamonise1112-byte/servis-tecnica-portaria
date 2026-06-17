@@ -1878,7 +1878,8 @@ function Dashboard({setTab}){
             React.createElement("div",{style:{background:C.yellow+"18",borderRadius:8,padding:"10px",textAlign:"center"}},React.createElement("div",{style:{fontSize:11,color:C.muted}},"Pendentes"),React.createElement("div",{style:{fontSize:22,fontWeight:700,color:C.yellow}},stats.prevPendentes))
           )
         )
-      )
+      ),
+      React.createElement(IaDashboard,null)
     )
   );
 }
@@ -5855,35 +5856,241 @@ function GestaoAreas({usuario}){
 }
 
 
-// ── APP ───────────────────────────────────────────────────────
-const TABS=[
-  {id:"dashboard",icon:"▦",label:"Dashboard"},
-  {id:"nova-os",icon:"＋",label:"Nova OS"},
-  {id:"os",icon:"◉",label:"Ordens de Serviço"},
-  {id:"preventivas",icon:"◈",label:"Preventivas"},
-  {id:"reincidencias",icon:"↺",label:"Reincidências"},
-  {id:"sla",icon:"◈",label:"SLA & Operação"},
-  {id:"tecnicos",icon:"◎",label:"Técnicos"},
-  {id:"condominios",icon:"▣",label:"Condomínios"},
-  {id:"problemas",icon:"▲",label:"Problemas"},
-  {id:"atestados",icon:"🏥",label:"Atestados",badge:"at"},
-  {id:"horas-extras",icon:"⏱",label:"Horas Extras",badge:"he"},
-  {id:"particularidades",icon:"🏷",label:"Particularidades"},
-  {id:"os-pendencia",icon:"⚠",label:"OS em Pendência"},
-  {id:"reginaldo",icon:"🔧",label:"Serviço Reginaldo"},
-  {id:"pedidos",icon:"🛒",label:"Pedidos"},
-  {id:"demandas",icon:"📌",label:"Demandas Adm.",badge:"new"},
-  {id:"instalacoes",icon:"🔨",label:"Instalações"},
-  {id:"ranking",icon:"🏆",label:"Ranking"},
-  {id:"rastreamento",icon:"📍",label:"Rastreamento"},
-  {id:"parametros",icon:"📋",label:"Parâmetros"},
-  {id:"organograma",icon:"🏢",label:"Organograma"},
-  {id:"usuarios",icon:"👤",label:"Usuários"},
-  {id:"mapa-calor",icon:"🗺",label:"Mapa de Calor"},
-  {id:"gestao-areas",icon:"🔧",label:"Gestão de Áreas"},
-];
+// ── IA DASHBOARD ─────────────────────────────────────────────
+function IaDashboard(){
+  const {tick}=React.useContext(RefreshCtx);
+  const [pergunta,setPergunta]=useState("");
+  const [resposta,setResposta]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [historico,setHistorico]=useState([]);
 
-const RefreshCtx=React.createContext({tick:0,refresh:function(){}});
+  const EXEMPLOS=[
+    "Quais condomínios tiveram mais chamados este mês?",
+    "Qual técnico fechou mais OS?",
+    "Quais problemas mais aparecem?",
+    "Quais OS estão com SLA vencido?",
+    "Qual condomínio tem mais OS abertas?",
+    "Como está a produtividade da equipe?",
+  ];
+
+  const perguntar=async function(){
+    if(!pergunta.trim()||loading)return;
+    setLoading(true);
+    setResposta(null);
+    var p=pergunta.trim().toLowerCase();
+
+    // Buscar dados reais do banco
+    var hoje=new Date();
+    var anoAtual=String(hoje.getFullYear());
+    var mesAtual=String(hoje.getMonth()+1).padStart(2,"0");
+    var MESES_BR=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    var mesNome=MESES_BR[hoje.getMonth()];
+
+    var [rosRes,prevRes,tecRes,condRes]=await Promise.all([
+      sb.from("os").select("num,data,status,cond,tec,prob,pri,data_fechamento").gte("data",anoAtual+"-01-01").order("data",{ascending:false}),
+      sb.from("preventivas").select("id,cond,status,tecnico"),
+      sb.from("tecnicos").select("nome,status"),
+      sb.from("condominios").select("nome,tecnico,area_tecnico"),
+    ]);
+
+    var os=rosRes.data||[];
+    var prevs=prevRes.data||[];
+    var tecs=tecRes.data||[];
+    var conds=condRes.data||[];
+    var osMes=os.filter(function(o){return (o.data||"").slice(5,7)===mesAtual;});
+    var osAbertas=os.filter(function(o){return o.status==="Aberto";});
+    var slaVenc=osAbertas.filter(function(o){return (hoje-new Date(o.data))>72*3600000;});
+
+    // Mapas de dados
+    var condMapMes={};
+    osMes.forEach(function(o){if(o.cond)condMapMes[o.cond]=(condMapMes[o.cond]||0)+1;});
+    var topCondsMes=Object.entries(condMapMes).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+
+    var condMapAno={};
+    os.forEach(function(o){if(o.cond)condMapAno[o.cond]=(condMapAno[o.cond]||0)+1;});
+    var topCondsAno=Object.entries(condMapAno).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+
+    var tecFech={};
+    os.filter(function(o){return o.status==="Fechado";}).forEach(function(o){if(o.tec)tecFech[o.tec]=(tecFech[o.tec]||0)+1;});
+    var topTecs=Object.entries(tecFech).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+
+    var probMap={};
+    os.forEach(function(o){if(o.prob)probMap[o.prob]=(probMap[o.prob]||0)+1;});
+    var topProbs=Object.entries(probMap).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+
+    var condAbMap={};
+    osAbertas.forEach(function(o){if(o.cond)condAbMap[o.cond]=(condAbMap[o.cond]||0)+1;});
+    var topCondAb=Object.entries(condAbMap).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+
+    var tecProd={};
+    os.forEach(function(o){
+      if(!o.tec)return;
+      if(!tecProd[o.tec])tecProd[o.tec]={total:0,fech:0};
+      tecProd[o.tec].total++;
+      if(o.status==="Fechado")tecProd[o.tec].fech++;
+    });
+
+    // Responder com base na pergunta — análise local dos dados
+    var txt="";
+
+    if(p.includes("chamado")||p.includes("mais os")||(p.includes("condomin")&&p.includes("mes"))){
+      txt="📊 **Condomínios com mais chamados em "+mesNome+" ("+anoAtual+"):**\n\n";
+      if(topCondsMes.length===0){
+        txt+="Nenhuma OS registrada em "+mesNome+" ainda.";
+      }else{
+        topCondsMes.forEach(function(e,i){txt+=(i+1)+". "+e[0]+" — "+e[1]+" OS\n";});
+        txt+="\n📌 Total de OS em "+mesNome+": "+osMes.length;
+      }
+    }
+    else if(p.includes("técnico")||p.includes("tecnico")||(p.includes("fechou")||p.includes("fechou mais"))){
+      txt="🏆 **Técnicos com mais OS fechadas em "+anoAtual+":**\n\n";
+      if(topTecs.length===0){
+        txt+="Nenhuma OS fechada registrada ainda.";
+      }else{
+        topTecs.forEach(function(e,i){
+          var prod=tecProd[e[0]]||{total:0,fech:0};
+          var pct=prod.total>0?Math.round(prod.fech/prod.total*100):0;
+          txt+=(i+1)+". "+e[0]+" — "+e[1]+" fechadas ("+pct+"% de aproveitamento)\n";
+        });
+      }
+    }
+    else if(p.includes("problema")||p.includes("defeito")||p.includes("equipamento")||p.includes("frequente")){
+      txt="🔧 **Problemas mais frequentes em "+anoAtual+":**\n\n";
+      topProbs.forEach(function(e,i){txt+=(i+1)+". "+e[0]+" — "+e[1]+" ocorrências\n";});
+      txt+="\n💡 Dica: os 3 mais frequentes representam "+Math.round((topProbs.slice(0,3).reduce(function(s,e){return s+e[1];},0)/os.length)*100)+"% de todas as OS.";
+    }
+    else if(p.includes("sla")||p.includes("vencid")||p.includes("prazo")||p.includes("atras")){
+      txt="⏰ **OS com SLA vencido (>72h em aberto):**\n\n";
+      if(slaVenc.length===0){
+        txt+="✅ Ótima notícia! Nenhuma OS com SLA vencido no momento.";
+      }else{
+        txt+="⚠️ "+slaVenc.length+" OS em atraso:\n\n";
+        slaVenc.slice(0,5).forEach(function(o){
+          var h=Math.round((hoje-new Date(o.data))/3600000);
+          txt+="• OS #"+o.num+" | "+o.cond+" | Técnico: "+(o.tec||"—")+" | "+h+"h em aberto\n";
+        });
+        if(slaVenc.length>5)txt+="\n...e mais "+(slaVenc.length-5)+" OS.";
+      }
+    }
+    else if(p.includes("risco")||p.includes("cancelamento")||(p.includes("aberta")&&p.includes("condomin"))){
+      txt="🚨 **Condomínios com mais OS abertas (possível risco):**\n\n";
+      if(topCondAb.length===0){
+        txt+="✅ Nenhum condomínio com OS abertas no momento!";
+      }else{
+        topCondAb.forEach(function(e,i){txt+=(i+1)+". "+e[0]+" — "+e[1]+" OS abertas\n";});
+        txt+="\n💡 Condomínios com muitas OS abertas podem indicar insatisfação do cliente.";
+      }
+    }
+    else if(p.includes("produtividade")||p.includes("equipe")||p.includes("desempenho")){
+      txt="👷 **Produtividade da equipe em "+anoAtual+":**\n\n";
+      var lista=Object.entries(tecProd).sort(function(a,b){return b[1].fech-a[1].fech;}).slice(0,8);
+      lista.forEach(function(e){
+        var pct=e[1].total>0?Math.round(e[1].fech/e[1].total*100):0;
+        var bar=Array(Math.round(pct/10)).fill("█").join("")+Array(10-Math.round(pct/10)).fill("░").join("");
+        txt+="• "+e[0]+": "+e[1].fech+"/"+e[1].total+" OS | "+bar+" "+pct+"%\n";
+      });
+      var totalFech=os.filter(function(o){return o.status==="Fechado";}).length;
+      txt+="\n📊 Total: "+totalFech+" OS fechadas de "+os.length+" ("+Math.round(totalFech/Math.max(1,os.length)*100)+"% SLA geral)";
+    }
+    else if(p.includes("preventi")){
+      var concl=prevs.filter(function(p2){return p2.status==="Concluída";}).length;
+      var pend=prevs.filter(function(p2){return p2.status==="Pendente";}).length;
+      var em=prevs.filter(function(p2){return p2.status==="Em andamento";}).length;
+      var pct=prevs.length>0?Math.round(concl/prevs.length*100):0;
+      txt="◈ **Status das Preventivas:**\n\n";
+      txt+="• Total: "+prevs.length+"\n";
+      txt+="• ✅ Concluídas: "+concl+" ("+pct+"%)\n";
+      txt+="• 🔵 Em andamento: "+em+"\n";
+      txt+="• ⏳ Pendentes: "+pend+"\n\n";
+      if(pct>=80)txt+="✅ Ótimo! Meta de 80% atingida.";
+      else if(pct>=60)txt+="🟡 Atenção: abaixo da meta de 80%.";
+      else txt+="🔴 Crítico: muito abaixo da meta de 80%.";
+    }
+    else if(p.includes("resumo")||p.includes("situação")||p.includes("geral")||p.includes("como está")){
+      var totalFech2=os.filter(function(o){return o.status==="Fechado";}).length;
+      var slaP=os.length>0?Math.round(totalFech2/os.length*100):0;
+      txt="📊 **Resumo Geral — "+anoAtual+":**\n\n";
+      txt+="📋 OS: "+os.length+" total | "+osAbertas.length+" abertas | "+totalFech2+" fechadas\n";
+      txt+="⏱ SLA: "+slaP+"% | "+slaVenc.length+" vencidos\n";
+      txt+="◈ Preventivas: "+prevs.length+" | "+prevs.filter(function(p2){return p2.status==="Concluída";}).length+" concluídas\n";
+      txt+="👷 Técnicos: "+tecs.length+" | Condomínios: "+conds.length+"\n";
+      txt+="\n";
+      if(slaVenc.length>0)txt+="⚠️ "+slaVenc.length+" OS com SLA vencido!\n";
+      if(slaP>=80)txt+="✅ SLA dentro da meta ("+slaP+"%)";
+      else txt+="🔴 SLA abaixo da meta ("+slaP+"% < 80%)";
+    }
+    else{
+      // Resposta genérica com dados disponíveis
+      var totalFech3=os.filter(function(o){return o.status==="Fechado";}).length;
+      txt="🤔 Não entendi exatamente sua pergunta, mas aqui está um resumo dos dados:\n\n";
+      txt+="• "+os.length+" OS em "+anoAtual+" ("+osAbertas.length+" abertas, "+totalFech3+" fechadas)\n";
+      txt+="• "+slaVenc.length+" OS com SLA vencido\n";
+      txt+="• "+prevs.length+" preventivas cadastradas\n\n";
+      txt+="💡 **Tente perguntar sobre:**\n";
+      txt+="• Condomínios com mais chamados\n";
+      txt+="• Técnico que fechou mais OS\n";
+      txt+="• Problemas mais frequentes\n";
+      txt+="• OS com SLA vencido\n";
+      txt+="• Produtividade da equipe\n";
+      txt+="• Resumo geral";
+    }
+
+    setResposta(txt);
+    setHistorico(function(h){return [{pergunta:pergunta,hora:new Date().toLocaleTimeString("pt-BR")},...h].slice(0,5);});
+    setLoading(false);
+  };
+
+  return React.createElement("div",{style:{background:C.card,border:"1px solid "+C.border,borderRadius:16,padding:20,marginTop:16}},
+    React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:16}},
+      React.createElement("div",{style:{width:36,height:36,borderRadius:"50%",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}},"✨"),
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:15,fontWeight:700,color:C.text}},"Pergunte ao Dashboard"),
+        React.createElement("div",{style:{fontSize:11,color:C.muted}},"Análise inteligente dos seus dados em tempo real")
+      )
+    ),
+    React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12}},
+      React.createElement("input",{
+        style:{...base.inp,flex:1,margin:0,fontSize:13},
+        placeholder:"Ex: Qual técnico fechou mais OS?",
+        value:pergunta,
+        onChange:function(e){setPergunta(e.target.value);},
+        onKeyDown:function(e){if(e.key==="Enter")perguntar();}
+      }),
+      React.createElement("button",{
+        style:{...btnStyle("#6366f1"),padding:"10px 18px",fontSize:13,opacity:(loading||!pergunta.trim())?0.6:1,flexShrink:0},
+        disabled:loading||!pergunta.trim(),
+        onClick:perguntar
+      },loading?"⏳ Analisando...":"✨ Perguntar")
+    ),
+    React.createElement("div",{style:{display:"flex",gap:5,flexWrap:"wrap",marginBottom:14}},
+      EXEMPLOS.map(function(ex){
+        return React.createElement("button",{key:ex,
+          style:{background:"#6366f111",color:"#818cf8",border:"1px solid #6366f133",borderRadius:20,padding:"3px 12px",fontSize:10,cursor:"pointer"},
+          onClick:function(){setPergunta(ex);}
+        },ex);
+      })
+    ),
+    loading&&React.createElement("div",{style:{background:C.bg,borderRadius:10,padding:16,display:"flex",alignItems:"center",gap:10,color:C.muted,fontSize:13}},
+      "⏳ Analisando os dados do sistema..."
+    ),
+    resposta&&React.createElement("div",{style:{background:C.bg,borderRadius:12,padding:16,border:"1px solid #6366f133",borderLeft:"4px solid #6366f1"}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
+        React.createElement("div",{style:{fontSize:11,fontWeight:700,color:"#818cf8"}},"✨ Análise"),
+        React.createElement("button",{style:{background:"none",border:"none",color:C.dim,cursor:"pointer",fontSize:11},onClick:function(){setResposta(null);setPergunta("");}
+},"✕ Fechar")
+      ),
+      React.createElement("div",{style:{fontSize:13,color:C.text,lineHeight:1.8,whiteSpace:"pre-wrap"}},resposta)
+    ),
+    !resposta&&historico.length>0&&React.createElement("div",null,
+      React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:6}},"Consultas recentes:"),
+      historico.map(function(h,i){
+        return React.createElement("div",{key:i,style:{fontSize:11,color:C.dim,padding:"3px 0"}
+},"• "+h.pergunta+" — "+h.hora);
+      })
+    )
+  );
+}
+
 
 function MapaCalor({tecsBanco=TECNICOS}){
   const {tick}=React.useContext(RefreshCtx);
