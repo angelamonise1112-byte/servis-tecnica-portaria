@@ -1053,6 +1053,7 @@ function App(){
     {id:"os",icon:"📋",label:"OS"},
     {id:"campo",icon:"📡",label:"Em Campo"},
     {id:"ranking",icon:"🏆",label:"Ranking"},
+    {id:"inteligencia",icon:"🧠",label:"Meu Dia"},
   ];
 
   return React.createElement("div",null,
@@ -1067,7 +1068,7 @@ function App(){
         React.createElement("button",{style:{background:C.red+"22",border:"1px solid "+C.red+"33",color:C.red,borderRadius:8,padding:"5px 10px",fontSize:11,cursor:"pointer"},onClick:logout},"Sair")
       )
     ),
-    tab==="os"?React.createElement(MinhasOS,{usuario,onSelectOS:os=>{setOsSel({...os})}}):tab==="ranking"?React.createElement(RankingTecnicos,{usuario}):React.createElement(Andamento,{usuario}),
+    tab==="os"?React.createElement(MinhasOS,{usuario,onSelectOS:os=>{setOsSel({...os})}}):tab==="ranking"?React.createElement(RankingTecnicos,{usuario}):tab==="inteligencia"?React.createElement(InteligenciaOperacional,{usuario}):React.createElement(Andamento,{usuario}),
     React.createElement(BottomTab,{tabs,active:tab,onChange:setTab})
   );
 }
@@ -1075,4 +1076,186 @@ function App(){
 ReactDOM.render(React.createElement(App,null),document.getElementById("root"));
 </script>
 </body>
-</html>
+</html
+function InteligenciaOperacional({usuario}){
+  var [dados,setDados]=useState(null);
+  var [loading,setLoading]=useState(true);
+  var [secaoAberta,setSecaoAberta]=useState("agenda");
+  var hoje=new Date();
+  var hojeStr=hoje.toISOString().slice(0,10);
+  var hojeLabel=hoje.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"});
+  var horaAtual=hoje.getHours();
+  var saudacao=horaAtual<12?"Bom dia":horaAtual<18?"Boa tarde":"Boa noite";
+
+  useEffect(function(){
+    if(!usuario)return;
+    setLoading(true);
+    Promise.all([
+      sb.from("os").select("num,cond,prob,pri,data,status,descricao,relato").eq("tec",usuario.nome).eq("status","Aberto").order("pri",{ascending:false}),
+      sb.from("preventivas").select("id,cond,status,primeira_visita,retorno,obs,equipamentos").eq("tecnico",usuario.nome).or("primeira_visita.eq."+hojeStr+",retorno.eq."+hojeStr),
+      sb.from("os").select("num,cond,prob,relato,data_fechamento").eq("tec",usuario.nome).eq("status","Fechado").order("data_fechamento",{ascending:false}).limit(5),
+      sb.from("condominios").select("nome,endereco,area_tecnico").eq("tecnico",usuario.nome),
+      sb.from("os_pendencia").select("num,cond,prob,motivo,prazo").eq("tec",usuario.nome),
+    ]).then(function(r){
+      var osAbertas=r[0].data||[];
+      var prevHoje=r[1].data||[];
+      var historico=r[2].data||[];
+      var conds=r[3].data||[];
+      var pendencias=r[4].data||[];
+
+      var agenda=[];
+      prevHoje.forEach(function(p){
+        var cond=conds.find(function(c){return c.nome===p.cond;})||{};
+        agenda.push({tipo:"preventiva",icon:"◈",cor:"#10b981",titulo:"Preventiva — "+p.cond,subtitulo:p.status,endereco:cond.endereco||"",obs:p.obs||"",pri:"Media"});
+      });
+
+      var osAlta=osAbertas.filter(function(o){return o.pri==="Alta";});
+      var osMedia=osAbertas.filter(function(o){return o.pri==="Media"||o.pri==="Média";});
+      var osBaixa=osAbertas.filter(function(o){return o.pri==="Baixa";});
+
+      osAlta.concat(osMedia).concat(osBaixa).forEach(function(o){
+        var cond=conds.find(function(c){return c.nome===o.cond;})||{};
+        var diasAberta=Math.floor((hoje-new Date(o.data))/86400000);
+        agenda.push({tipo:"os",icon:"🔧",cor:o.pri==="Alta"?"#ef4444":o.pri==="Media"||o.pri==="Média"?"#f59e0b":"#6b7280",titulo:"OS #"+o.num+" — "+o.cond,subtitulo:o.prob,endereco:cond.endereco||"",obs:o.descricao||o.relato||"",pri:o.pri,diasAberta,num:o.num});
+      });
+
+      var materiaisSet=new Set();
+      prevHoje.forEach(function(p){
+        if(p.equipamentos){p.equipamentos.split(/[,;
+]/).forEach(function(m){var t=m.trim();if(t.length>3)materiaisSet.add(t);});}
+      });
+      osAbertas.forEach(function(o){
+        if(o.descricao){
+          ["capacitor","motor","placa","correia","bateria","nobreak","cabo","fusivel","rele","sensor","acionador"].forEach(function(k){
+            if(o.descricao.toLowerCase().includes(k))materiaisSet.add("Verificar "+k);
+          });
+        }
+      });
+
+      var alertas=[];
+      if(osAlta.length>0)alertas.push({tipo:"critico",msg:osAlta.length+" OS de ALTA prioridade",icon:"🚨"});
+      var slaVenc=osAbertas.filter(function(o){return (hoje-new Date(o.data))>72*3600000;});
+      if(slaVenc.length>0)alertas.push({tipo:"atencao",msg:slaVenc.length+" OS com SLA vencido",icon:"⏰"});
+      if(prevHoje.length>0)alertas.push({tipo:"info",msg:prevHoje.length+" preventiva(s) hoje",icon:"◈"});
+      if(pendencias.length>0)alertas.push({tipo:"atencao",msg:pendencias.length+" pendência(s)",icon:"⚠"});
+
+      setDados({agenda,materiais:Array.from(materiaisSet).slice(0,8),obsAnteriores:historico.filter(function(o){return o.relato||o.prob;}).slice(0,5),rota:agenda.filter(function(a){return a.endereco;}),alertas,osAlta,osMedia,osBaixa,prevHoje,pendencias,totalHoje:agenda.length});
+      setLoading(false);
+    });
+  },[usuario]);
+
+  function Secao(props){
+    var aberta=secaoAberta===props.id;
+    return React.createElement("div",{style:{background:C.card,borderRadius:14,overflow:"hidden",marginBottom:10}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"13px 16px",cursor:"pointer",borderBottom:aberta?"1px solid "+C.border:"none"},onClick:function(){setSecaoAberta(aberta?null:props.id);}},
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+          React.createElement("span",{style:{fontSize:18}},props.icon),
+          React.createElement("span",{style:{fontSize:14,fontWeight:700,color:C.text}},props.titulo),
+          props.badge>0&&React.createElement("span",{style:{background:C.blue,color:"#fff",borderRadius:10,padding:"1px 8px",fontSize:11,fontWeight:700}},props.badge)
+        ),
+        React.createElement("span",{style:{color:C.dim,fontSize:12}},aberta?"▲":"▼")
+      ),
+      aberta&&React.createElement("div",{style:{padding:"12px 16px"}},props.children)
+    );
+  }
+
+  if(!usuario)return null;
+  if(loading)return React.createElement("div",{style:{textAlign:"center",padding:60,color:C.muted}},"⏳ Preparando seu dia...");
+  if(!dados)return null;
+  var d=dados;
+
+  return React.createElement("div",{style:{height:"100%",overflowY:"auto",background:C.bg}},
+    React.createElement("div",{style:{background:"linear-gradient(135deg,#0d1f3c,#1a3a6b)",padding:"16px 16px 14px"}},
+      React.createElement("div",{style:{fontSize:12,color:"#93c5fd",marginBottom:2}},hojeLabel),
+      React.createElement("div",{style:{fontSize:18,fontWeight:800,color:"#fff",marginBottom:2}},saudacao+", "+usuario.nome.split(" ")[0]+"! 👋"),
+      React.createElement("div",{style:{fontSize:12,color:"#60a5fa"}},d.totalHoje>0?"Você tem "+d.totalHoje+" itens na agenda":"Nenhuma OS atribuída hoje"),
+      React.createElement("div",{style:{display:"flex",gap:8,marginTop:12}},
+        [{l:"Alta",v:d.osAlta.length,c:"#ef4444"},{l:"Média",v:d.osMedia.length,c:"#f59e0b"},{l:"Baixa",v:d.osBaixa.length,c:"#6b7280"},{l:"Preventivas",v:d.prevHoje.length,c:"#10b981"}].map(function(k){
+          return React.createElement("div",{key:k.l,style:{flex:1,background:"rgba(255,255,255,.1)",borderRadius:10,padding:"7px 6px",textAlign:"center"}},
+            React.createElement("div",{style:{fontSize:16,fontWeight:800,color:k.c}},k.v),
+            React.createElement("div",{style:{fontSize:9,color:"#93c5fd"}},k.l)
+          );
+        })
+      )
+    ),
+    React.createElement("div",{style:{padding:"12px 12px"}},
+      d.alertas.length>0&&React.createElement("div",{style:{marginBottom:12}},
+        d.alertas.map(function(a,i){
+          var bg=a.tipo==="critico"?"#ef444422":a.tipo==="atencao"?"#f59e0b22":"#3b82f622";
+          var cor=a.tipo==="critico"?"#f87171":a.tipo==="atencao"?"#fbbf24":"#60a5fa";
+          return React.createElement("div",{key:i,style:{background:bg,border:"1px solid "+cor+"44",borderRadius:10,padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:8}},
+            React.createElement("span",{style:{fontSize:16}},a.icon),
+            React.createElement("span",{style:{fontSize:12,color:cor,fontWeight:600}},a.msg)
+          );
+        })
+      ),
+      React.createElement(Secao,{id:"agenda",icon:"📅",titulo:"Agenda do Dia",badge:d.agenda.length,children:
+        d.agenda.length===0
+          ?React.createElement("div",{style:{textAlign:"center",padding:20,color:C.dim}},"Nenhuma OS para hoje")
+          :React.createElement("div",null,d.agenda.map(function(item,i){
+            var cor=item.cor||C.blue;
+            return React.createElement("div",{key:i,style:{background:C.bg,borderRadius:10,padding:"12px",marginBottom:8,borderLeft:"4px solid "+cor}},
+              React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.text,marginBottom:4}},item.icon+" "+item.titulo),
+              item.subtitulo&&React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:3}},"🔧 "+item.subtitulo),
+              item.endereco&&React.createElement("div",{style:{fontSize:11,color:C.blue,marginBottom:3}},"📍 "+item.endereco),
+              item.obs&&React.createElement("div",{style:{fontSize:11,color:C.dim,fontStyle:"italic"}},"💬 "+item.obs.slice(0,80)),
+              item.diasAberta>0&&React.createElement("div",{style:{fontSize:10,color:item.diasAberta>3?C.red:C.yellow,marginTop:3}},"⏱ Aberta há "+item.diasAberta+" dia(s)")
+            );
+          }))
+      }),
+      React.createElement(Secao,{id:"rota",icon:"📍",titulo:"Rota do Dia",badge:d.rota.length,children:
+        d.rota.length===0
+          ?React.createElement("div",{style:{color:C.dim,textAlign:"center",padding:16}},"Sem endereços cadastrados")
+          :React.createElement("div",null,d.rota.map(function(item,i){
+            return React.createElement("div",{key:i,style:{display:"flex",gap:10,alignItems:"flex-start",marginBottom:10}},
+              React.createElement("div",{style:{width:26,height:26,borderRadius:"50%",background:item.cor+"33",border:"2px solid "+item.cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:item.cor,flexShrink:0}},i+1),
+              React.createElement("div",{style:{flex:1}},
+                React.createElement("div",{style:{fontSize:12,fontWeight:700,color:C.text}},item.titulo),
+                React.createElement("div",{style:{fontSize:11,color:C.blue,marginTop:2}},"📍 "+item.endereco)
+              )
+            );
+          }))
+      }),
+      React.createElement(Secao,{id:"prioridades",icon:"🚨",titulo:"Prioridades",badge:d.osAlta.length,children:
+        d.osAlta.length===0&&d.pendencias.length===0
+          ?React.createElement("div",{style:{color:C.green,textAlign:"center",padding:16}},"Nenhuma OS crítica!")
+          :React.createElement("div",null,
+              d.osAlta.map(function(o){
+                var h=Math.round((hoje-new Date(o.data))/3600000);
+                return React.createElement("div",{key:o.num,style:{background:C.red+"11",borderRadius:10,padding:"10px 12px",marginBottom:6,borderLeft:"3px solid "+C.red}},
+                  React.createElement("div",{style:{fontSize:12,fontWeight:700,color:C.text}},"OS #"+o.num+" — "+o.cond),
+                  React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"🔧 "+(o.prob||"—")),
+                  React.createElement("div",{style:{fontSize:10,color:C.red,marginTop:2}},"⏱ "+h+"h em aberto")
+                );
+              })
+            )
+      }),
+      React.createElement(Secao,{id:"materiais",icon:"📦",titulo:"Materiais Sugeridos",badge:d.materiais.length,children:
+        d.materiais.length===0
+          ?React.createElement("div",{style:{color:C.dim,textAlign:"center",padding:16}},"Nenhum material identificado")
+          :React.createElement("div",null,d.materiais.map(function(m,i){
+            return React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:C.bg,borderRadius:8,marginBottom:6}},
+              React.createElement("span",null,"📦"),
+              React.createElement("span",{style:{fontSize:13,color:C.text}},m)
+            );
+          }))
+      }),
+      React.createElement(Secao,{id:"historico",icon:"📄",titulo:"Obs. Anteriores",badge:d.obsAnteriores.length,children:
+        d.obsAnteriores.length===0
+          ?React.createElement("div",{style:{color:C.dim,textAlign:"center",padding:16}},"Sem histórico recente")
+          :React.createElement("div",null,d.obsAnteriores.map(function(o){
+            return React.createElement("div",{key:o.num,style:{background:C.bg,borderRadius:10,padding:"10px 12px",marginBottom:8,borderLeft:"3px solid "+C.green}},
+              React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:4}},
+                React.createElement("span",{style:{fontSize:12,fontWeight:700,color:C.text}},"OS #"+o.num+" — "+o.cond),
+                React.createElement("span",{style:{fontSize:10,color:C.dim}},o.data_fechamento?new Date(o.data_fechamento).toLocaleDateString("pt-BR"):"")
+              ),
+              React.createElement("div",{style:{fontSize:11,color:C.muted}},"🔧 "+(o.prob||"—")),
+              o.relato&&React.createElement("div",{style:{fontSize:11,color:C.dim,marginTop:4,fontStyle:"italic"}},"💬 "+o.relato.slice(0,100))
+            );
+          }))
+      })
+    )
+  );
+}
+
+>
