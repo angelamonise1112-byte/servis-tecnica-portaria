@@ -21,6 +21,7 @@ input,select,textarea,button{font-family:inherit}
 .fade{animation:fadeIn .25s ease}
 .spin{display:inline-block;animation:spin .8s linear infinite}
 .pulse{animation:pulse 1.5s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 #ef444466;}70%{box-shadow:0 0 0 10px transparent;}100%{box-shadow:0 0 0 0 transparent;}}
 </style>
 </head>
 <body>
@@ -703,9 +704,18 @@ function DetalheOS({os,usuario,onBack}){
         // Relatório técnico (apenas quando em atendimento)
         idxAtual>=2&&statusAtual!=="Concluído"&&React.createElement("div",{style:{...card}},
           React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.orange,marginBottom:12}},"📝 Relatório Técnico"),
-          React.createElement("textarea",{style:{...inp,minHeight:80,resize:"vertical"},placeholder:"Problema encontrado *",value:problema,onChange:e=>setProblema(e.target.value)}),
-          React.createElement("textarea",{style:{...inp,minHeight:80,resize:"vertical",marginTop:8},placeholder:"Solução aplicada *",value:solucao,onChange:e=>setSolucao(e.target.value)}),
-          React.createElement("textarea",{style:{...inp,minHeight:60,resize:"vertical",marginTop:8},placeholder:"Material utilizado",value:material,onChange:e=>setMaterial(e.target.value)})
+          React.createElement("div",{style:{position:"relative"}},
+            React.createElement("textarea",{style:{...inp,minHeight:80,resize:"vertical",paddingBottom:44},placeholder:"Problema encontrado * (ou use o 🎤)",value:problema,onChange:e=>setProblema(e.target.value)}),
+            React.createElement(VozBtn,{onTexto:function(t){setProblema(function(p){return p?p+" "+t:t;});},cor:"#ef4444"})
+          ),
+          React.createElement("div",{style:{position:"relative",marginTop:8}},
+            React.createElement("textarea",{style:{...inp,minHeight:80,resize:"vertical",paddingBottom:44},placeholder:"Solução aplicada * (ou use o 🎤)",value:solucao,onChange:e=>setSolucao(e.target.value)}),
+            React.createElement(VozBtn,{onTexto:function(t){setSolucao(function(p){return p?p+" "+t:t;});},cor:"#10b981"})
+          ),
+          React.createElement("div",{style:{position:"relative",marginTop:8}},
+            React.createElement("textarea",{style:{...inp,minHeight:60,resize:"vertical",paddingBottom:44},placeholder:"Material utilizado (ou use o 🎤)",value:material,onChange:e=>setMaterial(e.target.value)}),
+            React.createElement(VozBtn,{onTexto:function(t){setMaterial(function(p){return p?p+" "+t:t;});},cor:"#f59e0b"})
+          )
         ),
         // Fotos
         idxAtual>=2&&statusAtual!=="Concluído"&&React.createElement("div",{style:{...card}},
@@ -789,7 +799,241 @@ function DetalheOS({os,usuario,onBack}){
   );
 }
 
-// ── APP PRINCIPAL ───────────────────────────────────────────
+// ── RELATÓRIO POR VOZ ───────────────────────────────────────
+function VozBtn({onTexto,placeholder,cor}){
+  var [gravando,setGravando]=useState(false);
+  var [suporte,setSuporte]=useState(true);
+  var recRef=React.useRef(null);
+  var cor2=cor||"#3b82f6";
+
+  useEffect(function(){
+    var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR)setSuporte(false);
+  },[]);
+
+  function iniciar(){
+    var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){alert("Reconhecimento de voz não suportado neste navegador.");return;}
+    var rec=new SR();
+    rec.lang="pt-BR";
+    rec.continuous=false;
+    rec.interimResults=false;
+    rec.onstart=function(){setGravando(true);};
+    rec.onresult=function(e){
+      var texto=e.results[0][0].transcript;
+      onTexto(texto);
+      setGravando(false);
+    };
+    rec.onerror=function(e){
+      setGravando(false);
+      if(e.error!=="no-speech")alert("Erro no microfone: "+e.error);
+    };
+    rec.onend=function(){setGravando(false);};
+    recRef.current=rec;
+    rec.start();
+  }
+
+  function parar(){
+    if(recRef.current)recRef.current.stop();
+    setGravando(false);
+  }
+
+  if(!suporte)return null;
+
+  return React.createElement("button",{
+    type:"button",
+    onClick:gravando?parar:iniciar,
+    style:{
+      position:"absolute",right:10,bottom:10,
+      width:36,height:36,borderRadius:"50%",border:"none",cursor:"pointer",
+      background:gravando?"#ef4444":"#1e3a5f",
+      display:"flex",alignItems:"center",justifyContent:"center",
+      fontSize:16,transition:"all .2s",
+      boxShadow:gravando?"0 0 0 4px #ef444433":"0 2px 8px rgba(0,0,0,.4)",
+      animation:gravando?"pulse 1s infinite":"none",
+    },
+    title:gravando?"Clique para parar":"Clique para falar"
+  },gravando?"⏹":"🎤");
+}
+
+
+// ── RANKING DOS TÉCNICOS ────────────────────────────────────
+function RankingTecnicos({usuario}){
+  const [dados,setDados]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [mes,setMes]=useState(String(new Date().getMonth()+1).padStart(2,"0"));
+  const [ano,setAno]=useState(String(new Date().getFullYear()));
+  const [expandido,setExpandido]=useState(null);
+  const MESES_N=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  const MEDALS=["🥇","🥈","🥉"];
+  const MESES=["01","02","03","04","05","06","07","08","09","10","11","12"];
+
+  useEffect(function(){
+    setLoading(true);
+    var dataIni=ano+"-"+mes+"-01";
+    var ultimoDia=new Date(parseInt(ano),parseInt(mes),0).getDate();
+    var dataFim=ano+"-"+mes+"-"+String(ultimoDia).padStart(2,"0");
+    Promise.all([
+      sb.from("os").select("num,tec,status,data,data_fechamento,cond").gte("data",dataIni).lte("data",dataFim),
+      sb.from("tecnicos").select("nome,mat,foto_url"),
+    ]).then(function(r){
+      var os=r[0].data||[];
+      var tecs=r[1].data||[];
+      var map={};
+      os.forEach(function(o){
+        if(!o.tec)return;
+        if(!map[o.tec])map[o.tec]={nome:o.tec,total:0,fech:0,abertas:0,tempos:[],conds:new Set()};
+        map[o.tec].total++;
+        map[o.tec].conds.add(o.cond);
+        if(o.status==="Fechado"){
+          map[o.tec].fech++;
+          if(o.data&&o.data_fechamento){
+            var diff=(new Date(o.data_fechamento)-new Date(o.data))/(1000*3600);
+            if(diff>0&&diff<720)map[o.tec].tempos.push(diff);
+          }
+        }else map[o.tec].abertas++;
+      });
+
+      // Retrabalho
+      os.forEach(function(o){
+        if(!o.tec||!o.cond||!map[o.tec])return;
+        var retr=os.filter(function(o2){
+          return o2.cond===o.cond&&o2.tec===o.tec&&o2.num!==o.num&&
+            Math.abs(new Date(o.data)-new Date(o2.data))/(1000*3600*24)<=7;
+        }).length;
+        map[o.tec].retrabalho=(map[o.tec].retrabalho||0)+retr;
+      });
+
+      var lista=Object.values(map).map(function(t){
+        var tec=tecs.find(function(x){return x.nome===t.nome;})||{};
+        var tempoMed=t.tempos.length>0?t.tempos.reduce(function(a,b){return a+b;},0)/t.tempos.length:null;
+        var efic=t.total>0?Math.round(t.fech/t.total*100):0;
+        var retr=t.fech>0?Math.round((t.retrabalho||0)/t.fech*100):0;
+        return{nome:t.nome,foto:tec.foto_url||null,total:t.total,fech:t.fech,abertas:t.abertas,tempoMed,efic,retrabalho:retr,conds:t.conds.size};
+      }).sort(function(a,b){return b.fech-a.fech;});
+
+      setDados(lista);
+      setLoading(false);
+    });
+  },[mes,ano]);
+
+  var euIdx=dados.findIndex(function(t){return usuario&&t.nome===usuario.nome;});
+  var eu=euIdx>=0?dados[euIdx]:null;
+
+  return React.createElement("div",{style:{height:"100%",display:"flex",flexDirection:"column",background:C.bg}},
+
+    // Header fixo
+    React.createElement("div",{style:{background:"linear-gradient(135deg,#0d1f3c,#1a3a6b)",padding:"14px 14px 10px",flexShrink:0}},
+      React.createElement("div",{style:{fontSize:16,fontWeight:800,color:"#fff",marginBottom:10}},"🏆 Ranking dos Técnicos"),
+      React.createElement("div",{style:{display:"flex",gap:8}},
+        React.createElement("select",{
+          style:{flex:1,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.25)",borderRadius:10,color:"#fff",padding:"8px 10px",fontSize:13,outline:"none"},
+          value:mes,onChange:function(e){setMes(e.target.value);}
+        },MESES.map(function(m,i){return React.createElement("option",{key:m,value:m,style:{color:"#000",background:"#fff"}},MESES_N[i]);})),
+        React.createElement("select",{
+          style:{width:80,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.25)",borderRadius:10,color:"#fff",padding:"8px 10px",fontSize:13,outline:"none"},
+          value:ano,onChange:function(e){setAno(e.target.value);}
+        },["2026","2025"].map(function(a){return React.createElement("option",{key:a,value:a,style:{color:"#000",background:"#fff"}},a);}))
+      )
+    ),
+
+    // Meu card
+    eu&&React.createElement("div",{style:{background:"#1e3a5f",borderBottom:"1px solid #2d5a9e",padding:"10px 14px",flexShrink:0}},
+      React.createElement("div",{style:{fontSize:10,color:"#60a5fa",fontWeight:700,marginBottom:6,letterSpacing:1}},"📍 SUA POSIÇÃO"),
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+        React.createElement("div",{style:{fontSize:28,lineHeight:1}},MEDALS[euIdx]||React.createElement("span",{style:{fontSize:14,fontWeight:800,color:"#fff"}},"#"+(euIdx+1))),
+        React.createElement("div",{style:{flex:1}},
+          React.createElement("div",{style:{fontSize:14,fontWeight:800,color:"#fff",marginBottom:4}},eu.nome),
+          React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+            React.createElement("span",{style:{background:"#10b98133",color:"#4ade80",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}},"✅ "+eu.fech+" OS"),
+            React.createElement("span",{style:{background:"#3b82f633",color:"#60a5fa",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}},"⚡ "+eu.efic+"%"),
+            eu.tempoMed&&React.createElement("span",{style:{background:"#6366f133",color:"#a78bfa",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}},"⏱ "+eu.tempoMed.toFixed(1)+"h")
+          )
+        )
+      )
+    ),
+
+    // Lista
+    React.createElement("div",{style:{flex:1,overflowY:"auto",padding:"10px 12px"}},
+      loading
+        ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"⏳ Carregando...")
+        :dados.length===0
+          ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Sem dados neste período")
+          :React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+              dados.map(function(t,i){
+                var isMeu=usuario&&t.nome===usuario.nome;
+                var isExp=expandido===t.nome;
+                var corMedal=i===0?"#f59e0b":i===1?"#9ca3af":i===2?"#f97316":C.border;
+                var ini=(t.nome||"?").split(" ").slice(0,2).map(function(w){return w[0]||"";}).join("").toUpperCase();
+                var eficCor=t.efic>=80?C.green:t.efic>=60?C.yellow:C.red;
+
+                return React.createElement("div",{key:t.nome,
+                  style:{background:isMeu?"#1e3a5f33":C.card,border:"2px solid "+(isMeu?"#3b82f6":isExp?corMedal:C.border),borderRadius:14,overflow:"hidden",transition:"all .2s"}
+                },
+                  // Linha principal — clicável
+                  React.createElement("div",{
+                    style:{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",cursor:"pointer"},
+                    onClick:function(){setExpandido(isExp?null:t.nome);}
+                  },
+                    // Posição
+                    React.createElement("div",{style:{width:32,textAlign:"center",flexShrink:0}},
+                      i<3
+                        ?React.createElement("div",{style:{fontSize:24}},MEDALS[i])
+                        :React.createElement("div",{style:{width:28,height:28,borderRadius:"50%",background:C.surface,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.muted}},i+1)
+                    ),
+                    // Avatar
+                    t.foto
+                      ?React.createElement("img",{src:t.foto,style:{width:42,height:42,borderRadius:"50%",objectFit:"cover",border:"2px solid "+corMedal,flexShrink:0}})
+                      :React.createElement("div",{style:{width:42,height:42,borderRadius:"50%",background:corMedal+"22",border:"2px solid "+corMedal,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:corMedal,flexShrink:0}},ini),
+                    // Nome + OS
+                    React.createElement("div",{style:{flex:1,minWidth:0}},
+                      React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},
+                        t.nome+(isMeu?" 👈":"")
+                      ),
+                      React.createElement("div",{style:{display:"flex",gap:6,marginTop:3,flexWrap:"wrap"}},
+                        React.createElement("span",{style:{fontSize:11,color:C.green,fontWeight:700}},"✅ "+t.fech),
+                        t.abertas>0&&React.createElement("span",{style:{fontSize:11,color:C.yellow}},"🔴 "+t.abertas),
+                        React.createElement("span",{style:{fontSize:11,color:eficCor,fontWeight:600}},"⚡"+t.efic+"%")
+                      )
+                    ),
+                    // Seta
+                    React.createElement("div",{style:{color:C.dim,fontSize:12,flexShrink:0}},isExp?"▲":"▼")
+                  ),
+
+                  // Barra de progresso
+                  React.createElement("div",{style:{height:3,background:C.border,margin:"0 14px 8px"}},
+                    React.createElement("div",{style:{height:"100%",width:Math.min(100,dados[0].fech>0?Math.round(t.fech/dados[0].fech*100):0)+"%",background:corMedal,borderRadius:2,transition:"width .6s"}})
+                  ),
+
+                  // Detalhes expandidos
+                  isExp&&React.createElement("div",{style:{padding:"0 14px 14px",borderTop:"1px solid "+C.border+"44",paddingTop:10,marginTop:2}},
+                    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
+                      [
+                        {icon:"✅",label:"OS Fechadas",valor:t.fech,cor:C.green},
+                        {icon:"🔴",label:"OS Abertas",valor:t.abertas,cor:C.yellow},
+                        {icon:"⏱",label:"Tempo Médio",valor:t.tempoMed?t.tempoMed.toFixed(1)+"h":"—",cor:C.blue},
+                        {icon:"↩",label:"Retrabalho",valor:t.retrabalho+"%",cor:t.retrabalho>20?C.red:t.retrabalho>10?C.yellow:C.green},
+                        {icon:"🏦",label:"Condomínios",valor:t.conds,cor:C.cyan},
+                        {icon:"📋",label:"Total OS",valor:t.total,cor:C.muted},
+                      ].map(function(k){
+                        return React.createElement("div",{key:k.label,style:{background:C.bg,borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8}},
+                          React.createElement("div",{style:{fontSize:18,flexShrink:0}},k.icon),
+                          React.createElement("div",null,
+                            React.createElement("div",{style:{fontSize:16,fontWeight:800,color:k.cor}},k.valor),
+                            React.createElement("div",{style:{fontSize:10,color:C.dim}},k.label)
+                          )
+                        );
+                      })
+                    )
+                  )
+                );
+              })
+            )
+    )
+  );
+}
+
+
 function App(){
   const [usuario,setUsuario]=useState(null);
   const [tab,setTab]=useState("os");
@@ -808,6 +1052,7 @@ function App(){
   const tabs=[
     {id:"os",icon:"📋",label:"OS"},
     {id:"campo",icon:"📡",label:"Em Campo"},
+    {id:"ranking",icon:"🏆",label:"Ranking"},
   ];
 
   return React.createElement("div",null,
@@ -822,7 +1067,7 @@ function App(){
         React.createElement("button",{style:{background:C.red+"22",border:"1px solid "+C.red+"33",color:C.red,borderRadius:8,padding:"5px 10px",fontSize:11,cursor:"pointer"},onClick:logout},"Sair")
       )
     ),
-    tab==="os"?React.createElement(MinhasOS,{usuario,onSelectOS:os=>{setOsSel({...os})}}):React.createElement(Andamento,{usuario}),
+    tab==="os"?React.createElement(MinhasOS,{usuario,onSelectOS:os=>{setOsSel({...os})}}):tab==="ranking"?React.createElement(RankingTecnicos,{usuario}):React.createElement(Andamento,{usuario}),
     React.createElement(BottomTab,{tabs,active:tab,onChange:setTab})
   );
 }
