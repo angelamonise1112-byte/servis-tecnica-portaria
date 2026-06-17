@@ -4234,334 +4234,144 @@ function SLA(){
 function Rastreamento(){
   const {tick}=React.useContext(RefreshCtx);
   const [locs,setLocs]=useState([]);
-  const [historico,setHistorico]=useState([]);
   const [loading,setLoading]=useState(true);
   const [selTec,setSelTec]=useState("");
   const [filtData,setFiltData]=useState(todayStr());
-  const [viewMode,setViewMode]=useState("cards"); // cards | mapa | timeline
-  const [leafReady,setLeafReady]=useState(!!window.L);
-  const mapRef=React.useRef(null);
-  const rotaRef=React.useRef(null);
-  const marcRef=React.useRef([]);
-
-  // Carregar Leaflet
-  useEffect(function(){
-    if(window.L){setLeafReady(true);return;}
-    var css=document.createElement("link");css.rel="stylesheet";
-    css.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(css);
-    var sc=document.createElement("script");sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-    sc.onload=function(){setLeafReady(true);};document.head.appendChild(sc);
-  },[]);
 
   const load=useCallback(async function(){
     setLoading(true);
-    var dataInicio=filtData+" 00:00:00";
-    var dataFim=filtData+" 23:59:59";
-    var[rl,rh]=await Promise.all([
-      sb.from("tecnicos_localizacao").select("*").order("atualizado_em",{ascending:false}),
-      sb.from("tecnicos_historico").select("*")
-        .gte("criado_em",dataInicio).lte("criado_em",dataFim)
-        .order("criado_em",{ascending:true})
-        .limit(5000),
-    ]);
-    setLocs(rl.data||[]);
-    setHistorico(rh.data||[]);
+    const{data}=await sb.from("tecnicos_localizacao").select("*").order("atualizado_em",{ascending:false});
+    setLocs(data||[]);
     setLoading(false);
-  },[filtData]);
-  useEffect(function(){load();},[load,tick]);
-  useEffect(function(){var t=setInterval(load,30000);return function(){clearInterval(t);};},[load]);
+  },[tick]);
 
-  // Técnicos disponíveis
-  var tecsList=useMemo(function(){
-    return[...new Set([
-      ...(locs||[]).map(function(l){return l.tec;}).filter(Boolean),
-      ...(historico||[]).map(function(h){return h.tec;}).filter(Boolean)
-    ])].sort();
-  },[locs,historico]);
+  useEffect(function(){load();},[load]);
 
-  // Histórico do técnico selecionado
-  var histTec=useMemo(function(){
-    if(!selTec)return[];
-    return(historico||[]).filter(function(h){return h.tec===selTec;});
-  },[historico,selTec]);
-
-  // Indicadores do técnico selecionado
-  var indicadores=useMemo(function(){
-    if(!histTec.length)return{km:0,pontos:0,conds:new Set(),os:new Set(),tempoAtend:0,tempoDeslocamento:0};
-    var km=0;
-    var conds=new Set();
-    var os=new Set();
-    var tempoAtend=0;
-    var tempoDeslocamento=0;
-    for(var i=1;i<histTec.length;i++){
-      var a=histTec[i-1];var b=histTec[i];
-      if(a.lat&&a.lng&&b.lat&&b.lng){
-        // Fórmula Haversine simplificada
-        var dLat=(b.lat-a.lat)*Math.PI/180;
-        var dLng=(b.lng-a.lng)*Math.PI/180;
-        var s=Math.sin(dLat/2)*Math.sin(dLat/2)+
-          Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*
-          Math.sin(dLng/2)*Math.sin(dLng/2);
-        var dist=6371*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));
-        km+=dist;
-      }
-      if(a.os_cond)conds.add(a.os_cond);
-      if(a.os_num)os.add(a.os_num);
-      var dtA=new Date(a.criado_em);var dtB=new Date(b.criado_em);
-      var minutos=(dtB-dtA)/60000;
-      if(minutos>0&&minutos<60){
-        if(a.status_campo==="Em Atendimento"||a.status_campo==="No Local")tempoAtend+=minutos;
-        else if(a.status_campo==="A Caminho")tempoDeslocamento+=minutos;
-      }
-    }
-    return{km:km.toFixed(1),pontos:histTec.length,conds:conds,os:os,
-      tempoAtend:Math.round(tempoAtend),tempoDeslocamento:Math.round(tempoDeslocamento)};
-  },[histTec]);
-
-  // Mapa com trajeto
-  useEffect(function(){
-    if(!leafReady||viewMode!=="mapa")return;
-    var L=window.L;
-    var el=document.getElementById("rast-mapa");
-    if(!el)return;
-    if(!mapRef.current){
-      mapRef.current=L.map(el,{center:[-3.79,-38.55],zoom:12});
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(mapRef.current);
-    }
-    var m=mapRef.current;
-    // Limpar
-    marcRef.current.forEach(function(mk){mk.remove();});marcRef.current=[];
-    if(rotaRef.current){rotaRef.current.remove();rotaRef.current=null;}
-
-    if(!selTec||!histTec.length)return;
-    var pontos=histTec.filter(function(h){return h.lat&&h.lng;}).map(function(h){return[h.lat,h.lng];});
-    if(!pontos.length)return;
-
-    // Linha do trajeto
-    rotaRef.current=L.polyline(pontos,{color:"#3b82f6",weight:3,opacity:0.8}).addTo(m);
-
-    // Ponto inicial (verde)
-    var ini=histTec.find(function(h){return h.lat&&h.lng;});
-    if(ini){
-      var icoIni=L.divIcon({html:"<div style='width:14px;height:14px;border-radius:50%;background:#10b981;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.5)'></div>",className:"",iconSize:[14,14],iconAnchor:[7,7]});
-      var mk=L.marker([ini.lat,ini.lng],{icon:icoIni}).bindPopup("<b>🟢 Início</b><br>"+new Date(ini.criado_em).toLocaleTimeString("pt-BR")).addTo(m);
-      marcRef.current.push(mk);
-    }
-
-    // Ponto final (vermelho)
-    var ult=[...histTec].reverse().find(function(h){return h.lat&&h.lng;});
-    if(ult&&ult!==ini){
-      var icoUlt=L.divIcon({html:"<div style='width:14px;height:14px;border-radius:50%;background:#ef4444;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.5)'></div>",className:"",iconSize:[14,14],iconAnchor:[7,7]});
-      var mk2=L.marker([ult.lat,ult.lng],{icon:icoUlt}).bindPopup("<b>🔴 Último registro</b><br>"+new Date(ult.criado_em).toLocaleTimeString("pt-BR")).addTo(m);
-      marcRef.current.push(mk2);
-    }
-
-    // Pontos intermediários com popup de hora
-    histTec.filter(function(h){return h.lat&&h.lng;}).forEach(function(h,i){
-      if(i===0||i===histTec.length-1)return;
-      var cor=h.status_campo==="Em Atendimento"?"#f97316":h.status_campo==="No Local"?"#06b6d4":"#6b7280";
-      var ico=L.divIcon({html:"<div style='width:7px;height:7px;border-radius:50%;background:"+cor+";border:1px solid #fff'></div>",className:"",iconSize:[7,7],iconAnchor:[3,3]});
-      var mk3=L.marker([h.lat,h.lng],{icon:ico}).bindPopup(
-        "<div style='font-size:11px'><b>"+new Date(h.criado_em).toLocaleTimeString("pt-BR")+"</b><br>"
-        +(h.status_campo||"—")+(h.os_cond?"<br>📍 "+h.os_cond:"")+"</div>"
-      ).addTo(m);
-      marcRef.current.push(mk3);
-    });
-
-    m.fitBounds(rotaRef.current.getBounds(),{padding:[20,20]});
-  },[leafReady,viewMode,histTec,selTec]);
-
-  var agora=new Date();
-  function minAgo(dt){return Math.floor((agora-new Date(dt))/60000);}
-  var statusCor=function(s){return s==="Em Atendimento"||s==="No Local"?C.orange:s==="A Caminho"?C.yellow:s==="Disponível"?C.green:C.dim;};
-  var statusIcon=function(s){return s==="Em Atendimento"?"🔧":s==="A Caminho"?"🚗":s==="No Local"?"📍":s==="Concluído"?"✅":"🟢";};
-
-  function exportarPDFRast(){
-    var tec=selTec||"Todos";
-    var rows=histTec.map(function(h){
-      return "<tr><td>"+new Date(h.criado_em).toLocaleTimeString("pt-BR")+"</td>"
-        +"<td>"+(h.status_campo||"—")+"</td>"
-        +"<td>"+(h.os_cond||"—")+"</td>"
-        +"<td>"+(h.os_num?"#"+h.os_num:"—")+"</td>"
-        +"<td>"+(h.lat?h.lat.toFixed(5):"—")+", "+(h.lng?h.lng.toFixed(5):"—")+"</td>"
-        +"<td>"+(h.velocidade?h.velocidade.toFixed(1)+" m/s":"—")+"</td></tr>";
-    }).join("");
-    var conteudo="<div class='stats'>"
-      +"<div class='stat'><div class='n'>"+indicadores.pontos+"</div><div class='l'>Pontos GPS</div></div>"
-      +"<div class='stat'><div class='n'>"+indicadores.km+"km</div><div class='l'>Percorridos</div></div>"
-      +"<div class='stat'><div class='n'>"+indicadores.conds.size+"</div><div class='l'>Condomínios</div></div>"
-      +"<div class='stat'><div class='n'>"+indicadores.os.size+"</div><div class='l'>OS Atendidas</div></div>"
-      +"<div class='stat'><div class='n'>"+indicadores.tempoAtend+"min</div><div class='l'>Em atendimento</div></div>"
-      +"</div>"
-      +"<table><thead><tr><th>HORÁRIO</th><th>STATUS</th><th>CONDOMÍNIO</th><th>OS</th><th>COORDENADAS</th><th>VELOCIDADE</th></tr></thead>"
-      +"<tbody>"+rows+"</tbody></table>";
-    servisRelatorioPDF(
-      "Rastreamento — "+tec+" — "+filtData,
-      conteudo,
-      "",
-      "Técnico: "+tec+" · Data: "+filtData
-    );
+  function minAgo(dt){
+    if(!dt)return 999;
+    return Math.round((new Date()-new Date(dt))/60000);
   }
 
-  return React.createElement("div",null,
+  function statusLabel(s){
+    if(!s)return"Desconhecido";
+    if(s==="em_campo"||s==="Em Campo")return"Em Campo";
+    if(s==="Disponível"||s==="disponivel")return"Disponível";
+    return s;
+  }
+
+  function statusCor(s){
+    if(!s)return C.dim;
+    var sl=s.toLowerCase();
+    if(sl.includes("campo"))return C.green;
+    if(sl.includes("dispon"))return C.blue;
+    return C.dim;
+  }
+
+  var locsAtivas=locs.filter(function(l){return minAgo(l.atualizado_em)<120;});
+  var emCampo=locs.filter(function(l){return (l.status_campo||"").toLowerCase().includes("campo");}).length;
+  var disponiveis=locs.filter(function(l){return (l.status_campo||"").toLowerCase().includes("dispon");}).length;
+  var online=locs.filter(function(l){return minAgo(l.atualizado_em)<10;}).length;
+
+  return React.createElement("div",{style:{height:"100%",overflowY:"auto",background:C.bg}},
+
     // Header
-    React.createElement("div",{style:{background:C.surface,padding:"12px 20px",position:"sticky",top:0,zIndex:10,borderBottom:"1px solid "+C.border}},
-      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}},
+    React.createElement("div",{style:{background:C.surface,padding:"14px 24px",borderBottom:"1px solid "+C.border,position:"sticky",top:0,zIndex:10}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
         React.createElement("div",null,
-          React.createElement("div",{style:{fontSize:17,fontWeight:700}},"📡 Rastreamento"),
-          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginTop:2}},
-            React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:C.green,animation:"pulse 2s infinite"}}),
-            React.createElement("span",{style:{fontSize:11,color:C.muted}},"Atualização automática a cada 30s")
-          )
+          React.createElement("div",{style:{fontSize:18,fontWeight:700}},"📍 Rastreamento"),
+          React.createElement("div",{style:{fontSize:12,color:C.muted}},"Localização dos técnicos em tempo real")
         ),
-        React.createElement("div",{style:{display:"flex",gap:6}},
-          selTec&&histTec.length>0&&React.createElement("button",{style:{...btnStyle(C.red,true),fontSize:11,padding:"6px 12px"},onClick:exportarPDFRast},"📄 Exportar PDF"),
-          React.createElement("button",{style:{...btnStyle(C.blue,true),fontSize:11,padding:"6px 12px"},onClick:load},"🔄 Atualizar")
-        )
+        React.createElement("button",{style:{...btnStyle(C.blue,true),fontSize:11,padding:"7px 14px"},onClick:load},"↺ Atualizar")
       ),
-      React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}},
-        // Filtros
-        React.createElement("select",{style:{...base.sel,width:160,fontSize:11},value:selTec,onChange:function(e){setSelTec(e.target.value);}},
-          React.createElement("option",{value:""},"Todos técnicos"),
-          tecsList.map(function(t){return React.createElement("option",{key:t,value:t},t);})
-        ),
-        React.createElement("input",{type:"date",style:{...base.inp,width:140,fontSize:11},value:filtData,onChange:function(e){setFiltData(e.target.value);}}),
-        // Tabs de view
-        React.createElement("div",{style:{display:"flex",gap:4,marginLeft:"auto"}},
-          [{id:"cards",l:"📋 Cards"},{id:"mapa",l:"🗺 Mapa"},{id:"timeline",l:"⏱ Linha do Tempo"}]
-          .map(function(v){
-            return React.createElement("button",{key:v.id,
-              style:{...btnStyle(C.blue,viewMode!==v.id),fontSize:11,padding:"5px 10px"},
-              onClick:function(){setViewMode(v.id);}},v.l);
-          })
-        )
+      // KPIs
+      React.createElement("div",{style:{display:"flex",gap:10}},
+        [{l:"Online agora",v:online,c:C.green},{l:"Em campo",v:emCampo,c:C.blue},{l:"Disponíveis",v:disponiveis,c:C.cyan},{l:"Total",v:locs.length,c:C.muted}].map(function(k){
+          return React.createElement("div",{key:k.l,style:{background:k.c+"18",border:"1px solid "+k.c+"33",borderRadius:10,padding:"7px 14px",textAlign:"center"}},
+            React.createElement("div",{style:{fontSize:20,fontWeight:800,color:k.c}},k.v),
+            React.createElement("div",{style:{fontSize:10,color:C.dim}},k.l)
+          );
+        })
       )
     ),
-    // KPIs
-    loading?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.muted}},"Carregando..."):
-    React.createElement("div",null,
-      // KPIs gerais
-      React.createElement("div",{style:{padding:"12px 20px"}},
-        React.createElement(Grid,{cols:selTec?6:4,mb:12},
-          React.createElement(KPI,{label:"Técnicos",value:locs.length,color:C.blue}),
-          React.createElement(KPI,{label:"🟢 Disponíveis",value:locs.filter(function(l){return l.status_campo==="Disponível";}).length,color:C.green}),
-          React.createElement(KPI,{label:"🟠 Em Campo",value:locs.filter(function(l){return l.status_campo&&l.status_campo!=="Disponível"&&l.status_campo!=="Concluído";}).length,color:C.orange}),
-          React.createElement(KPI,{label:"📡 Online <10min",value:locs.filter(function(l){return minAgo(l.atualizado_em)<10;}).length,color:C.cyan}),
-          selTec&&React.createElement(KPI,{label:"📍 Pontos GPS",value:indicadores.pontos,color:C.blue}),
-          selTec&&React.createElement(KPI,{label:"🚗 KM percorridos",value:indicadores.km+"km",color:C.green})
-        ),
-        selTec&&histTec.length>0&&React.createElement(Grid,{cols:4,mb:0},
-          React.createElement(KPI,{label:"🏢 Condomínios",value:indicadores.conds.size,color:C.purple}),
-          React.createElement(KPI,{label:"📋 OS Atendidas",value:indicadores.os.size,color:C.cyan}),
-          React.createElement(KPI,{label:"⏱ Tempo atend.",value:indicadores.tempoAtend+"min",color:C.orange}),
-          React.createElement(KPI,{label:"🚗 Tempo deslocam.",value:indicadores.tempoDeslocamento+"min",color:C.yellow})
-        )
-      ),
-      // CARDS
-      viewMode==="cards"&&React.createElement("div",{style:{padding:"0 20px 20px"}},
-        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10}},
-          locs.map(function(loc){
-            var mins=minAgo(loc.atualizado_em);
-            var online=mins<10;
-            var cor=statusCor(loc.status_campo);
-            var histLocal=(historico||[]).filter(function(h){return h.tec===loc.tec;});
-            return React.createElement("div",{key:loc.tec,
-              style:{background:selTec===loc.tec?C.blue+"11":C.card,
-                border:"1px solid "+(selTec===loc.tec?C.blue:C.border),
-                borderLeft:"4px solid "+cor,borderRadius:10,padding:14,cursor:"pointer"},
-              onClick:function(){setSelTec(selTec===loc.tec?"":loc.tec);}
-            },
-              React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}},
-                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
-                  React.createElement("div",{style:{width:36,height:36,borderRadius:"50%",background:cor+"22",border:"2px solid "+cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}},statusIcon(loc.status_campo)),
-                  React.createElement("div",null,
-                    React.createElement("div",{style:{fontSize:13,fontWeight:700}},loc.tec),
-                    React.createElement("span",{style:{fontSize:11,color:cor,fontWeight:600}},loc.status_campo||"—")
-                  )
-                ),
-                React.createElement("div",{style:{textAlign:"right"}},
-                  React.createElement("div",{style:{display:"flex",alignItems:"center",gap:4,justifyContent:"flex-end"}},
-                    React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:online?C.green:C.dim}}),
-                    React.createElement("span",{style:{fontSize:10,color:online?C.green:C.dim}},online?"Online":"Offline")
-                  ),
-                  React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:2}},
-                    mins<60?mins+"min atrás":Math.floor(mins/60)+"h atrás"
-                  )
-                )
-              ),
-              loc.os_cond&&React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:6,background:C.bg,borderRadius:6,padding:"4px 8px"}},
-                "📍 "+loc.os_cond+(loc.os_num?" · #"+loc.os_num:"")
-              ),
-              React.createElement("div",{style:{display:"flex",gap:6,marginTop:6}},
-                React.createElement("div",{style:{flex:1,background:C.bg,borderRadius:6,padding:"4px 8px",fontSize:10,textAlign:"center"}},
-                  React.createElement("div",{style:{fontWeight:700,color:C.blue}},histLocal.length),
-                  React.createElement("div",{style:{color:C.muted}},"pontos GPS hoje")
-                ),
-                loc.lat&&loc.lng&&React.createElement("a",{
-                  href:"https://maps.google.com/?q="+loc.lat+","+loc.lng,target:"_blank",
-                  style:{...iBtn(C.blue),textDecoration:"none",padding:"4px 8px",fontSize:10}
-                },"🗺 Maps")
+
+    loading
+      ?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.muted}},"⏳ Carregando...")
+      :locs.length===0
+        ?React.createElement("div",{style:{textAlign:"center",padding:60}},
+            React.createElement("div",{style:{fontSize:48,marginBottom:12}},"📡"),
+            React.createElement("div",{style:{fontSize:16,fontWeight:600,color:C.text,marginBottom:8}},"Nenhuma localização registrada"),
+            React.createElement("div",{style:{fontSize:13,color:C.muted,maxWidth:360,margin:"0 auto",lineHeight:1.6}},"Os técnicos precisam abrir o App de Campo e ir para a aba \"Em Campo\" para registrar a localização."),
+            React.createElement("div",{style:{marginTop:20,background:C.card,borderRadius:12,padding:16,maxWidth:400,margin:"20px auto",border:"1px solid "+C.border,textAlign:"left"}},
+              React.createElement("div",{style:{fontSize:12,fontWeight:700,color:C.blue,marginBottom:8}},"Como funciona:"),
+              React.createElement("div",{style:{fontSize:12,color:C.muted,lineHeight:1.8}},
+                "1. Técnico abre o App Campo\n2. Vai na aba 📡 Em Campo\n3. Clica em \"Iniciar Atendimento\"\n4. Posição aparece aqui automaticamente"
               )
-            );
-          })
-        )
-      ),
-      // MAPA
-      viewMode==="mapa"&&React.createElement("div",{style:{padding:"0 20px 20px"}},
-        !selTec?React.createElement(Card,null,
-          React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},
-            React.createElement("div",{style:{fontSize:32,marginBottom:8}},"👆"),
-            "Selecione um técnico para ver o trajeto no mapa"
+            )
           )
-        ):
-        !leafReady?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando mapa..."):
-        React.createElement("div",{style:{height:500,borderRadius:12,overflow:"hidden",border:"1px solid "+C.border}},
-          React.createElement("div",{id:"rast-mapa",style:{width:"100%",height:"100%"}})
-        )
-      ),
-      // LINHA DO TEMPO
-      viewMode==="timeline"&&React.createElement("div",{style:{padding:"0 20px 20px"}},
-        !selTec?React.createElement(Card,null,
-          React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Selecione um técnico")
-        ):histTec.length===0?React.createElement(Card,null,
-          React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Nenhum registro para "+selTec+" em "+filtData)
-        ):
-        React.createElement(Card,null,
-          React.createElement("div",{style:{fontSize:13,fontWeight:700,marginBottom:14}},"⏱ Linha do Tempo — "+selTec+" — "+filtData),
-          React.createElement("div",{style:{position:"relative"}},
-            React.createElement("div",{style:{position:"absolute",left:20,top:0,bottom:0,width:2,background:C.border,borderRadius:2}}),
-            histTec.filter(function(h,i){
-              // Mostrar apenas pontos com mudança de status ou OS
-              if(i===0||i===histTec.length-1)return true;
-              var prev=histTec[i-1];
-              return h.status_campo!==prev.status_campo||h.os_num!==prev.os_num||h.os_cond!==prev.os_cond;
-            }).map(function(h,i){
-              var cor=statusCor(h.status_campo);
-              var icon=statusIcon(h.status_campo);
-              var hora=new Date(h.criado_em).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-              return React.createElement("div",{key:i,style:{display:"flex",gap:12,marginBottom:12,paddingLeft:8}},
-                React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0}},
-                  React.createElement("div",{style:{width:26,height:26,borderRadius:"50%",background:cor+"22",border:"2px solid "+cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,zIndex:1}},icon),
-                ),
-                React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"8px 12px",flex:1,minWidth:0}},
-                  React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}},
-                    React.createElement("span",{style:{fontSize:12,fontWeight:700,color:cor}},h.status_campo||"—"),
-                    React.createElement("span",{style:{fontSize:11,color:C.dim,fontFamily:"monospace"}},hora)
+        :React.createElement("div",{style:{padding:"20px 24px"}},
+            // Grid cards
+            React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}},
+              locs.map(function(loc){
+                var mins=minAgo(loc.atualizado_em);
+                var online2=mins<10;
+                var recente=mins<30;
+                var cor=statusCor(loc.status_campo);
+                var isSel=selTec===loc.tec;
+                return React.createElement("div",{key:loc.tec||loc.id,
+                  style:{background:isSel?C.blue+"11":C.card,border:"2px solid "+(isSel?C.blue:cor),borderRadius:12,padding:14,cursor:"pointer"},
+                  onClick:function(){setSelTec(isSel?"":loc.tec);}
+                },
+                  // Header card
+                  React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}},
+                    React.createElement("div",null,
+                      React.createElement("div",{style:{fontSize:14,fontWeight:700,color:C.text}},loc.tec||"—"),
+                      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginTop:4}},
+                        React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:online2?C.green:recente?C.yellow:C.dim}}),
+                        React.createElement("span",{style:{fontSize:11,color:online2?C.green:recente?C.yellow:C.dim,fontWeight:600}},
+                          online2?"Online agora":recente?mins+"min atrás":mins+"min atrás"
+                        )
+                      )
+                    ),
+                    React.createElement("span",{style:{background:cor+"22",color:cor,borderRadius:20,padding:"4px 10px",fontSize:10,fontWeight:700}},
+                      statusLabel(loc.status_campo)
+                    )
                   ),
-                  h.os_cond&&React.createElement("div",{style:{fontSize:11,color:C.muted}},
-                    "📍 "+h.os_cond+(h.os_num?" · OS #"+h.os_num:"")
+
+                  // OS atual
+                  loc.os_num&&React.createElement("div",{style:{background:C.blue+"11",borderRadius:8,padding:"6px 10px",marginBottom:8,fontSize:11}},
+                    React.createElement("div",{style:{color:C.blue,fontWeight:700}},"OS em andamento: #"+loc.os_num),
+                    loc.os_cond&&React.createElement("div",{style:{color:C.muted,marginTop:1}},loc.os_cond)
                   ),
-                  h.lat&&h.lng&&React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:2}},
-                    h.lat.toFixed(5)+", "+h.lng.toFixed(5)+
-                    (h.velocidade?" · "+h.velocidade.toFixed(1)+"m/s":"")
+
+                  // Coordenadas
+                  loc.lat&&loc.lng&&React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+                    React.createElement("div",{style:{fontSize:10,color:C.dim}},
+                      "📍 "+parseFloat(loc.lat).toFixed(5)+", "+parseFloat(loc.lng).toFixed(5)
+                    ),
+                    React.createElement("a",{
+                      href:"https://www.google.com/maps?q="+loc.lat+","+loc.lng,
+                      target:"_blank",
+                      style:{...btnStyle(C.green,true),fontSize:10,padding:"4px 10px",textDecoration:"none"},
+                      onClick:function(e){e.stopPropagation();}
+                    },"🗺 Ver no Maps")
+                  ),
+
+                  // Última atualização
+                  React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:6}},
+                    "Atualizado: "+(loc.atualizado_em?new Date(loc.atualizado_em).toLocaleString("pt-BR"):"—")
                   )
-                )
-              );
-            })
+                );
+              })
+            ),
+
+            // Instrução para técnicos sem localização
+            React.createElement("div",{style:{marginTop:20,background:C.card,borderRadius:12,padding:16,border:"1px solid "+C.border}},
+              React.createElement("div",{style:{fontSize:12,fontWeight:700,color:C.muted,marginBottom:8}},"ℹ️ Como os técnicos atualizam a localização:"),
+              React.createElement("div",{style:{fontSize:12,color:C.dim,lineHeight:1.8}},
+                "1. Técnico abre o App Campo → aba 📡 Em Campo\n2. Clica em \"Iniciar Atendimento\" ou \"Atualizar Localização\"\n3. Aceita a permissão de localização no celular\n4. Posição atualiza automaticamente aqui"
+              )
+            )
           )
-        )
-      )
-    )
   );
 }
 
