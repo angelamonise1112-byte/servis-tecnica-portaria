@@ -6486,6 +6486,10 @@ const TABS=[
 ];
 
 
+const RefreshCtx=React.createContext({tick:0,refresh:function(){}});
+const RegionalCtx=React.createContext({regional:"CE",setRegional:function(){}});
+
+
 function App(){
   const [usuario,setUsuario]=useState(null);
   const [refreshTick,setRefreshTick]=useState(0);
