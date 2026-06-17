@@ -708,17 +708,14 @@ function DetalheOS({os,usuario,onBack}){
             React.createElement("textarea",{style:{...inp,minHeight:80,resize:"vertical",paddingBottom:44},placeholder:"Problema encontrado * (ou use o 🎤)",value:problema,onChange:e=>setProblema(e.target.value)}),
             React.createElement(VozBtn,{onTexto:function(t){setProblema(function(p){return p?p+" "+t:t;});},cor:"#ef4444"})
           ),
-          React.createElement(IARelatorio,{texto:problema,onAplicar:setProblema,placeholder:"problema"}),
           React.createElement("div",{style:{position:"relative",marginTop:8}},
             React.createElement("textarea",{style:{...inp,minHeight:80,resize:"vertical",paddingBottom:44},placeholder:"Solução aplicada * (ou use o 🎤)",value:solucao,onChange:e=>setSolucao(e.target.value)}),
             React.createElement(VozBtn,{onTexto:function(t){setSolucao(function(p){return p?p+" "+t:t;});},cor:"#10b981"})
           ),
-          React.createElement(IARelatorio,{texto:solucao,onAplicar:setSolucao,placeholder:"solucao"}),
           React.createElement("div",{style:{position:"relative",marginTop:8}},
             React.createElement("textarea",{style:{...inp,minHeight:60,resize:"vertical",paddingBottom:44},placeholder:"Material utilizado (ou use o 🎤)",value:material,onChange:e=>setMaterial(e.target.value)}),
             React.createElement(VozBtn,{onTexto:function(t){setMaterial(function(p){return p?p+" "+t:t;});},cor:"#f59e0b"})
-          ),
-          React.createElement(IARelatorio,{texto:material,onAplicar:setMaterial,placeholder:"material"})
+          )
         ),
         // Fotos
         idxAtual>=2&&statusAtual!=="Concluído"&&React.createElement("div",{style:{...card}},
@@ -1101,7 +1098,6 @@ function InteligenciaOperacional({usuario}){
       var hist=r[2].data||[];
       var conds=r[3].data||[];
       var pends=r[4].data||[];
-
       var agenda=[];
       prevHoje.forEach(function(p){
         var c=conds.find(function(x){return x.nome===p.cond;})||{};
@@ -1115,26 +1111,16 @@ function InteligenciaOperacional({usuario}){
         var dias=Math.floor((hoje-new Date(o.data))/86400000);
         agenda.push({tipo:"os",icon:"🔧",cor:o.pri==="Alta"?"#ef4444":o.pri==="Media"||o.pri==="Média"?"#f59e0b":"#6b7280",titulo:"OS #"+o.num+" — "+o.cond,subtitulo:o.prob,endereco:c.endereco||"",obs:o.descricao||o.relato||"",pri:o.pri,diasAberta:dias});
       });
-
       var mats=[];
-      prevHoje.forEach(function(p){
-        if(p.equipamentos){p.equipamentos.split(",").forEach(function(m){var t=m.trim();if(t.length>3)mats.push(t);});}
-      });
-      osAb.forEach(function(o){
-        if(o.descricao){
-          var kws=["capacitor","motor","placa","correia","bateria","nobreak","cabo","fusivel","rele","sensor"];
-          kws.forEach(function(k){if(o.descricao.toLowerCase().indexOf(k)>=0)mats.push("Verificar "+k);});
-        }
-      });
+      prevHoje.forEach(function(p){if(p.equipamentos){p.equipamentos.split(",").forEach(function(m){var t=m.trim();if(t.length>3)mats.push(t);});}});
+      osAb.forEach(function(o){if(o.descricao){["capacitor","motor","placa","correia","bateria","nobreak","cabo","fusivel","rele","sensor"].forEach(function(k){if(o.descricao.toLowerCase().indexOf(k)>=0)mats.push("Verificar "+k);});}});
       mats=mats.filter(function(m,i){return mats.indexOf(m)===i;}).slice(0,8);
-
       var alertas=[];
       if(osAlta.length>0)alertas.push({tipo:"critico",msg:osAlta.length+" OS de ALTA prioridade",icon:"🚨"});
       var slaV=osAb.filter(function(o){return (hoje-new Date(o.data))>72*3600000;});
       if(slaV.length>0)alertas.push({tipo:"atencao",msg:slaV.length+" OS com SLA vencido",icon:"⏰"});
       if(prevHoje.length>0)alertas.push({tipo:"info",msg:prevHoje.length+" preventiva(s) hoje",icon:"◈"});
       if(pends.length>0)alertas.push({tipo:"atencao",msg:pends.length+" pendência(s)",icon:"⚠"});
-
       setDados({agenda,mats,hist:hist.filter(function(o){return o.relato||o.prob;}).slice(0,5),rota:agenda.filter(function(a){return a.endereco;}),alertas,osAlta,osMedia,osBaixa,prevHoje,pends,total:agenda.length});
       setLoading(false);
     });
@@ -1234,11 +1220,6 @@ function InteligenciaOperacional({usuario}){
   );
 }
 
-ReactDOM.render(React.createElement(App,null),document.getElementById("root"));
-</script>
-</body>
-</html
-// ── IA PARA RELATÓRIOS TÉCNICOS ─────────────────────────────
 function IARelatorio({texto,onAplicar,placeholder}){
   var [aberto,setAberto]=useState(false);
   var [modo,setModo]=useState("profissional");
@@ -1247,164 +1228,89 @@ function IARelatorio({texto,onAplicar,placeholder}){
   var [pontuacao,setPontuacao]=useState(null);
 
   var MODOS=[
-    {id:"ortografia",icon:"📝",label:"Corrigir Ortografia",desc:"Corrige erros sem alterar o texto"},
-    {id:"profissional",icon:"✨",label:"Profissionalizar",desc:"Transforma em texto técnico profissional"},
-    {id:"completo",icon:"📄",label:"Relatório Completo",desc:"Gera relatório detalhado completo"},
+    {id:"ortografia",icon:"📝",label:"Ortografia",desc:"Corrige erros sem alterar o texto"},
+    {id:"profissional",icon:"✨",label:"Profissionalizar",desc:"Transforma em texto técnico"},
+    {id:"completo",icon:"📄",label:"Completo",desc:"Gera relatório detalhado"},
   ];
 
   var PROMPTS={
-    ortografia:"Você é especialista em português técnico. Corrija APENAS os erros ortográficos, pontuação e concordância do texto abaixo. NÃO altere o conteúdo nem acrescente informações. Retorne somente o texto corrigido, sem explicações.",
-    profissional:"Você é especialista em manutenção de sistemas de segurança eletrônica (portões, CFTV, controle de acesso, alarmes, interfonia, cercas elétricas). Transforme o texto do técnico em um relatório técnico claro, profissional e objetivo. Use linguagem adequada para síndicos e administradoras. NÃO invente informações. Retorne somente o texto melhorado, sem explicações.",
-    completo:"Você é especialista em manutenção de sistemas de segurança eletrônica. Com base no relato do técnico, gere um relatório técnico profissional com: 1) Problema identificado, 2) Diagnóstico técnico, 3) Serviços executados, 4) Situação final. Use linguagem técnica adequada para síndicos. NÃO invente dados. Retorne somente o relatório formatado.",
+    ortografia:"Você é especialista em português técnico. Corrija APENAS os erros ortográficos, pontuação e concordância. NÃO altere o conteúdo. Retorne somente o texto corrigido.",
+    profissional:"Você é especialista em manutenção de sistemas de segurança eletrônica (portões, CFTV, controle de acesso, alarmes, interfonia, cercas elétricas). Transforme o texto em um relatório técnico profissional para síndicos e administradoras. NÃO invente informações. Retorne somente o texto melhorado.",
+    completo:"Você é especialista em manutenção de segurança eletrônica. Gere um relatório com: 1) Problema identificado, 2) Diagnóstico técnico, 3) Serviços executados, 4) Situação final. NÃO invente dados. Retorne somente o relatório.",
   };
 
-  function calcPontuacao(original,melhorado){
-    if(!original||!melhorado)return null;
-    var palavrasOrig=original.split(" ").length;
-    var palavrasMelh=melhorado.split(" ").length;
-    var expansao=Math.min(100,Math.round((palavrasMelh/Math.max(palavrasOrig,1))*50));
-    var temPonto=melhorado.includes(".")?15:0;
-    var temTecnico=["sistema","equipamento","funcionamento","realizado","verificado","constatado","substituição","normalização"].some(function(w){return melhorado.toLowerCase().includes(w);})?20:0;
-    var comprimento=Math.min(30,Math.round(melhorado.length/10));
-    var semErro=!/\s[a-z]{1,2}\s/.test(melhorado)?15:8;
-    var total=Math.min(100,expansao+temPonto+temTecnico+comprimento+semErro);
-    return{
-      ortografia:temErro(melhorado)?75:100,
-      clareza:Math.min(100,70+temPonto+temTecnico/2),
-      tecnico:Math.min(100,60+temTecnico+comprimento/2),
-      total:total,
-    };
-  }
-
-  function temErro(t){
-    var erros=["tava","trocou","ficou","fico","estava","naum","troquei no","nao ","nao,"];
-    return erros.some(function(e){return t.toLowerCase().includes(e);});
-  }
-
-  async function melhorar(){
-    if(!texto||!texto.trim()){alert("Digite algo no campo antes de melhorar.");return;}
-    setLoading(true);setResultado("");setPontuacao(null);
-
-    try{
-      var res=await fetch("/api/ia",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          system:PROMPTS[modo],
-          messages:[{role:"user",content:texto.trim()}]
-        })
-      });
-      var data=await res.json();
-      var txt=data.content&&data.content[0]?data.content[0].text:"";
-      if(txt){
-        setResultado(txt);
-        setPontuacao(calcPontuacao(texto,txt));
-      }else{
-        // Fallback local se API falhar
-        setResultado(melhorarLocal(texto,modo));
-        setPontuacao(calcPontuacao(texto,melhorarLocal(texto,modo)));
-      }
-    }catch(e){
-      // Fallback local
-      var fb=melhorarLocal(texto,modo);
-      setResultado(fb);
-      setPontuacao(calcPontuacao(texto,fb));
-    }
-    setLoading(false);
+  function calcPontuacao(orig,melh){
+    if(!orig||!melh)return null;
+    var exp=Math.min(100,Math.round((melh.split(" ").length/Math.max(orig.split(" ").length,1))*50));
+    var ponto=melh.includes(".")?15:0;
+    var tec=["sistema","equipamento","funcionamento","realizado","verificado","substituição","normalização"].some(function(w){return melh.toLowerCase().includes(w);})?20:0;
+    var comp=Math.min(30,Math.round(melh.length/10));
+    var total=Math.min(100,exp+ponto+tec+comp+15);
+    return{ortografia:melh.includes("tava")||melh.includes("nao ")?70:100,clareza:Math.min(100,70+ponto+tec/2),tecnico:Math.min(100,60+tec+comp/2),total:total};
   }
 
   function melhorarLocal(txt,m){
     var t=txt.trim();
-    // Correções ortográficas expandidas
-    var correcoes={
-      "nao":"não","naum":"não","nao ":"não ","tava":"estava","to ":"estou ",
-      "ta ":"está ","pra ":"para ","pro ":"para o ","vc":"você","tb":"também",
-      "q ":"que ","q.":"que.","eh ":"é ","eh.":"é.","oq":"o que",
-      "troquei":"realizei a substituição de","trocou":"realizou a substituição de",
-      "quebrou":"apresentou falha","queimou":"apresentou queima",
-      "arrumei":"realizei o ajuste em","consertei":"realizei o reparo em",
-      "ajustei":"realizei ajuste em","regulei":"realizei a regulagem de",
-      "limpei":"realizei a limpeza de","testei":"realizei testes em",
-      "funcionando":"em funcionamento normal","ok":"normalizado",
-    };
-    Object.keys(correcoes).forEach(function(k){
-      t=t.replace(new RegExp("\\b"+k+"\\b","gi"),correcoes[k]);
-    });
+    var corr={"nao":"não","naum":"não","tava":"estava","ta ":"está ","pra ":"para ","vc":"você","tb":"também","troquei":"realizei a substituição de","arrumei":"realizei o ajuste em","consertei":"realizei o reparo em","ajustei":"realizei ajuste em","regulei":"realizei a regulagem de","limpei":"realizei a limpeza de","testei":"realizei testes em","funcionando":"em funcionamento normal"};
+    Object.keys(corr).forEach(function(k){t=t.replace(new RegExp("\\b"+k+"\\b","gi"),corr[k]);});
     t=t.charAt(0).toUpperCase()+t.slice(1);
     if(!t.endsWith("."))t+=".";
     if(m==="ortografia")return t;
-
-    // Detectar equipamentos mencionados
-    var equips=[];
-    var eq_map={"portão":"portão automático","camera":"câmera de monitoramento","câmera":"câmera de monitoramento","leitor":"leitor de acesso","interfone":"interfone","motor":"motor do portão","nobreak":"nobreak","cerca":"cerca elétrica","alarme":"sistema de alarme","dvr":"DVR","fonte":"fonte de alimentação","capacitor":"capacitor","placa":"placa eletrônica"};
-    Object.keys(eq_map).forEach(function(k){if(txt.toLowerCase().includes(k))equips.push(eq_map[k]);});
-    var equip=equips.length>0?equips[0]:"equipamento";
-
+    var eq_map={"portão":"portão automático","camera":"câmera","câmera":"câmera","leitor":"leitor de acesso","interfone":"interfone","motor":"motor","nobreak":"nobreak","cerca":"cerca elétrica","alarme":"alarme","fonte":"fonte de alimentação","capacitor":"capacitor","placa":"placa eletrônica"};
+    var equip="equipamento";
+    Object.keys(eq_map).forEach(function(k){if(txt.toLowerCase().indexOf(k)>=0)equip=eq_map[k];});
     if(m==="profissional"){
       return "Durante o atendimento técnico foi constatado que o "+equip+" apresentava: "+t.toLowerCase().replace(/\.$/, "")+". Foram realizados os procedimentos técnicos necessários para diagnóstico e correção. Após os ajustes, efetuados testes operacionais com resultado satisfatório, restabelecendo o funcionamento normal do sistema.";
     }
-    // Completo
-    return "PROBLEMA IDENTIFICADO:
-O "+equip+" apresentou a seguinte ocorrência: "+t.toLowerCase().replace(/\.$/, "")+".
+    return "PROBLEMA IDENTIFICADO:\nO "+equip+" apresentou: "+t.toLowerCase().replace(/\.$/, "")+".\n\nDIAGNÓSTICO TÉCNICO:\nApós análise, foi identificada a causa raiz do problema.\n\nSERVIÇOS EXECUTADOS:\nForam realizados os procedimentos para diagnóstico, correção e ajuste do "+equip+".\n\nSITUAÇÃO FINAL:\nEquipamento testado e aprovado em pleno funcionamento.";
+  }
 
-DIAGNÓSTICO TÉCNICO:
-Após análise técnica, foi identificada a causa raiz do problema no "+equip+".
-
-SERVIÇOS EXECUTADOS:
-Foram realizados os procedimentos técnicos necessários para diagnóstico, correção e ajuste do "+equip+".
-
-SITUAÇÃO FINAL:
-Equipamento testado e aprovado em pleno funcionamento. Sistema entregue em condições normais de operação.";
+  async function melhorar(){
+    if(!texto||!texto.trim()){alert("Digite algo antes de melhorar.");return;}
+    setLoading(true);setResultado("");setPontuacao(null);
+    try{
+      var res=await fetch("/api/ia",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({system:PROMPTS[modo],messages:[{role:"user",content:texto.trim()}]})});
+      var data=await res.json();
+      var txt=data.content&&data.content[0]?data.content[0].text:"";
+      if(txt){setResultado(txt);setPontuacao(calcPontuacao(texto,txt));}
+      else{var fb=melhorarLocal(texto,modo);setResultado(fb);setPontuacao(calcPontuacao(texto,fb));}
+    }catch(e){var fb=melhorarLocal(texto,modo);setResultado(fb);setPontuacao(calcPontuacao(texto,fb));}
+    setLoading(false);
   }
 
   if(!aberto){
-    return React.createElement("button",{
-      type:"button",
+    return React.createElement("button",{type:"button",
       style:{width:"100%",marginTop:6,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6},
       onClick:function(){setAberto(true);}
     },"✨ Melhorar com IA");
   }
 
   return React.createElement("div",{style:{background:"#1e1b4b22",border:"1px solid #6366f144",borderRadius:12,padding:12,marginTop:6}},
-
-    // Header
     React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
       React.createElement("div",{style:{fontSize:12,fontWeight:700,color:"#818cf8"}},"✨ Assistente IA"),
       React.createElement("button",{style:{background:"none",border:"none",color:"#818cf8",cursor:"pointer",fontSize:18},onClick:function(){setAberto(false);}},"×")
     ),
-
-    // Modos
     React.createElement("div",{style:{display:"flex",gap:5,marginBottom:10}},
       MODOS.map(function(m){
         var isA=modo===m.id;
         return React.createElement("button",{key:m.id,type:"button",
-          style:{flex:1,background:isA?"#6366f133":"transparent",color:isA?"#818cf8":"#6b7280",border:"1px solid "+(isA?"#6366f155":"#374151"),borderRadius:8,padding:"6px 4px",fontSize:9,cursor:"pointer",fontWeight:isA?700:400,lineHeight:1.3,textAlign:"center"},
+          style:{flex:1,background:isA?"#6366f133":"transparent",color:isA?"#818cf8":"#6b7280",border:"1px solid "+(isA?"#6366f155":"#374151"),borderRadius:8,padding:"6px 4px",fontSize:9,cursor:"pointer",fontWeight:isA?700:400,textAlign:"center"},
           onClick:function(){setModo(m.id);}
-        },m.icon+"\n"+m.label);
+        },m.icon+" "+m.label);
       })
     ),
-
-    // Botão melhorar
     React.createElement("button",{type:"button",
       style:{width:"100%",background:loading?"#4f46e5":"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",border:"none",borderRadius:8,padding:"9px",fontSize:12,fontWeight:700,cursor:loading?"not-allowed":"pointer",opacity:loading?0.7:1,marginBottom:resultado?10:0},
       disabled:loading,onClick:melhorar
     },loading?"⏳ Processando...":"✨ "+MODOS.find(function(m){return m.id===modo;}).label),
-
-    // Resultado
     resultado&&React.createElement("div",null,
       React.createElement("div",{style:{background:"#0f172a",borderRadius:8,padding:10,marginBottom:8,border:"1px solid #6366f133"}},
         React.createElement("div",{style:{fontSize:10,color:"#818cf8",fontWeight:700,marginBottom:5}},"RESULTADO:"),
         React.createElement("div",{style:{fontSize:12,color:"#e2e8f0",lineHeight:1.6,whiteSpace:"pre-wrap"}},resultado)
       ),
-
-      // Pontuação
       pontuacao&&React.createElement("div",{style:{background:"#0f172a",borderRadius:8,padding:10,marginBottom:8,border:"1px solid #6366f133"}},
         React.createElement("div",{style:{fontSize:10,color:"#818cf8",fontWeight:700,marginBottom:8}},"📊 QUALIDADE DO RELATÓRIO"),
-        [
-          {l:"Ortografia",v:pontuacao.ortografia},
-          {l:"Clareza",v:pontuacao.clareza},
-          {l:"Técnico",v:pontuacao.tecnico},
-        ].map(function(k){
+        [{l:"Ortografia",v:pontuacao.ortografia},{l:"Clareza",v:pontuacao.clareza},{l:"Técnico",v:pontuacao.tecnico}].map(function(k){
           var cor=k.v>=90?"#4ade80":k.v>=70?"#facc15":"#f87171";
           return React.createElement("div",{key:k.l,style:{marginBottom:6}},
             React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:10,marginBottom:2}},
@@ -1412,19 +1318,15 @@ Equipamento testado e aprovado em pleno funcionamento. Sistema entregue em condi
               React.createElement("span",{style:{color:cor,fontWeight:700}},k.v+"%")
             ),
             React.createElement("div",{style:{background:"#1e293b",borderRadius:4,height:4}},
-              React.createElement("div",{style:{height:"100%",width:k.v+"%",background:cor,borderRadius:4,transition:"width .5s"}})
+              React.createElement("div",{style:{height:"100%",width:k.v+"%",background:cor,borderRadius:4}})
             )
           );
         }),
         React.createElement("div",{style:{marginTop:8,textAlign:"center"}},
           React.createElement("div",{style:{fontSize:10,color:"#94a3b8"}},"Nota Final"),
-          React.createElement("div",{style:{fontSize:22,fontWeight:900,color:pontuacao.total>=90?"#4ade80":pontuacao.total>=70?"#facc15":"#f87171"}},
-            pontuacao.total+"/100"
-          )
+          React.createElement("div",{style:{fontSize:22,fontWeight:900,color:pontuacao.total>=90?"#4ade80":pontuacao.total>=70?"#facc15":"#f87171"}},pontuacao.total+"/100")
         )
       ),
-
-      // Botões
       React.createElement("div",{style:{display:"flex",gap:6}},
         React.createElement("button",{type:"button",
           style:{flex:1,background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"8px",fontSize:11,fontWeight:700,cursor:"pointer"},
@@ -1439,4 +1341,7 @@ Equipamento testado e aprovado em pleno funcionamento. Sistema entregue em condi
   );
 }
 
->
+ReactDOM.render(React.createElement(App,null),document.getElementById("root"));
+</script>
+</body>
+</html>
