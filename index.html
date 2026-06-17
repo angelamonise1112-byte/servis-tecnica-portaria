@@ -1130,7 +1130,60 @@ function ServicoReginaldo({onSave}){
         React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🔧 Serviço Reginaldo"),
         React.createElement("div",{style:{fontSize:12,color:C.muted}},"Serviços terceirizados")
       ),
-      React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Novo")
+      React.createElement("div",{style:{display:"flex",gap:6}},
+        React.createElement("button",{
+          style:{...btnStyle(C.green,true),fontSize:11,padding:"7px 14px"},
+          onClick:function(){
+            try{
+              var mesLabel=filtMes?NOMES_MES[MESES.indexOf(filtMes)]:"Todos os meses";
+              var anoLabel=filtAno||"Todos os anos";
+              var periodoLabel=filtMes||filtAno?"Período: "+mesLabel+" / "+anoLabel:"Todos os registros";
+
+              // Totais
+              var totalServicos=filtrado.length;
+              var totalServis=filtrado.reduce(function(s,d){return s+(parseFloat(d.vl_servis)||0);},0);
+              var totalReginaldo=filtrado.reduce(function(s,d){return s+(parseFloat(d.vl_reginaldo)||0);},0);
+              var totalGeral=filtrado.reduce(function(s,d){return s+((parseFloat(d.vl_servis)||0)+(parseFloat(d.vl_reginaldo)||0));},0);
+
+              var kpis=servisKPIs([
+                {l:"Total de Serviços",v:totalServicos},
+                {l:"Valor Servis",v:"R$ "+totalServis.toFixed(2).replace(".",",")},
+                {l:"Valor Reginaldo",v:"R$ "+totalReginaldo.toFixed(2).replace(".",",")},
+                {l:"Total Geral",v:"R$ "+totalGeral.toFixed(2).replace(".",",")},
+              ]);
+
+              var linhas=filtrado.map(function(d){
+                var tot=(parseFloat(d.vl_servis)||0)+(parseFloat(d.vl_reginaldo)||0);
+                return [
+                  d.local_dem||"—",
+                  d.descricao||"—",
+                  d.prazo?new Date(d.prazo+"T12:00:00").toLocaleDateString("pt-BR"):"—",
+                  d.num_pedido||"—",
+                  d.parcelas||"—",
+                  d.vl_servis?"R$ "+parseFloat(d.vl_servis).toFixed(2).replace(".",","):"—",
+                  d.vl_reginaldo?"R$ "+parseFloat(d.vl_reginaldo).toFixed(2).replace(".",","):"—",
+                  "R$ "+tot.toFixed(2).replace(".",","),
+                  d.status||"—",
+                ];
+              });
+
+              var tabela=servisTabela(
+                ["Condomínio","Serviço","Data","Pedido","Parcelas","Vl. Servis","Vl. Reginaldo","Total","Status"],
+                linhas
+              );
+
+              servisRelatorioPDF(
+                "Relatório de Serviços — Reginaldo",
+                kpis+tabela,
+                window._servisUser||"",
+                periodoLabel,
+                "CE"
+              );
+            }catch(e){alert("Erro ao gerar PDF: "+e.message);}
+          }
+        },"📄 Relatório PDF"),
+        React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Novo")
+      )
     ),
     React.createElement("div",{style:{padding:"20px 24px"}},
       React.createElement(Grid,{cols:4,mb:16},
@@ -3448,158 +3501,276 @@ function Pedidos({usuarioAtual}){
 // ── USUÁRIOS ──────────────────────────────────────────────────
 function Usuarios({usuarioAtual}){
   const NIVEIS=["admin","gestor","tecnico","central","visualizador"];
-  const niveisColor={admin:C.red,gestor:C.blue,tecnico:C.cyan,central:C.purple,visualizador:C.dim};
+  const NIVEL_INFO={
+    admin:{label:"Administrador",desc:"Acesso total ao sistema",cor:C.red,icon:"🔴"},
+    gestor:{label:"Gestor",desc:"Gestão operacional completa",cor:C.orange,icon:"🟠"},
+    tecnico:{label:"Técnico",desc:"OS, preventivas e campo",cor:C.blue,icon:"🔵"},
+    central:{label:"Central",desc:"Monitoramento e chamados",cor:C.purple,icon:"🟣"},
+    visualizador:{label:"Visualizador",desc:"Somente leitura",cor:C.dim,icon:"⚪"},
+  };
   const [users,setUsers]=useState([]);
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
-  const [mostrarSenha,setMostrarSenha]=useState({});
   const [savingMsg,setSavingMsg]=useState("");
+  const [busca,setBusca]=useState("");
+  const [filtNivel,setFiltNivel]=useState("");
 
-  const isAdmin=usuarioAtual?.nivel==="admin";
+  var isAdmin=(usuarioAtual?.nivel||"").toLowerCase()==="admin";
 
-  const load=useCallback(async()=>{
+  const load=async function(){
     setLoading(true);
-    const{data:rows}=await sb.from("usuarios").select("*").order("nome",{ascending:true});
-    setUsers(rows||[]);setLoading(false);
-  },[]);
-  useEffect(()=>{load();},[load]);
-
-  const saveUser=async item=>{
-    setSavingMsg("Salvando...");
-    if(item.id&&users.find(x=>x.id===item.id)){await sb.from("usuarios").update(item).eq("id",item.id);}
-    else{await sb.from("usuarios").insert(item);}
-    setSavingMsg("Salvo!");setTimeout(()=>setSavingMsg(""),2000);
-    setModal(null);load();
+    const{data}=await sb.from("usuarios").select("id,nome,nivel,ativo,primeiro_acesso,foto_url").order("nome");
+    setUsers(data||[]);setLoading(false);
   };
-  const delUser=async id=>{await sb.from("usuarios").delete().eq("id",id);setConfirmDel(null);load();};
-  const resetSenha=async u=>{
-    await sb.from("usuarios").update({primeiro_acesso:true,senha:"trocar"}).eq("id",u.id);
-    setSavingMsg("Senha resetada!");setTimeout(()=>setSavingMsg(""),3000);load();
+  useEffect(function(){load();},[]);
+
+  const filtered=useMemo(function(){
+    return users.filter(function(u){
+      var mb=!busca||(u.nome||"").toLowerCase().includes(busca.toLowerCase());
+      var mn=!filtNivel||u.nivel===filtNivel;
+      return mb&&mn;
+    });
+  },[users,busca,filtNivel]);
+
+  const del=async function(id){
+    if(id===usuarioAtual?.id){alert("Não é possível excluir seu próprio usuário.");return;}
+    await sb.from("usuarios").delete().eq("id",id);
+    setConfirmDel(null);load();
   };
 
-  const EditModal=({item,onClose})=>{
-    const ehNovo=!item?.id;
-    const [f,setF]=useState(item||{nome:"",senha:"",nivel:"tecnico",ativo:true,primeiro_acesso:true,foto_url:""});
-    const [err,setErr]=useState("");
-    const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
+  const toggleAtivo=async function(u){
+    if(u.id===usuarioAtual?.id){alert("Não é possível desativar seu próprio usuário.");return;}
+    await sb.from("usuarios").update({ativo:!u.ativo}).eq("id",u.id);
+    load();
+  };
 
-    const handleFoto=e=>{
-      const file=e.target.files[0];if(!file)return;
-      const r=new FileReader();
-      r.onload=ev=>setF(p=>({...p,foto_url:ev.target.result}));
-      r.readAsDataURL(file);
+  // ── MODAL ──
+  const EditModal=function({item,onClose}){
+    var isNovo=!item||!item.id;
+    var [f,setF]=useState(item||{nome:"",senha:"",nivel:"tecnico",ativo:true,primeiro_acesso:true,foto_url:""});
+    var [senhaConf,setSenhaConf]=useState("");
+    var [showPass,setShowPass]=useState(false);
+    var [err,setErr]=useState("");
+    var [saving,setSaving]=useState(false);
+    var upd=function(k){return function(e){setF(function(p){var n={...p};n[k]=e.target.value;return n;});};};
+    var updCheck=function(k){return function(e){setF(function(p){var n={...p};n[k]=e.target.checked;return n;});};};
+
+    var save=async function(){
+      setErr("");
+      if(!f.nome.trim()){setErr("Informe o nome do usuário.");return;}
+      if(isNovo&&!f.senha){setErr("Informe uma senha.");return;}
+      if(f.senha&&f.senha.length<6){setErr("A senha deve ter no mínimo 6 caracteres.");return;}
+      if(f.senha&&f.senha!==senhaConf){setErr("As senhas não coincidem.");return;}
+      setSaving(true);
+      var payload={nome:f.nome.trim(),nivel:f.nivel,ativo:f.ativo,primeiro_acesso:f.primeiro_acesso,foto_url:f.foto_url||null};
+      if(f.senha)payload.senha=f.senha;
+      var res;
+      if(isNovo){
+        payload.id="usr_"+Date.now();
+        res=await sb.from("usuarios").insert(payload);
+      }else{
+        res=await sb.from("usuarios").update(payload).eq("id",f.id||item.id);
+      }
+      if(res&&res.error){setErr("Erro: "+res.error.message);setSaving(false);return;}
+      setSaving(false);onClose();load();
+      setSavingMsg(isNovo?"✅ Usuário criado com sucesso!":"✅ Usuário atualizado!");
+      setTimeout(function(){setSavingMsg("");},3000);
     };
 
-    const submit=async()=>{
-      if(!f.nome.trim()){setErr("Nome obrigatório");return;}
-      if(ehNovo&&(!f.senha.trim()||f.senha.length<4)){setErr("Senha mínimo 4 caracteres");return;}
-      await saveUser({...f,id:f.id||uid()});
-    };
+    var nivelInfo=NIVEL_INFO[f.nivel]||NIVEL_INFO.visualizador;
 
-    return React.createElement(Modal,{title:item?"Editar Usuário":"Novo Usuário",onClose},
-      React.createElement("div",{style:{display:"grid",gap:14}},
-        // Foto
-        React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:8,marginBottom:4}},
-          React.createElement("div",{style:{position:"relative",width:80,height:80}},
-            f.foto_url
-              ?React.createElement("img",{src:f.foto_url,style:{width:80,height:80,borderRadius:"50%",objectFit:"cover",border:`3px solid ${niveisColor[f.nivel]||C.blue}`}})
-              :React.createElement("div",{style:{width:80,height:80,borderRadius:"50%",background:(niveisColor[f.nivel]||C.blue)+"22",border:`3px solid ${niveisColor[f.nivel]||C.blue}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,color:niveisColor[f.nivel]||C.blue,fontWeight:700}},f.nome?f.nome[0].toUpperCase():"?"),
-            React.createElement("label",{htmlFor:"user-foto",style:{position:"absolute",bottom:0,right:0,width:24,height:24,borderRadius:"50%",background:C.blue,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,border:"2px solid "+C.surface}},"📷"),
-            React.createElement("input",{type:"file",accept:"image/*",id:"user-foto",style:{display:"none"},onChange:handleFoto})
-          ),
-          React.createElement("div",{style:{fontSize:11,color:C.muted}},"Clique em 📷 para adicionar foto")
-        ),
+    return React.createElement(Modal,{title:isNovo?"+ Novo Usuário":"✏️ Editar Usuário",onClose,width:520},
+      // Avatar
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:16,marginBottom:20,padding:"14px 16px",background:C.bg,borderRadius:12}},
+        f.foto_url
+          ?React.createElement("img",{src:f.foto_url,style:{width:56,height:56,borderRadius:"50%",objectFit:"cover",border:"3px solid "+C.blue}})
+          :React.createElement("div",{style:{width:56,height:56,borderRadius:"50%",background:nivelInfo.cor+"33",border:"2px solid "+nivelInfo.cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}},nivelInfo.icon),
         React.createElement("div",null,
-          React.createElement("label",{style:base.lbl},"Nome de usuário *"),
-          React.createElement("input",{style:base.inp,value:f.nome,onChange:upd("nome"),placeholder:"ex: joao.silva",disabled:!!item?.id})
-        ),
-        ehNovo&&React.createElement("div",null,
-          React.createElement("label",{style:base.lbl},"Senha inicial *"),
-          React.createElement("input",{type:"text",style:base.inp,value:f.senha,onChange:upd("senha"),placeholder:"mínimo 4 caracteres"}),
-          React.createElement("div",{style:{fontSize:11,color:C.dim,marginTop:4}},"Usuário definirá nova senha no primeiro acesso.")
-        ),
-        React.createElement("div",null,
-          React.createElement("label",{style:base.lbl},"Nível de acesso"),
-          React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
-            NIVEIS.map(n=>React.createElement("button",{key:n,style:{...btnStyle(niveisColor[n]||C.blue,f.nivel!==n),flex:1,fontSize:10,textTransform:"capitalize",padding:"6px 4px"},onClick:()=>setF(p=>({...p,nivel:n}))},n))
-          ),
-          // Descrição do nível
-          React.createElement("div",{style:{fontSize:10,color:C.dim,marginTop:6,background:C.bg,borderRadius:6,padding:"6px 10px",lineHeight:1.5}},
-            f.nivel==="admin"?"👑 Acesso total — vê e edita tudo, gerencia usuários":
-            f.nivel==="gestor"?"📊 Vê tudo e pode editar, mas não gerencia usuários":
-            f.nivel==="tecnico"?"🔧 Vê tudo mas não pode editar nem criar usuários":
-            f.nivel==="central"?"📞 Cria OS e vê OS + Preventivas no dashboard":
-            "👁 Apenas visualização"
-          )
-        ),
-        React.createElement("div",null,
-          React.createElement("label",{style:base.lbl},"Status"),
-          React.createElement("div",{style:{display:"flex",gap:8}},
-            React.createElement("button",{style:{...btnStyle(C.green,!f.ativo),flex:1},onClick:()=>setF(p=>({...p,ativo:true}))},"Ativo"),
-            React.createElement("button",{style:{...btnStyle(C.dim,f.ativo),flex:1},onClick:()=>setF(p=>({...p,ativo:false}))},"Inativo")
-          )
-        ),
-        err&&React.createElement("div",{style:{color:C.red,fontSize:12}},err)
+          React.createElement("div",{style:{fontSize:15,fontWeight:700,color:C.text}},f.nome||"Novo Usuário"),
+          React.createElement("div",{style:{fontSize:11,color:nivelInfo.cor,fontWeight:600,marginTop:2}},nivelInfo.label),
+          React.createElement("div",{style:{fontSize:10,color:C.dim}},nivelInfo.desc)
+        )
       ),
-      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+      // Nome
+      React.createElement("div",{style:{marginBottom:12}},
+        React.createElement("label",{style:base.lbl},"Nome completo *"),
+        React.createElement("input",{style:base.inp,value:f.nome,onChange:upd("nome"),placeholder:"Nome do usuário"})
+      ),
+      // Nível
+      React.createElement("div",{style:{marginBottom:12}},
+        React.createElement("label",{style:base.lbl},"Nível de Acesso *"),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginTop:4}},
+          NIVEIS.map(function(n){
+            var ni=NIVEL_INFO[n];
+            var isA=f.nivel===n;
+            return React.createElement("button",{key:n,
+              style:{background:isA?ni.cor+"22":"transparent",color:isA?ni.cor:C.muted,
+                border:"2px solid "+(isA?ni.cor:C.border),borderRadius:10,padding:"8px 10px",
+                cursor:"pointer",textAlign:"left",transition:"all .15s"},
+              onClick:function(){setF(function(p){return{...p,nivel:n};});}
+            },
+              React.createElement("div",{style:{fontSize:13,marginBottom:2}},ni.icon+" "+ni.label),
+              React.createElement("div",{style:{fontSize:9,color:isA?ni.cor:C.dim}},ni.desc)
+            );
+          })
+        )
+      ),
+      // Senha
+      React.createElement("div",{style:{marginBottom:12}},
+        React.createElement("label",{style:base.lbl},isNovo?"Senha *":"Nova senha (deixe vazio para manter)"),
+        React.createElement("div",{style:{position:"relative"}},
+          React.createElement("input",{
+            type:showPass?"text":"password",
+            style:{...base.inp,paddingRight:40},
+            value:f.senha||"",onChange:upd("senha"),
+            placeholder:isNovo?"Mínimo 6 caracteres":"••••••"
+          }),
+          React.createElement("button",{
+            style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:C.dim,fontSize:14},
+            onClick:function(){setShowPass(function(p){return !p;});}
+          },showPass?"🙈":"👁")
+        ),
+        f.senha&&f.senha.length<6&&React.createElement("div",{style:{fontSize:10,color:C.yellow,marginTop:3}},"⚠ Mínimo 6 caracteres")
+      ),
+      f.senha&&React.createElement("div",{style:{marginBottom:12}},
+        React.createElement("label",{style:base.lbl},"Confirmar senha *"),
+        React.createElement("div",{style:{position:"relative"}},
+          React.createElement("input",{
+            type:showPass?"text":"password",
+            style:{...base.inp,borderColor:senhaConf&&senhaConf!==f.senha?C.red:senhaConf?C.green:undefined},
+            value:senhaConf,onChange:function(e){setSenhaConf(e.target.value);},
+            placeholder:"Repita a senha"
+          }),
+          senhaConf&&React.createElement("span",{style:{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:14}},
+            senhaConf===f.senha?"✅":"❌"
+          )
+        )
+      ),
+      // URL foto
+      React.createElement("div",{style:{marginBottom:12}},
+        React.createElement("label",{style:base.lbl},"URL da foto (opcional)"),
+        React.createElement("input",{style:base.inp,value:f.foto_url||"",onChange:upd("foto_url"),placeholder:"https://..."})
+      ),
+      // Toggles
+      React.createElement("div",{style:{display:"flex",gap:12,marginBottom:16}},
+        React.createElement("label",{style:{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12,color:C.text}},
+          React.createElement("input",{type:"checkbox",checked:f.ativo,onChange:updCheck("ativo")}),
+          React.createElement("span",null,"Usuário ativo")
+        ),
+        React.createElement("label",{style:{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12,color:C.text}},
+          React.createElement("input",{type:"checkbox",checked:f.primeiro_acesso,onChange:updCheck("primeiro_acesso")}),
+          React.createElement("span",null,"Forçar troca de senha no próximo acesso")
+        )
+      ),
+      err&&React.createElement("div",{style:{background:C.red+"22",border:"1px solid "+C.red+"44",borderRadius:8,padding:"8px 14px",marginBottom:12,fontSize:12,color:C.red}},"⚠ "+err),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end"}},
         React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
-        React.createElement("button",{style:btnStyle(C.blue),onClick:submit},"Salvar")
+        React.createElement("button",{style:{...btnStyle(C.blue),opacity:saving?0.7:1},disabled:saving,onClick:save},saving?"Salvando...":"💾 Salvar")
       )
     );
   };
 
-  return React.createElement("div",null,
-    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
-      React.createElement("div",null,
-        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"👤 Usuários"),
-        React.createElement("div",{style:{fontSize:12,color:C.muted}},"Gerencie os acessos ao sistema")
+  return React.createElement("div",{style:{height:"100%",overflowY:"auto"}},
+    // Header
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:"1px solid "+C.border}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}},
+        React.createElement("div",null,
+          React.createElement("div",{style:{fontSize:18,fontWeight:700}},"👤 Usuários"),
+          React.createElement("div",{style:{fontSize:12,color:C.muted}},"Controle de acesso e permissões do sistema")
+        ),
+        isAdmin&&React.createElement("button",{style:btnStyle(C.blue),onClick:function(){setModal({});}},"+ Novo Usuário")
       ),
-      isAdmin&&React.createElement("button",{style:btnStyle(C.blue),onClick:()=>setModal({})},"+ Novo Usuário")
+      // Busca + filtro nível
+      React.createElement("div",{style:{display:"flex",gap:8}},
+        React.createElement("input",{style:{...base.inp,width:220,margin:0},placeholder:"🔍 Buscar usuário...",value:busca,onChange:function(e){setBusca(e.target.value);}}),
+        React.createElement("select",{style:{...base.sel,width:160},value:filtNivel,onChange:function(e){setFiltNivel(e.target.value);}},
+          React.createElement("option",{value:""},"Todos os níveis"),
+          NIVEIS.map(function(n){return React.createElement("option",{key:n,value:n},NIVEL_INFO[n].label);})
+        )
+      )
     ),
+
     React.createElement("div",{style:{padding:"20px 24px"}},
-      savingMsg&&React.createElement("div",{style:{background:C.green+"22",border:`1px solid ${C.green}44`,borderRadius:8,padding:"10px 16px",marginBottom:16,fontSize:13,color:C.green}},savingMsg),
-      // Legenda níveis
-      React.createElement("div",{style:{background:C.card,borderRadius:10,padding:"12px 16px",marginBottom:16,display:"flex",gap:8,flexWrap:"wrap"}},
-        [["admin","👑 Admin — tudo"],["gestor","📊 Gestor — edita"],["tecnico","🔧 Técnico — visualiza"],["central","📞 Central — cria OS"],["visualizador","👁 Visualizador"]].map(([n,l],i)=>
-          React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:5,fontSize:11}},
-            React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:niveisColor[n]}}),
-            React.createElement("span",{style:{color:C.muted}},l)
-          )
+      savingMsg&&React.createElement("div",{style:{background:C.green+"22",border:"1px solid "+C.green+"44",borderRadius:8,padding:"10px 16px",marginBottom:16,fontSize:13,color:C.green,fontWeight:600}},savingMsg),
+
+      // KPIs
+      React.createElement(Grid,{cols:5,mb:16},
+        React.createElement(KPI,{label:"Total",value:users.length,color:C.blue}),
+        React.createElement(KPI,{label:"Ativos",value:users.filter(function(u){return u.ativo;}).length,color:C.green}),
+        React.createElement(KPI,{label:"Inativos",value:users.filter(function(u){return !u.ativo;}).length,color:C.dim}),
+        React.createElement(KPI,{label:"1º Acesso",value:users.filter(function(u){return u.primeiro_acesso;}).length,color:C.yellow}),
+        React.createElement(KPI,{label:"Admins",value:users.filter(function(u){return u.nivel==="admin";}).length,color:C.red})
+      ),
+
+      // Legenda de níveis
+      React.createElement("div",{style:{background:C.card,borderRadius:12,padding:"12px 16px",marginBottom:16,border:"1px solid "+C.border}},
+        React.createElement("div",{style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:8,textTransform:"uppercase",letterSpacing:1}},"Níveis de Acesso"),
+        React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+          NIVEIS.map(function(n){
+            var ni=NIVEL_INFO[n];
+            var count=users.filter(function(u){return u.nivel===n;}).length;
+            return React.createElement("div",{key:n,style:{background:ni.cor+"18",border:"1px solid "+ni.cor+"44",borderRadius:8,padding:"6px 12px",display:"flex",alignItems:"center",gap:6}},
+              React.createElement("span",{style:{fontSize:13}},ni.icon),
+              React.createElement("div",null,
+                React.createElement("div",{style:{fontSize:11,fontWeight:700,color:ni.cor}},ni.label),
+                React.createElement("div",{style:{fontSize:9,color:C.dim}},ni.desc)
+              ),
+              React.createElement("div",{style:{background:ni.cor,color:"#fff",borderRadius:10,padding:"1px 7px",fontSize:10,fontWeight:700,marginLeft:4}},count)
+            );
+          })
         )
       ),
-      React.createElement(Grid,{cols:4,mb:16},
-        React.createElement(KPI,{label:"Total",value:users.length,color:C.blue}),
-        React.createElement(KPI,{label:"Ativos",value:users.filter(u=>u.ativo).length,color:C.green}),
-        React.createElement(KPI,{label:"Admins",value:users.filter(u=>u.nivel==="admin").length,color:C.red}),
-        React.createElement(KPI,{label:"Técnicos",value:users.filter(u=>u.nivel==="tecnico").length,color:C.cyan})
-      ),
-      loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
-      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(270px,1fr))",gap:12}},
-        users.map(u=>React.createElement(Card,{key:u.id,style:{borderLeft:`4px solid ${niveisColor[u.nivel]||C.blue}`,opacity:u.ativo?1:0.6}},
-          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:12}},
-            // Foto ou inicial
-            u.foto_url
-              ?React.createElement("img",{src:u.foto_url,style:{width:44,height:44,borderRadius:"50%",objectFit:"cover",border:`2px solid ${niveisColor[u.nivel]||C.blue}`,flexShrink:0}})
-              :React.createElement("div",{style:{width:44,height:44,borderRadius:"50%",background:(niveisColor[u.nivel]||C.blue)+"22",border:`2px solid ${niveisColor[u.nivel]||C.blue}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:700,color:niveisColor[u.nivel]||C.blue,flexShrink:0}},u.nome[0].toUpperCase()),
-            React.createElement("div",null,
-              React.createElement("div",{style:{fontWeight:600,fontSize:14}},u.nome),
-              React.createElement(Pill,{c:niveisColor[u.nivel]||C.blue},u.nivel),
-              React.createElement("div",{style:{fontSize:11,color:u.ativo?C.green:C.dim,marginTop:4}},u.ativo?"● Ativo":"● Inativo"),
-              u.primeiro_acesso&&React.createElement("div",{style:{fontSize:10,color:C.yellow,marginTop:2}},"⚠ Aguardando 1º acesso")
-            )
-          ),
-          isAdmin&&React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},
-            React.createElement("button",{style:{...iBtn(C.blue),flex:1},onClick:()=>setModal(u)},"✏️ Editar"),
-            !u.primeiro_acesso&&u.nome!==usuarioAtual?.nome&&React.createElement("button",{style:{...iBtn(C.orange),flex:1},onClick:()=>resetSenha(u)},"🔑 Resetar"),
-            u.nome!==usuarioAtual?.nome&&React.createElement("button",{style:{...iBtn(C.red),flex:1},onClick:()=>setConfirmDel(u.id)},"🗑 Excluir")
+
+      // Lista de usuários
+      loading
+        ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando...")
+        :React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}},
+            filtered.map(function(u){
+              var ni=NIVEL_INFO[u.nivel]||NIVEL_INFO.visualizador;
+              var ini=(u.nome||"?").split(" ").slice(0,2).map(function(w){return w[0]||"";}).join("").toUpperCase();
+              var isSelf=u.id===usuarioAtual?.id;
+              return React.createElement("div",{key:u.id,style:{
+                background:C.card,border:"1px solid "+(u.ativo?C.border:"#374151"),
+                borderRadius:14,padding:16,
+                opacity:u.ativo?1:0.6,
+                borderTop:"3px solid "+ni.cor
+              }},
+                // Avatar + info
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12,marginBottom:12}},
+                  u.foto_url
+                    ?React.createElement("img",{src:u.foto_url,style:{width:44,height:44,borderRadius:"50%",objectFit:"cover",border:"2px solid "+ni.cor,flexShrink:0}})
+                    :React.createElement("div",{style:{width:44,height:44,borderRadius:"50%",background:ni.cor+"33",border:"2px solid "+ni.cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:ni.cor,flexShrink:0}},ini),
+                  React.createElement("div",{style:{flex:1,minWidth:0}},
+                    React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
+                      React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},u.nome),
+                      isSelf&&React.createElement("span",{style:{fontSize:9,background:C.blue+"22",color:C.blue,borderRadius:8,padding:"1px 5px",fontWeight:700,flexShrink:0}},"VOCÊ")
+                    ),
+                    React.createElement("div",{style:{display:"flex",gap:5,marginTop:4,flexWrap:"wrap"}},
+                      React.createElement("span",{style:{background:ni.cor+"22",color:ni.cor,fontSize:9,borderRadius:8,padding:"2px 7px",fontWeight:700}},ni.icon+" "+ni.label),
+                      React.createElement("span",{style:{background:(u.ativo?C.green:C.dim)+"22",color:u.ativo?C.green:C.dim,fontSize:9,borderRadius:8,padding:"2px 7px",fontWeight:600}},u.ativo?"● Ativo":"○ Inativo"),
+                      u.primeiro_acesso&&React.createElement("span",{style:{background:C.yellow+"22",color:C.yellow,fontSize:9,borderRadius:8,padding:"2px 7px"}},"🔑 1º acesso")
+                    )
+                  )
+                ),
+                // Ações
+                isAdmin&&React.createElement("div",{style:{display:"flex",gap:6,borderTop:"1px solid "+C.border+"44",paddingTop:10}},
+                  React.createElement("button",{style:{...iBtn(C.blue),flex:1,fontSize:11,padding:"5px"},onClick:function(){setModal({...u});}
+},"✏️ Editar"),
+                  React.createElement("button",{
+                    style:{...iBtn(u.ativo?C.yellow:C.green),flex:1,fontSize:11,padding:"5px"},
+                    onClick:function(){toggleAtivo(u);},
+                    title:u.ativo?"Desativar usuário":"Ativar usuário"
+                  },u.ativo?"⏸ Desativar":"▶ Ativar"),
+                  !isSelf&&React.createElement("button",{style:{...iBtn(C.red),fontSize:11,padding:"5px 8px"},onClick:function(){setConfirmDel(u.id);}
+},"🗑")
+                )
+              );
+            })
           )
-        ))
-      ),
-      !isAdmin&&React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim,fontSize:13}},"Apenas administradores podem gerenciar usuários.")
     ),
-    modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
-    confirmDel&&React.createElement(Confirm,{msg:"Excluir este usuário?",onYes:()=>delUser(confirmDel),onNo:()=>setConfirmDel(null)})
+    modal!==null&&React.createElement(EditModal,{item:modal&&modal.id?modal:null,onClose:function(){setModal(null);}}),
+    confirmDel&&React.createElement(Confirm,{msg:"Excluir este usuário? Esta ação não pode ser desfeita.",onYes:function(){del(confirmDel);},onNo:function(){setConfirmDel(null);}})
   );
 }
 
