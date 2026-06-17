@@ -6840,8 +6840,11 @@ function ProdutividadeDiaria({usuario}){
   const [tecSel,setTecSel]=useState(null);
 
   const hoje=new Date();
-  const hojeStr=todayStr();
-  const hojeLabel=hoje.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"});
+  const [filtData,setFiltData]=useState(todayStr());
+  const hojeStr=filtData;
+  const diaLabel=new Date(filtData+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  var hojeLabel=diaLabel;
+  var isHoje=filtData===todayStr();
 
   // Atualizar relógio a cada minuto
   useEffect(function(){
@@ -6853,7 +6856,7 @@ function ProdutividadeDiaria({usuario}){
     setLoading(true);
     var [rTec,rOs,rLoc,rPrev]=await Promise.all([
       sb.from("tecnicos").select("id,nome,mat,status,foto_url").order("nome"),
-      sb.from("os").select("num,data,status,cond,tec,prob,data_fechamento").eq("data",hojeStr),
+      sb.from("os").select("num,data,status,cond,tec,prob,data_fechamento").eq("data",filtData),
       sb.from("tecnicos_localizacao").select("*").order("atualizado_em",{ascending:false}),
       sb.from("preventivas").select("id,cond,tecnico,status,primeira_visita").eq("primeira_visita",hojeStr),
     ]);
@@ -6869,7 +6872,7 @@ function ProdutividadeDiaria({usuario}){
 
     // OS fechadas hoje (data_fechamento = hoje)
     var [rFech]=await Promise.all([
-      sb.from("os").select("num,cond,tec,data_fechamento,prob").eq("data_fechamento",hojeStr),
+      sb.from("os").select("num,cond,tec,data_fechamento,prob").eq("data_fechamento",filtData),
     ]);
     var fechHoje=rFech.data||[];
 
@@ -6900,7 +6903,7 @@ function ProdutividadeDiaria({usuario}){
       prevConclHoje:prevHoje.filter(function(p){return p.status==="Concluída";}).length,
     });
     setLoading(false);
-  },[hojeStr,tick]);
+  },[filtData,tick]);
 
   useEffect(function(){load();},[load]);
 
@@ -6912,7 +6915,7 @@ function ProdutividadeDiaria({usuario}){
     if(!dados)return;
     try{
       var d2=dados;
-      var dataFormatada=hoje.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+      var dataFormatada=diaLabel+(isHoje?" — Hoje":"");
       var kpisHtml=servisKPIs([
         {l:"Técnicos na Rua",v:d2.emCampo},
         {l:"Disponíveis",v:d2.disponiveis},
@@ -6943,7 +6946,20 @@ function ProdutividadeDiaria({usuario}){
           React.createElement("div",{style:{fontSize:18,fontWeight:800,color:"#fff"}},"⚡ Produtividade Diária"),
           React.createElement("div",{style:{fontSize:12,color:"#8899bb",marginTop:2}},hojeLabel+" · "+agora.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}))
         ),
-        React.createElement("div",{style:{display:"flex",gap:6}},
+        React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}},
+          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,background:C.card,border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px"}},
+            React.createElement("span",null,"📅"),
+            React.createElement("input",{
+              type:"date",
+              style:{background:"transparent",border:"none",color:C.text,fontSize:12,outline:"none",cursor:"pointer"},
+              value:filtData,
+              onChange:function(e){setFiltData(e.target.value);}
+            })
+          ),
+          React.createElement("button",{
+            style:{...btnStyle(C.dim,true),fontSize:11,padding:"6px 12px"},
+            onClick:function(){setFiltData(todayStr());}
+          },"Hoje"),
           React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:11,padding:"7px 14px"},onClick:function(){gerarPDFProd();}},
             "📄 Relatório PDF"
           ),
