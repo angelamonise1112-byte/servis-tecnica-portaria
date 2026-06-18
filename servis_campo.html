@@ -734,7 +734,17 @@ function DetalheOS({os,usuario,onBack}){
     // Header
     React.createElement("div",{style:{background:C.surface,borderBottom:"1px solid "+C.border,position:"sticky",top:0,zIndex:10}},
       React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,padding:"12px 16px"}},
-        React.createElement("button",{style:{background:"none",border:"none",color:C.text,fontSize:24,cursor:"pointer",padding:4},onClick:onBack},"‹"),
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
+          React.createElement("button",{style:{background:"none",border:"none",color:C.text,fontSize:24,cursor:"pointer",padding:4},onClick:onBack},"‹"),
+          statusAtual!=="Concluído"&&statusAtual!=="Aguardando"&&React.createElement("button",{
+            style:{background:C.blue+"22",border:"1px solid "+C.blue+"44",borderRadius:8,padding:"4px 10px",fontSize:10,color:C.blue,cursor:"pointer",fontWeight:600},
+            onClick:function(){
+              var id="loc_"+(usuario.nome||"").replace(/\s+/g,"_");
+              fetch("https://qemqcpqkwlxkbckwwevv.supabase.co/rest/v1/tecnicos_localizacao",{method:"POST",headers:{"apikey":"sb_publishable_TDgkeeJ4SICauVqBUDQ9ZQ_6lwT14lc","Authorization":"Bearer sb_publishable_TDgkeeJ4SICauVqBUDQ9ZQ_6lwT14lc","Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},body:JSON.stringify({id:id,tec:usuario.nome,status_campo:"Disponível",os_num:null,os_cond:null,atualizado_em:new Date().toISOString()})}).catch(function(){});
+              onBack();
+            }
+          },"+ Outra OS")
+        ),
         React.createElement("div",{style:{flex:1}},
           React.createElement("div",{style:{fontSize:16,fontWeight:700,color:C.cyan}},"OS #"+os.num),
           React.createElement("div",{style:{fontSize:11,color:C.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},os.cond)
@@ -1131,10 +1141,52 @@ function App(){
     if(u)try{setUsuario(JSON.parse(u));}catch(e){}
   },[]);
 
-  function logout(){setUsuario(null);setOsSel(null);sessionStorage.removeItem("servis_user");}
+  // Registrar online/offline no Supabase
+  function registrarStatus(usr, status){
+    if(!usr)return;
+    var id="loc_"+(usr.nome||"").replace(/\s+/g,"_");
+    fetch("https://qemqcpqkwlxkbckwwevv.supabase.co/rest/v1/tecnicos_localizacao",{
+      method:"POST",
+      headers:{
+        "apikey":"sb_publishable_TDgkeeJ4SICauVqBUDQ9ZQ_6lwT14lc",
+        "Authorization":"Bearer sb_publishable_TDgkeeJ4SICauVqBUDQ9ZQ_6lwT14lc",
+        "Content-Type":"application/json",
+        "Prefer":"resolution=merge-duplicates"
+      },
+      body:JSON.stringify({
+        id:id,tec:usr.nome,
+        status_campo:status,
+        os_num:null,os_cond:null,
+        atualizado_em:new Date().toISOString()
+      })
+    }).catch(function(){});
+  }
 
-  if(!usuario)return React.createElement(Login,{onLogin:setUsuario});
-  if(osSel)return React.createElement(DetalheOS,{os:osSel,usuario,onBack:()=>setOsSel(null)});
+  function logout(){
+    registrarStatus(usuario,"Offline");
+    setUsuario(null);setOsSel(null);
+    sessionStorage.removeItem("servis_user");
+  }
+
+  if(!usuario)return React.createElement(Login,{onLogin:function(u){
+    setUsuario(u);
+    // Registrar online ao logar
+    var id="loc_"+(u.nome||"").replace(/\s+/g,"_");
+    fetch("https://qemqcpqkwlxkbckwwevv.supabase.co/rest/v1/tecnicos_localizacao",{
+      method:"POST",
+      headers:{
+        "apikey":"sb_publishable_TDgkeeJ4SICauVqBUDQ9ZQ_6lwT14lc",
+        "Authorization":"Bearer sb_publishable_TDgkeeJ4SICauVqBUDQ9ZQ_6lwT14lc",
+        "Content-Type":"application/json",
+        "Prefer":"resolution=merge-duplicates"
+      },
+      body:JSON.stringify({id:id,tec:u.nome,status_campo:"Disponível",os_num:null,os_cond:null,atualizado_em:new Date().toISOString()})
+    }).catch(function(){});
+  }});
+  if(osSel)return React.createElement(DetalheOS,{os:osSel,usuario,onBack:function(){
+    setOsSel(null);
+    registrarStatus(usuario,"Disponível");
+  }});
 
   const tabs=[
     {id:"os",icon:"📋",label:"OS"},
