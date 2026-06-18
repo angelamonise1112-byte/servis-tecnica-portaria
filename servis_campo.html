@@ -1086,12 +1086,24 @@ function InteligenciaOperacional({usuario}){
   useEffect(function(){
     if(!usuario)return;
     setLoading(true);
+    // Buscar nome do técnico no banco para garantir match exato
+    sb.from("tecnicos").select("nome,mat").then(function(rTec){
+      var tecsBanco=rTec.data||[];
+      // Tentar match por nome exato, nome parcial ou mat
+      var tecEncontrado=tecsBanco.find(function(t){
+        return t.nome===usuario.nome||
+          t.nome.toLowerCase().includes(usuario.nome.toLowerCase())||
+          usuario.nome.toLowerCase().includes(t.nome.toLowerCase())||
+          t.mat===usuario.mat;
+      });
+      var nomeBusca=tecEncontrado?tecEncontrado.nome:usuario.nome;
+
     Promise.all([
-      sb.from("os").select("num,cond,prob,pri,data,status,descricao,relato").eq("tec",usuario.nome).eq("status","Aberto").order("pri",{ascending:false}),
-      sb.from("preventivas").select("id,cond,status,primeira_visita,retorno,obs,equipamentos").eq("tecnico",usuario.nome).or("primeira_visita.eq."+hojeStr+",retorno.eq."+hojeStr),
-      sb.from("os").select("num,cond,prob,relato,data_fechamento").eq("tec",usuario.nome).eq("status","Fechado").order("data_fechamento",{ascending:false}).limit(5),
-      sb.from("condominios").select("nome,endereco").eq("tecnico",usuario.nome),
-      sb.from("os_pendencia").select("num,cond,prob,motivo,prazo").eq("tec",usuario.nome),
+      sb.from("os").select("num,cond,prob,pri,data,status,descricao,relato").eq("tec",nomeBusca).eq("status","Aberto").order("pri",{ascending:false}),
+      sb.from("preventivas").select("id,cond,status,primeira_visita,retorno,obs,equipamentos").eq("tecnico",nomeBusca).or("primeira_visita.eq."+hojeStr+",retorno.eq."+hojeStr),
+      sb.from("os").select("num,cond,prob,relato,data_fechamento").eq("tec",nomeBusca).eq("status","Fechado").order("data_fechamento",{ascending:false}).limit(10),
+      sb.from("condominios").select("nome,endereco").eq("tecnico",nomeBusca),
+      sb.from("os_pendencia").select("num,cond,prob,motivo,prazo").eq("tec",nomeBusca),
     ]).then(function(r){
       var osAb=r[0].data||[];
       var prevHoje=r[1].data||[];
@@ -1121,9 +1133,10 @@ function InteligenciaOperacional({usuario}){
       if(slaV.length>0)alertas.push({tipo:"atencao",msg:slaV.length+" OS com SLA vencido",icon:"⏰"});
       if(prevHoje.length>0)alertas.push({tipo:"info",msg:prevHoje.length+" preventiva(s) hoje",icon:"◈"});
       if(pends.length>0)alertas.push({tipo:"atencao",msg:pends.length+" pendência(s)",icon:"⚠"});
-      setDados({agenda,mats,hist:hist.filter(function(o){return o.relato||o.prob;}).slice(0,5),rota:agenda.filter(function(a){return a.endereco;}),alertas,osAlta,osMedia,osBaixa,prevHoje,pends,total:agenda.length});
+      setDados({agenda,mats,hist:hist.filter(function(o){return o.relato||o.prob;}).slice(0,5),rota:agenda.filter(function(a){return a.endereco;}),alertas,osAlta,osMedia,osBaixa,prevHoje,pends,total:agenda.length,nomeBusca});
       setLoading(false);
     });
+    }); // fecha sb.from("tecnicos")
   },[usuario]);
 
   function Sec(props){
@@ -1151,6 +1164,9 @@ function InteligenciaOperacional({usuario}){
       React.createElement("div",{style:{fontSize:12,color:"#93c5fd"}},hojeLabel),
       React.createElement("div",{style:{fontSize:18,fontWeight:800,color:"#fff",margin:"4px 0"}},saudacao+", "+usuario.nome.split(" ")[0]+"! 👋"),
       React.createElement("div",{style:{fontSize:12,color:"#60a5fa"}},d.total>0?"Você tem "+d.total+" itens hoje":"Sem OS atribuídas hoje"),
+      d.total===0&&React.createElement("div",{style:{background:"rgba(255,255,255,.1)",borderRadius:8,padding:"8px 10px",marginTop:8,fontSize:11,color:"#93c5fd"}},
+        "🔍 Buscando por: "+d.nomeBusca
+      ),
       React.createElement("div",{style:{display:"flex",gap:8,marginTop:12}},
         [{l:"Alta",v:d.osAlta.length,c:"#ef4444"},{l:"Média",v:d.osMedia.length,c:"#f59e0b"},{l:"Baixa",v:d.osBaixa.length,c:"#6b7280"},{l:"Prev.",v:d.prevHoje.length,c:"#10b981"}].map(function(k){
           return React.createElement("div",{key:k.l,style:{flex:1,background:"rgba(255,255,255,.1)",borderRadius:10,padding:"7px 4px",textAlign:"center"}},
