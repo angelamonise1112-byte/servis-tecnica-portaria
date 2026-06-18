@@ -455,92 +455,179 @@ function MinhasOS({usuario,onSelectOS}){
 function Andamento({usuario}){
   const [locs,setLocs]=useState([]);
   const [loading,setLoading]=useState(true);
+  const [registrando,setRegistrando]=useState(false);
+  const [msgReg,setMsgReg]=useState("");
+  const [meuStatus,setMeuStatus]=useState("Disponível");
 
-  const load=useCallback(async()=>{
+  const load=useCallback(async function(){
     setLoading(true);
     const{data}=await sb.from("tecnicos_localizacao").select("*").order("atualizado_em",{ascending:false});
-    setLocs(data||[]);setLoading(false);
+    setLocs(data||[]);
+    setLoading(false);
   },[]);
-  useEffect(()=>{load();},[load]);
-  useEffect(()=>{const t=setInterval(load,20000);return()=>clearInterval(t);},[load]);
 
-  const agora=new Date();
-  const minAgo=dt=>Math.floor((agora-new Date(dt))/60000);
-  const online=dt=>minAgo(dt)<15;
-  const statusIcon=s=>s==="Em Atendimento"?"🔧":s==="A Caminho"?"🚗":s==="No Local"?"📍":"🟢";
-  const statusCor=s=>s==="Em Atendimento"?C.orange:s==="A Caminho"?C.yellow:s==="No Local"?C.cyan:C.green;
+  useEffect(function(){load();},[load]);
+  useEffect(function(){
+    var t=setInterval(load,30000);
+    return function(){clearInterval(t);};
+  },[load]);
 
-  const ativos=locs.filter(l=>l.status_campo&&l.status_campo!=="Disponível"&&l.status_campo!=="Concluído");
-  const disp=locs.filter(l=>l.status_campo==="Disponível"||!l.status_campo);
+  // Registrar localização manualmente
+  async function registrarLocalizacao(status){
+    setRegistrando(true);
+    setMsgReg("");
+    try{
+      var pos=await new Promise(function(res,rej){
+        if(!navigator.geolocation){rej(new Error("GPS não disponível neste dispositivo"));return;}
+        navigator.geolocation.getCurrentPosition(
+          function(p){res(p);},
+          function(e){
+            var msg=e.code===1?"Permissão de localização negada. Vá em Configurações > Privacidade > Localização e permita para este app.":e.code===2?"GPS indisponível no momento. Tente em área aberta.":"Tempo esgotado. Tente novamente.";
+            rej(new Error(msg));
+          },
+          {timeout:10000,enableHighAccuracy:true,maximumAge:0}
+        );
+      });
 
-  return React.createElement("div",{style:{paddingBottom:80}},
-    React.createElement("div",{style:{background:C.surface,padding:"16px",borderBottom:"1px solid "+C.border,position:"sticky",top:0,zIndex:10}},
-      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
-        React.createElement("div",null,
-          React.createElement("div",{style:{fontSize:16,fontWeight:700}},"Técnicos em Campo"),
-          React.createElement("div",{style:{fontSize:11,color:C.muted}},"Atualizado a cada 20s")
-        ),
-        React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center"}},
-          React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:C.green,boxShadow:"0 0 6px "+C.green},className:"pulse"}),
-          React.createElement("button",{style:{background:"none",border:"none",fontSize:20,color:C.muted,cursor:"pointer"},onClick:load},"🔄")
-        )
-      )
-    ),
-    loading?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.muted}},React.createElement(Spinner)):
-    React.createElement("div",{style:{padding:"12px 16px"}},
-      // Em atendimento
-      ativos.length>0&&React.createElement("div",null,
-        React.createElement("div",{style:{fontSize:12,fontWeight:700,color:C.muted,marginBottom:8,letterSpacing:1}},"EM CAMPO"),
-        ativos.map((loc,i)=>{
-          const mins=minAgo(loc.atualizado_em);
-          const cor=statusCor(loc.status_campo);
-          const isMe=loc.tec===usuario.nome;
-          return React.createElement("div",{key:i,style:{...card,borderLeft:"3px solid "+cor,background:isMe?cor+"08":C.card}},
-            React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}},
-              React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
-                React.createElement("div",{style:{width:40,height:40,borderRadius:"50%",background:cor+"22",border:"2px solid "+cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}},statusIcon(loc.status_campo)),
-                React.createElement("div",null,
-                  React.createElement("div",{style:{fontSize:14,fontWeight:700}},loc.tec+(isMe?" (você)":"")),
-                  React.createElement(Badge,{label:loc.status_campo,cor,small:true})
-                )
+      var lat=pos.coords.latitude;
+      var lng=pos.coords.longitude;
+      var agora=new Date().toISOString();
+      var id="loc_"+(usuario.nome||"").replace(/\s+/g,"_");
+
+      var res=await sb.from("tecnicos_localizacao").upsert({
+        id:id,tec:usuario.nome,lat:lat,lng:lng,
+        status_campo:status||meuStatus,
+        os_num:null,os_cond:null,
+        atualizado_em:agora
+      },{onConflict:"tec"});
+
+      if(res.error){
+        setMsgReg("Erro ao salvar: "+res.error.message);
+      }else{
+        setMsgReg("✅ Localização registrada com sucesso!");
+        load();
+        setTimeout(function(){setMsgReg("");},4000);
+      }
+    }catch(e){
+      setMsgReg("❌ "+e.message);
+    }
+    setRegistrando(false);
+  }
+
+  var minAgo=function(dt){if(!dt)return 999;return Math.floor((new Date()-new Date(dt))/60000);};
+  var online=function(dt){return minAgo(dt)<15;};
+  var statusIcon=function(s){return s==="Em Atendimento"?"🔧":s==="A Caminho"?"🚗":s==="No Local"?"📍":"🟢";};
+  var statusCor=function(s){return s==="Em Atendimento"?C.orange:s==="A Caminho"?C.yellow:s==="No Local"?C.cyan:C.green;};
+
+  var meuLoc=locs.find(function(l){return l.tec===usuario.nome;});
+  var ativos=locs.filter(function(l){return l.status_campo&&l.status_campo!=="Disponível"&&l.status_campo!=="Concluído";});
+  var disp=locs.filter(function(l){return l.status_campo==="Disponível"||!l.status_campo;});
+
+  return React.createElement("div",{style:{height:"100%",overflowY:"auto",background:C.bg}},
+
+    // ── MINHA LOCALIZAÇÃO ──
+    React.createElement("div",{style:{background:"linear-gradient(135deg,#0d1f3c,#1a3a6b)",padding:"16px"}},
+      React.createElement("div",{style:{fontSize:14,fontWeight:700,color:"#fff",marginBottom:12}},"📡 Minha Localização"),
+
+      // Status atual
+      meuLoc
+        ?React.createElement("div",{style:{background:"rgba(255,255,255,.1)",borderRadius:10,padding:"10px 14px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+            React.createElement("div",null,
+              React.createElement("div",{style:{fontSize:12,color:"#93c5fd"}},"Último registro:"),
+              React.createElement("div",{style:{fontSize:13,fontWeight:700,color:"#fff"}},
+                minAgo(meuLoc.atualizado_em)<1?"agora mesmo":minAgo(meuLoc.atualizado_em)+"min atrás"
               ),
-              React.createElement("div",{style:{textAlign:"right"}},
-                React.createElement("div",{style:{fontSize:11,color:online(loc.atualizado_em)?C.green:C.dim}},online(loc.atualizado_em)?"● Online":"● "+mins+"min"),
-                loc.os_num&&React.createElement("div",{style:{fontSize:11,color:C.cyan,marginTop:2}},"#"+loc.os_num)
+              meuLoc.lat&&React.createElement("div",{style:{fontSize:10,color:"#60a5fa",marginTop:2}},
+                "📍 "+parseFloat(meuLoc.lat).toFixed(4)+", "+parseFloat(meuLoc.lng).toFixed(4)
               )
             ),
-            loc.os_cond&&React.createElement("div",{style:{fontSize:13,fontWeight:600,marginBottom:6}},loc.os_cond),
-            loc.lat&&loc.lng&&React.createElement("div",{style:{display:"flex",gap:8}},
-              React.createElement("a",{href:"https://maps.google.com/?q="+loc.lat+","+loc.lng,target:"_blank",style:{flex:1,display:"block",background:C.blue+"22",border:"1px solid "+C.blue+"33",borderRadius:8,padding:"6px",textAlign:"center",color:C.blue,fontSize:11,fontWeight:600,textDecoration:"none"}},"🗺 Maps"),
-              React.createElement("a",{href:"https://waze.com/ul?ll="+loc.lat+","+loc.lng+"&navigate=yes",target:"_blank",style:{flex:1,display:"block",background:C.cyan+"22",border:"1px solid "+C.cyan+"33",borderRadius:8,padding:"6px",textAlign:"center",color:C.cyan,fontSize:11,fontWeight:600,textDecoration:"none"}},"🔵 Waze")
+            React.createElement("div",{style:{background:statusCor(meuLoc.status_campo)+"33",borderRadius:20,padding:"6px 12px",fontSize:11,fontWeight:700,color:statusCor(meuLoc.status_campo)}},
+              statusIcon(meuLoc.status_campo)+" "+meuLoc.status_campo
             )
-          );
+          )
+        :React.createElement("div",{style:{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#93c5fd"}},"Nenhuma localização registrada ainda"),
+
+      // Seletor de status
+      React.createElement("div",{style:{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}},
+        ["Disponível","A Caminho","No Local","Em Atendimento"].map(function(s){
+          var isA=meuStatus===s;
+          var cor=statusCor(s);
+          return React.createElement("button",{key:s,
+            style:{flex:1,minWidth:70,background:isA?cor+"33":"rgba(255,255,255,.08)",color:isA?cor:"#93c5fd",border:"1px solid "+(isA?cor:"transparent"),borderRadius:8,padding:"6px 4px",fontSize:10,fontWeight:isA?700:400,cursor:"pointer"},
+            onClick:function(){setMeuStatus(s);}
+          },statusIcon(s)+" "+s);
         })
       ),
-      // Disponíveis
-      disp.length>0&&React.createElement("div",{style:{marginTop:16}},
-        React.createElement("div",{style:{fontSize:12,fontWeight:700,color:C.muted,marginBottom:8,letterSpacing:1}},"DISPONÍVEIS"),
-        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
-          disp.map((loc,i)=>React.createElement("div",{key:i,style:{...card,padding:12,margin:0}},
-            React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
-              React.createElement("div",{style:{width:32,height:32,borderRadius:"50%",background:C.green+"22",border:"2px solid "+C.green,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}},"🟢"),
-              React.createElement("div",null,
-                React.createElement("div",{style:{fontSize:12,fontWeight:600}},loc.tec),
-                React.createElement("div",{style:{fontSize:10,color:C.green}},"Disponível")
-              )
-            )
-          ))
-        )
-      ),
-      locs.length===0&&React.createElement("div",{style:{textAlign:"center",padding:60}},
-        React.createElement("div",{style:{fontSize:48,marginBottom:12}},"📡"),
-        React.createElement("div",{style:{fontSize:15,color:C.muted}},"Nenhum técnico rastreado")
+
+      // Botão principal
+      React.createElement("button",{
+        style:{width:"100%",background:registrando?"#374151":"linear-gradient(135deg,#10b981,#059669)",color:"#fff",border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:registrando?"not-allowed":"pointer",opacity:registrando?0.7:1},
+        disabled:registrando,
+        onClick:function(){registrarLocalizacao(meuStatus);}
+      },registrando?"⏳ Obtendo GPS...":"📍 Registrar Minha Localização"),
+
+      // Mensagem de resultado
+      msgReg&&React.createElement("div",{style:{marginTop:8,background:msgReg.startsWith("✅")?"#10b98133":"#ef444433",borderRadius:8,padding:"8px 12px",fontSize:12,color:msgReg.startsWith("✅")?"#4ade80":"#f87171",fontWeight:600}},
+        msgReg
       )
+    ),
+
+    // ── EQUIPE ──
+    React.createElement("div",{style:{padding:12}},
+      loading
+        ?React.createElement("div",{style:{textAlign:"center",padding:30,color:C.muted}},"⏳ Carregando...")
+        :React.createElement("div",null,
+
+            ativos.length>0&&React.createElement("div",{style:{marginBottom:16}},
+              React.createElement("div",{style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:8}},"🔧 Em Atendimento ("+ativos.length+")"),
+              ativos.map(function(loc){
+                var cor=statusCor(loc.status_campo);
+                var isMe=loc.tec===usuario.nome;
+                return React.createElement("div",{key:loc.tec,style:{background:isMe?cor+"11":C.card,border:"1px solid "+(isMe?cor:C.border),borderRadius:12,padding:12,marginBottom:8}},
+                  React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}},
+                    React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+                      React.createElement("div",{style:{width:36,height:36,borderRadius:"50%",background:cor+"22",border:"2px solid "+cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}},statusIcon(loc.status_campo)),
+                      React.createElement("div",null,
+                        React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.text}},loc.tec+(isMe?" (você)":"")),
+                        React.createElement("div",{style:{fontSize:10,color:C.dim}},online(loc.atualizado_em)?"🟢 online":minAgo(loc.atualizado_em)+"min atrás")
+                      )
+                    ),
+                    React.createElement("span",{style:{background:cor+"22",color:cor,borderRadius:20,padding:"3px 10px",fontSize:10,fontWeight:700}},loc.status_campo)
+                  ),
+                  loc.os_num&&React.createElement("div",{style:{fontSize:11,color:C.blue}},"OS #"+loc.os_num+(loc.os_cond?" — "+loc.os_cond:"")),
+                  loc.lat&&React.createElement("a",{href:"https://www.google.com/maps?q="+loc.lat+","+loc.lng,target:"_blank",style:{fontSize:10,color:C.cyan,textDecoration:"none"}},"📍 Ver no Maps")
+                );
+              })
+            ),
+
+            disp.length>0&&React.createElement("div",null,
+              React.createElement("div",{style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:8}},"🟢 Disponíveis ("+disp.length+")"),
+              disp.map(function(loc){
+                var isMe=loc.tec===usuario.nome;
+                return React.createElement("div",{key:loc.tec,style:{background:isMe?C.green+"11":C.card,border:"1px solid "+(isMe?C.green:C.border),borderRadius:12,padding:"10px 14px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+                  React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+                    React.createElement("div",{style:{width:30,height:30,borderRadius:"50%",background:C.green+"22",border:"2px solid "+C.green,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}},"🟢"),
+                    React.createElement("div",null,
+                      React.createElement("div",{style:{fontSize:12,fontWeight:600,color:C.text}},loc.tec+(isMe?" (você)":"")),
+                      React.createElement("div",{style:{fontSize:10,color:C.dim}},online(loc.atualizado_em)?"online agora":minAgo(loc.atualizado_em)+"min atrás")
+                    )
+                  ),
+                  loc.lat&&React.createElement("a",{href:"https://www.google.com/maps?q="+loc.lat+","+loc.lng,target:"_blank",style:{fontSize:10,color:C.cyan,textDecoration:"none"}},"📍 Maps")
+                );
+              })
+            ),
+
+            locs.length===0&&React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},
+              React.createElement("div",{style:{fontSize:36,marginBottom:8}},"📡"),
+              React.createElement("div",{style:{fontSize:13,color:C.muted}},"Nenhum técnico registrou localização ainda"),
+              React.createElement("div",{style:{fontSize:11,color:C.dim,marginTop:4}},"Use o botão acima para registrar sua posição")
+            )
+          )
     )
   );
 }
 
-// ── DETALHE DA OS ───────────────────────────────────────────
+
 function DetalheOS({os,usuario,onBack}){
   const [campo,setCampo]=useState(os.campo||null);
   const [historico,setHistorico]=useState([]);
