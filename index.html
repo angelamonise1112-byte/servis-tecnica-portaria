@@ -42,6 +42,7 @@ const C={
   green:"#10B981",red:"#EF4444",yellow:"#F59E0B",orange:"#F97316",
   text:"#F0F6FF",muted:"#8BA3C7",dim:"#4A6080",
 };
+const POR_PAG=20;
 
 // ── DADOS REAIS DA PLANILHA ───────────────────────────────────
 const TECNICOS=[
@@ -302,6 +303,7 @@ function HorasExtras({tecsBanco=TECNICOS,onSave}){
   const [filtMes,setFiltMes]=useState("");
   const [filtAno,setFiltAno]=useState(String(new Date().getFullYear()));
   const [filtStatus,setFiltStatus]=useState("");
+  const [pagina,setPagina]=useState(1);
 
   const load=useCallback(async()=>{
     setLoading(true);
@@ -324,7 +326,10 @@ function HorasExtras({tecsBanco=TECNICOS,onSave}){
     var matchMes=!filtMes||(d.data||"").slice(5,7)===filtMes;
     var matchAno=!filtAno||(d.data||"").slice(0,4)===filtAno;
     return matchBusca&&matchTec&&matchStatus&&matchMes&&matchAno;
-  }),[data,busca,filtTec,filtStatus]);
+  }),[data,busca,filtTec,filtStatus,filtMes,filtAno]);
+
+  const paginados=(filtered||[]).slice((pagina-1)*POR_PAG,pagina*POR_PAG);
+  const totalPag=Math.ceil((filtered||[]).length/POR_PAG);
 
   const totalH=filtered.reduce((s,d)=>s+(d.total_h||0),0);
   const pendentes=filtered.filter(d=>d.status==="Pendente").length;
@@ -342,11 +347,11 @@ function HorasExtras({tecsBanco=TECNICOS,onSave}){
     React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
       React.createElement("div",{style:{fontSize:18,fontWeight:700}},"⏱ Horas Extras"),
       React.createElement("div",{style:{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}},
-        React.createElement("select",{style:{...base.sel,width:100},value:filtAno,onChange:function(e){setFiltAno(e.target.value);}},
+        React.createElement("select",{style:{...base.sel,width:100},value:filtAno,onChange:function(e){setFiltAno(e.target.value);setPagina(1);}},
           React.createElement("option",{value:""},"Todos anos"),
           ["2026","2025"].map(function(a){return React.createElement("option",{key:a,value:a},a);})
         ),
-        React.createElement("select",{style:{...base.sel,width:140},value:filtMes,onChange:function(e){setFiltMes(e.target.value);}},
+        React.createElement("select",{style:{...base.sel,width:140},value:filtMes,onChange:function(e){setFiltMes(e.target.value);setPagina(1);}},
           React.createElement("option",{value:""},"Todos os meses"),
           [["01","Janeiro"],["02","Fevereiro"],["03","Março"],["04","Abril"],["05","Maio"],["06","Junho"],["07","Julho"],["08","Agosto"],["09","Setembro"],["10","Outubro"],["11","Novembro"],["12","Dezembro"]].map(function(m){return React.createElement("option",{key:m[0],value:m[0]},m[1]);})
         )
@@ -373,12 +378,12 @@ function HorasExtras({tecsBanco=TECNICOS,onSave}){
         React.createElement(KPI,{label:"⏳ Pendentes",value:pendentes,color:C.yellow})
       ),
       React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
-        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar técnico...",value:busca,onChange:e=>setBusca(e.target.value)}),
-        React.createElement("select",{style:{...base.sel,width:160},value:filtTec,onChange:e=>setFiltTec(e.target.value)},
+        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar técnico...",value:busca,onChange:e=>{setBusca(e.target.value);setPagina(1);}}),
+        React.createElement("select",{style:{...base.sel,width:160},value:filtTec,onChange:e=>{setFiltTec(e.target.value);setPagina(1);}},
           React.createElement("option",{value:""},"Todos técnicos"),
           ...TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
         ),
-        React.createElement("select",{style:{...base.sel,width:140},value:filtStatus,onChange:e=>setFiltStatus(e.target.value)},
+        React.createElement("select",{style:{...base.sel,width:140},value:filtStatus,onChange:e=>{setFiltStatus(e.target.value);setPagina(1);}},
           React.createElement("option",{value:""},"Todos status"),
           React.createElement("option",{value:"Pendente"},"Pendente"),
           React.createElement("option",{value:"Aprovado"},"Aprovado"),
@@ -408,7 +413,7 @@ function HorasExtras({tecsBanco=TECNICOS,onSave}){
           ?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim}},"Nenhum registro encontrado")
           :React.createElement(Table,{
               cols:["Técnico","Matrícula","Data","H. Brutas","Mult.","Total HE","Status","Ações"],
-              rows:filtered.map(d=>[
+              rows:paginados.map(d=>[
                 React.createElement("span",{style:{fontWeight:600}},d.tec),
                 React.createElement("span",{style:{fontSize:11,color:C.dim}},d.mat||"—"),
                 React.createElement("span",{style:{fontSize:11}},fmt(d.data)),
@@ -424,6 +429,7 @@ function HorasExtras({tecsBanco=TECNICOS,onSave}){
             })
       )
     ),
+    React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||[]).length,setPagina}),
     modal!==null&&React.createElement(ModalHE,{item:modal?.id?modal:null,onSave:save,onClose:()=>setModal(null),tecsBanco}),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir este registro?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
   );
@@ -469,6 +475,7 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
   const [filtMes,setFiltMes]=useState("");
   const [filtAno,setFiltAno]=useState("2026");
   const [filtStatus,setFiltStatus]=useState("");
+  const [pagina,setPagina]=useState(1);
   const load=useCallback(async()=>{
     setLoading(true);
     const{data:rows}=await sb.from("atestados").select("*").order("data",{ascending:false});
@@ -482,6 +489,8 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
     var matchAno=!filtAno||(d.data||d.retorno||"").slice(0,4)===filtAno;
     return matchBusca&&matchStatus&&matchMes&&matchAno;
   }),[data,busca,filtStatus,filtMes,filtAno]);
+  const paginados=(filtered||[]).slice((pagina-1)*POR_PAG,pagina*POR_PAG);
+  const totalPag=Math.ceil((filtered||[]).length/POR_PAG);
   const save=async item=>{
     if(item.id&&data.find(x=>x.id===item.id)){await sb.from("atestados").update(item).eq("id",item.id);}
     else{await sb.from("atestados").insert(item);}
@@ -493,12 +502,12 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
       React.createElement("div",null,
         React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🏥 Atestados"),
         React.createElement("div",{style:{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}},
-          React.createElement("input",{style:{...base.inp,width:160,margin:0},placeholder:"Buscar técnico...",value:busca,onChange:function(e){setBusca(e.target.value);}}),
-          React.createElement("select",{style:{...base.sel,width:100},value:filtAno,onChange:function(e){setFiltAno(e.target.value);}},
+          React.createElement("input",{style:{...base.inp,width:160,margin:0},placeholder:"Buscar técnico...",value:busca,onChange:function(e){setBusca(e.target.value);setPagina(1);}}),
+          React.createElement("select",{style:{...base.sel,width:100},value:filtAno,onChange:function(e){setFiltAno(e.target.value);setPagina(1);}},
             React.createElement("option",{value:""},"Todos anos"),
             ["2026","2025"].map(function(a){return React.createElement("option",{key:a,value:a},a);})
           ),
-          React.createElement("select",{style:{...base.sel,width:140},value:filtMes,onChange:function(e){setFiltMes(e.target.value);}},
+          React.createElement("select",{style:{...base.sel,width:140},value:filtMes,onChange:function(e){setFiltMes(e.target.value);setPagina(1);}},
             React.createElement("option",{value:""},"Todos os meses"),
             React.createElement("option",{value:"01"},"Janeiro"),
             React.createElement("option",{value:"02"},"Fevereiro"),
@@ -513,7 +522,7 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
             React.createElement("option",{value:"11"},"Novembro"),
             React.createElement("option",{value:"12"},"Dezembro")
           ),
-          React.createElement("select",{style:{...base.sel,width:130},value:filtStatus,onChange:function(e){setFiltStatus(e.target.value);}},
+          React.createElement("select",{style:{...base.sel,width:130},value:filtStatus,onChange:function(e){setFiltStatus(e.target.value);setPagina(1);}},
             React.createElement("option",{value:""},"Todos status"),
             ["Pendente","Em Análise","Aprovado","Afastado","Alta"].map(function(s){return React.createElement("option",{key:s},s);})
           )
@@ -541,8 +550,8 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
         React.createElement(KPI,{label:"Afastados",value:data.filter(d=>{const r=new Date(d.retorno);return r>new Date()&&d.status==="Aprovado";}).length,color:C.red})
       ),
       React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12}},
-        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar técnico...",value:busca,onChange:e=>setBusca(e.target.value)}),
-        React.createElement("select",{style:{...base.sel,width:150},value:filtStatus,onChange:e=>setFiltStatus(e.target.value)},
+        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar técnico...",value:busca,onChange:e=>{setBusca(e.target.value);setPagina(1);}}),
+        React.createElement("select",{style:{...base.sel,width:150},value:filtStatus,onChange:e=>{setFiltStatus(e.target.value);setPagina(1);}},
           React.createElement("option",{value:""},"Todos status"),...Object.keys(STATUS_AT).map(s=>React.createElement("option",{key:s,value:s},s))
         ),
         (busca||filtStatus)&&React.createElement("button",{style:btnStyle(C.dim,true),onClick:()=>{setBusca("");setFiltStatus("");}},"✕ Limpar")
@@ -551,7 +560,7 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
       React.createElement(Card,null,
         React.createElement(Table,{
           cols:["Técnico","Matrícula","Data","Dias","Retorno","Motivo","Status","Ações"],
-          rows:filtered.map(d=>[
+          rows:paginados.map(d=>[
             d.tec,d.mat,fmt(d.data),
             React.createElement("span",{style:{color:C.cyan}},d.dias),
             fmt(d.retorno),d.motivo,
@@ -564,6 +573,7 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
         })
       )
     ),
+    React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||[]).length,setPagina}),
     modal!==null&&React.createElement(ModalAtestado,{item:modal.id?modal:null,onSave:save,onClose:()=>setModal(null),tecsBanco}),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir este atestado?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
   );
@@ -586,25 +596,43 @@ function NovaOS({setTab,onSave}){
   const [condsBanco,setCondsBanco]=useState(CONDS);
   const [areaSel,setAreaSel]=useState("");
   const [areasDB,setAreasDB]=useState([]);
+  const [tecsBanco,setTecsBanco]=useState([]);
 
   useEffect(function(){
     sb.from("areas_responsaveis").select("*").order("area")
       .then(function(r){setAreasDB(r.data||[]);});
-    sb.from("condominios").select("nome").order("nome",{ascending:true})
+    sb.from("condominios").select("nome,tecnico,area_tecnico").order("nome",{ascending:true})
       .then(function(r){
-        if(r.data&&r.data.length>0)setCondsBanco(r.data.map(function(c){return c.nome;}).filter(Boolean));
+        if(r.data&&r.data.length>0)setCondsBanco(r.data||[]);
+      });
+    sb.from("tecnicos").select("nome,mat").order("nome",{ascending:true})
+      .then(function(r){
+        if(r.data&&r.data.length>0)setTecsBanco(r.data);
       });
   },[]);
 
   const condsFilt=useMemo(function(){
     if(!busca)return condsBanco;
-    return condsBanco.filter(function(c){return c.toLowerCase().includes(busca.toLowerCase());});
+    return condsBanco.filter(function(c){return (c.nome||c).toLowerCase().includes(busca.toLowerCase());});
   },[condsBanco,busca]);
 
   function selecionarCond(nome){
     setCond(nome);
     setBusca(nome);
     setShowList(false);
+    // Vincular técnico automaticamente — prioriza o técnico da ÁREA do condomínio
+    var condObj=condsBanco.find(function(c){return (c.nome||c)===nome;});
+    if(!condObj)return;
+    var tecnicoFinal="";
+    // 1º: buscar técnico pela área do condomínio (fonte de verdade)
+    if(condObj.area_tecnico){
+      var ar=areasDB.find(function(a){return a.area===condObj.area_tecnico;});
+      if(ar&&ar.tecnico)tecnicoFinal=ar.tecnico;
+      setAreaSel(condObj.area_tecnico);
+    }
+    // 2º: se não achou pela área, usar o técnico direto do condomínio
+    if(!tecnicoFinal&&condObj.tecnico)tecnicoFinal=condObj.tecnico;
+    if(tecnicoFinal)setTec(tecnicoFinal);
   }
 
   const selecionarArea=function(area){
@@ -615,11 +643,13 @@ function NovaOS({setTab,onSave}){
 
   const submit=async function(){
     setErro("");
-    if(!num.trim()){setErro("Informe o No da OS");return;}
-    if(!cond){setErro("Selecione o condominio");return;}
+    if(!num.trim()){setErro("Informe o Nº da OS");return;}
+    if(!cond){setErro("Selecione o condomínio");return;}
+    if(!tec){setErro("Selecione o técnico responsável");return;}
+    if(!prob){setErro("Selecione o tipo de problema");return;}
     setSaving(true);
     var ex=await sb.from("os").select("id").eq("num",num.trim()).limit(1);
-    if(ex.data&&ex.data.length>0){setErro("Ja existe uma OS com este numero");setSaving(false);return;}
+    if(ex.data&&ex.data.length>0){setErro("Já existe uma OS com este número");setSaving(false);return;}
     var res=await sb.from("os").insert({id:uid(),num:num.trim(),data:data||todayStr(),cond:cond,tec:tec,pri:pri,prob:prob,descricao:desc,status:"Aberto"});
     if(res.error){setErro("Erro: "+res.error.message);setSaving(false);return;}
     setSaving(false);setToast(true);
@@ -637,7 +667,7 @@ function NovaOS({setTab,onSave}){
         React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}},
           // No OS
           React.createElement("div",null,
-            React.createElement("label",{style:base.lbl},"No OS *"),
+            React.createElement("label",{style:base.lbl},"Nº OS *"),
             React.createElement("input",{style:base.inp,value:num,onChange:function(e){setNum(e.target.value);},placeholder:"514001",autoComplete:"off"})
           ),
           // Data
@@ -647,7 +677,7 @@ function NovaOS({setTab,onSave}){
           ),
           // Condomínio — autocomplete moderno
           React.createElement("div",{style:{gridColumn:"1/-1",position:"relative"}},
-            React.createElement("label",{style:base.lbl},"Condominio *"),
+            React.createElement("label",{style:base.lbl},"Condomínio *"),
             React.createElement("div",{style:{position:"relative"}},
               React.createElement("input",{
                 style:{...base.inp,paddingLeft:36},
@@ -668,16 +698,21 @@ function NovaOS({setTab,onSave}){
               maxHeight:220,overflowY:"auto",boxShadow:"0 8px 24px rgba(0,0,0,.4)",marginTop:2
             }},
               condsFilt.slice(0,20).map(function(c){
-                return React.createElement("div",{key:c,
+                return React.createElement("div",{key:(c.nome||c),
                   style:{padding:"10px 14px",cursor:"pointer",fontSize:13,
                     borderBottom:"1px solid "+C.border,
-                    background:c===cond?C.blue+"22":"transparent",
-                    color:c===cond?C.blue:C.text
+                    background:(c.nome||c)===cond?C.blue+"22":"transparent",
+                    color:(c.nome||c)===cond?C.blue:C.text
                   },
-                  onMouseDown:function(){selecionarCond(c);}
+                  onMouseDown:function(){selecionarCond(c.nome||c);}
                 },
-                  c===cond&&React.createElement("span",{style:{marginRight:6,color:C.green}},"✓"),
-                  c
+                  (c.nome||c)===cond&&React.createElement("span",{style:{marginRight:6,color:C.green}},"✓"),
+                  React.createElement("div",null,
+                    React.createElement("div",{style:{fontSize:12,fontWeight:600}},c.nome||c),
+                    (c.tecnico||c.area_tecnico)&&React.createElement("div",{style:{fontSize:10,color:C.blue,marginTop:1}},
+                      "👷 "+(c.tecnico||"")+(c.area_tecnico?" · "+c.area_tecnico:"")
+                    )
+                  )
                 );
               }),
               condsFilt.length>20&&React.createElement("div",{style:{padding:"8px 14px",fontSize:11,color:C.dim,textAlign:"center"}},
@@ -709,12 +744,13 @@ function NovaOS({setTab,onSave}){
             )
           ),
           React.createElement("div",null,
-            React.createElement("label",{style:base.lbl},"Tecnico"),
+            React.createElement("label",{style:base.lbl},"Técnico"),
             React.createElement("select",{style:{...base.sel,opacity:areaSel?0.7:1},value:tec,
               onChange:function(e){setTec(e.target.value);},
               disabled:false
             },
-              TECNICOS.map(function(t){return React.createElement("option",{key:t.mat,value:t.nome},t.nome);})
+              (tecsBanco.length>0?tecsBanco:TECNICOS).map(function(t){return React.createElement("option",{key:t.mat||t.nome,value:t.nome},t.nome);}),
+              tec&&!(tecsBanco.length>0?tecsBanco:TECNICOS).some(function(t){return t.nome===tec;})&&React.createElement("option",{key:"_extra",value:tec},tec)
             ),
             areaSel&&React.createElement("div",{style:{fontSize:10,color:C.blue,marginTop:3}},
               "🔗 Vinculado à área "+areaSel+" — altere em Gestão de Áreas"
@@ -738,7 +774,7 @@ function NovaOS({setTab,onSave}){
           ),
           // Descrição
           React.createElement("div",{style:{gridColumn:"1/-1"}},
-            React.createElement("label",{style:base.lbl},"Descricao adicional"),
+            React.createElement("label",{style:base.lbl},"Descrição adicional"),
             React.createElement("textarea",{style:{...base.inp,height:70},value:desc,onChange:function(e){setDesc(e.target.value);},placeholder:"Detalhes adicionais..."})
           ),
           // Erro
@@ -973,7 +1009,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
       ),
       // Filtros linha 2
       React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
-        React.createElement("input",{style:{...base.inp,width:180},placeholder:"Buscar OS ou cond...",value:busca,onChange:function(e){setBusca(e.target.value);}}),
+        React.createElement("input",{style:{...base.inp,width:180},placeholder:"Buscar OS ou cond...",value:busca,onChange:function(e){setBusca(e.target.value);setPagina(1);}}),
         React.createElement("select",{style:{...base.sel,width:150},value:filtTec,onChange:function(e){setFiltTec(e.target.value);}},
           React.createElement("option",{value:""},"Todos técnicos"),
           tecs.map(function(t){return React.createElement("option",{key:t,value:t},t);})
@@ -1296,6 +1332,7 @@ function Demandas({onSave}){
   const [modal,setModal]=useState(null);
   const [editPessoa,setEditPessoa]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
+  const [pagina,setPagina]=useState(1);
   const [filtResp,setFiltResp]=useState("Todos");
   const [filtStatus,setFiltStatus]=useState("");
   const [busca,setBusca]=useState("");
@@ -1309,6 +1346,8 @@ function Demandas({onSave}){
     (filtResp==="Todos"||d.resp===filtResp)&&(!filtStatus||d.status===filtStatus)&&
     (!busca||(d.descricao||"").toLowerCase().includes(busca.toLowerCase()))
   );
+  const paginados=(filtered||[]).slice((pagina-1)*POR_PAG,pagina*POR_PAG);
+  const totalPag=Math.ceil((filtered||[]).length/POR_PAG);
   const save=async item=>{
     const row={...item,descricao:item.descricao||""};
     if(row.id&&data.find(x=>x.id===row.id)){await sb.from("demandas").update(row).eq("id",row.id);}
@@ -1348,8 +1387,8 @@ function Demandas({onSave}){
           style:{...btnStyle(C.green,true),fontSize:11,padding:"7px 14px"},
           onClick:function(){
             try{
-              var linhas=(paginados||sorted||[]).map(function(d){return [d.resp||"",d.descricao||"",d.prazo||"",d.pri||"",d.status||"",d.cond_dem||"",d.obs||""];});
-              var kpis=servisKPIs([{l:"Total",v:(sorted||[]).length},{l:"Pendentes",v:(sorted||[]).filter(function(d){return d.status==="Pendente";}).length},{l:"Concluídas",v:(sorted||[]).filter(function(d){return d.status==="Concluído";}).length}]);
+              var linhas=(data||[]).slice(0,100).map(function(d){return [d.resp||"",d.descricao||"",d.prazo||"",d.pri||"",d.status||"",d.cond_dem||"",d.obs||""];});
+              var kpis=servisKPIs([{l:"Total",v:(data||[]).length},{l:"Pendentes",v:(data||[]).filter(function(d){return d.status==="Pendente";}).length},{l:"Concluídas",v:(data||[]).filter(function(d){return d.status==="Concluído";}).length}]);
               servisRelatorioPDF("Relatório de Demandas Administrativas",kpis+servisTabela(["Responsável","Descrição","Prazo","Prioridade","Status","Condomínio","Obs"],linhas),window._servisUser||"","Demandas Administrativas","CE");
             }catch(e){alert("Erro: "+e.message);}
           }
@@ -1377,9 +1416,9 @@ function Demandas({onSave}){
         })
       ),
       React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
-        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar...",value:busca,onChange:e=>setBusca(e.target.value)}),
+        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar...",value:busca,onChange:e=>{setBusca(e.target.value);setPagina(1);}}),
         ["Todos",...pessoas.map(p=>p.nome)].map(r=>React.createElement("button",{key:r,style:btnStyle(pessoas.find(p=>p.nome===r)?.cor||C.blue,filtResp!==r),onClick:()=>setFiltResp(r)},r)),
-        React.createElement("select",{style:{...base.sel,width:150},value:filtStatus,onChange:e=>setFiltStatus(e.target.value)},
+        React.createElement("select",{style:{...base.sel,width:150},value:filtStatus,onChange:e=>{setFiltStatus(e.target.value);setPagina(1);}},
           React.createElement("option",{value:""},"Todos status"),...Object.keys(STATUS_D).map(s=>React.createElement("option",{key:s,value:s},s))
         )
       ),
@@ -1387,7 +1426,7 @@ function Demandas({onSave}){
       React.createElement(Card,null,
         React.createElement(Table,{
           cols:["Responsável","Prazo","Descrição","Condomínio / Local","Prioridade","Status","Ações"],
-          rows:filtered.map(d=>{
+          rows:paginados.map(d=>{
             const p=pessoas.find(x=>x.nome===d.resp);
             return[
               React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
@@ -1408,6 +1447,7 @@ function Demandas({onSave}){
         })
       )
     ),
+    React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||data||[]).length,setPagina}),
     modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
     editPessoa&&React.createElement(Modal,{title:"Editar Pessoa",onClose:()=>setEditPessoa(null)},
       React.createElement("div",{style:{marginBottom:12}},React.createElement("label",{style:base.lbl},"Nome"),React.createElement("input",{style:base.inp,value:editPessoa.nome,onChange:e=>setEditPessoa(p=>({...p,nome:e.target.value}))})),
@@ -1560,7 +1600,12 @@ function servisRelatorioPDF(titulo,conteudoHTML,usuario,filtros,filial){
     +  "<div style='text-align:right'><div>"+dataHora+"</div></div>"
     +"</div>"
     +"</div>"
-    +"<script>window.onload=function(){window.print();}<\/script>"
+    +"<div class='no-print' style='position:fixed;bottom:20px;right:20px;display:flex;gap:10px;z-index:9999'>"
+    +"<button onclick='window.print()' style='background:#1A5FA8;color:#fff;border:none;border-radius:30px;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)'>🖨️ Imprimir / PDF</button>"
+    +"<button onclick='var t=encodeURIComponent(document.title+\" — Relatório Servis\");window.open(\"https://wa.me/?text=\"+t,\"_blank\");' style='background:#25D366;color:#fff;border:none;border-radius:30px;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)'>📱 WhatsApp</button>"
+    +"</div>"
+    +"<style>@media print{.no-print{display:none!important;}}</style>"
+    +"<script>window.onload=function(){setTimeout(function(){window.print();},500);}<\/script>"
     +"</body></html>";
 
   // Tentar abrir popup, fallback para download
@@ -1588,7 +1633,8 @@ function Dashboard({setTab}){
     prevConcluidas:0,prevPendentes:0,prevAndamento:0,
     pedidosPend:0,pedidosRetirada:0,pedidosDev:0,
     slaVencidas:0,reincidencias:0,
-    osPorMes:[],osAbertas16:[]
+    osPorMes:[],osAbertas16:[],
+    osAltaPrio:0,osPorEquip:[],prevAtrasadas:0,topTecs:[],topConds:[],tempoMedio:null
   });
   const [loading,setLoading]=useState(true);
   const [anoFiltro,setAnoFiltro]=useState("");
@@ -1619,7 +1665,7 @@ function Dashboard({setTab}){
         sb.from("condominios").select("id"),
         sb.from("horas_extras").select("status,total_h"),
         sb.from("atestados").select("status,tec,retorno"),
-        sb.from("preventivas").select("status"),
+        sb.from("preventivas").select("status,retorno"),
         sb.from("pedidos").select("status")
       ]);
       const os=osData||[];
@@ -1708,6 +1754,20 @@ function Dashboard({setTab}){
         pedidosTotal:ped.length,
         slaVencidas:slaVenc,reincidencias:reinc,
         osPorMes,osAbertas16:osAb.slice(0,6),
+        // OS Alta Prioridade em aberto
+        osAltaAberta:osAb.filter(function(o){return o.pri==="Alta";}).length,
+        osMediaAberta:osAb.filter(function(o){return o.pri==="Media"||o.pri==="Média";}).length,
+        // OS por tipo de equipamento (top 6)
+        osPorEquip:(function(){
+          var m={};
+          os.forEach(function(o){if(o.prob)m[o.prob]=(m[o.prob]||0)+1;});
+          return Object.entries(m).sort(function(a,b){return b[1]-a[1];}).slice(0,6).map(function(e){return{nome:e[0],qtd:e[1]};});
+        })(),
+        // Preventivas atrasadas (retorno < hoje e não concluída)
+        prevAtrasadas:(function(){
+          var hojeStr=new Date().toISOString().slice(0,10);
+          return prev.filter(function(p){return p.retorno&&p.retorno<hojeStr&&p.status!=="Concluída";}).length;
+        })(),
         // Top técnicos por OS fechadas
         topTecs:(function(){
           var m={};
@@ -1724,6 +1784,19 @@ function Dashboard({setTab}){
         tempoMedio:(function(){
           var tempos=osFech.filter(function(o){return o.data&&o.data_fechamento;}).map(function(o){return (new Date(o.data_fechamento)-new Date(o.data))/(1000*3600);}).filter(function(h){return h>0&&h<720;});
           return tempos.length>0?Math.round(tempos.reduce(function(a,b){return a+b;},0)/tempos.length):null;
+        })(),
+        // OS Alta Prioridade em aberto
+        osAltaPrio:osAb.filter(function(o){return o.pri==="Alta";}).length,
+        // OS por tipo de equipamento (top 5)
+        osPorEquip:(function(){
+          var m={};
+          os.forEach(function(o){var p=o.prob||"Outros";m[p]=(m[p]||0)+1;});
+          return Object.entries(m).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(e){return{nome:e[0],qtd:e[1]};});
+        })(),
+        // Preventivas atrasadas (retorno vencido e não concluída)
+        prevAtrasadas:(function(){
+          var hojeISO=new Date().toISOString().slice(0,10);
+          return (prevData||[]).filter(function(p){return p.retorno&&p.retorno<hojeISO&&p.status!=="Concluída";}).length;
         })()
       });
       setLoading(false);
@@ -1776,6 +1849,31 @@ function Dashboard({setTab}){
       )
     ),
     React.createElement("div",{style:{padding:"20px 24px"}},
+
+      // ── FAIXA DE ALERTAS CRÍTICOS ──
+      (stats.osAltaPrio>0||stats.slaVencidas>0||stats.prevAtrasadas>0)&&React.createElement("div",{style:{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}},
+        stats.osAltaPrio>0&&React.createElement("div",{style:{flex:1,minWidth:180,background:C.red+"15",border:"1px solid "+C.red+"55",borderRadius:10,padding:"12px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:12},onClick:()=>setTab("os")},
+          React.createElement("div",{style:{fontSize:28}},"🚨"),
+          React.createElement("div",null,
+            React.createElement("div",{style:{fontSize:22,fontWeight:800,color:C.red}},stats.osAltaPrio),
+            React.createElement("div",{style:{fontSize:11,color:C.muted}},"OS de Alta Prioridade abertas")
+          )
+        ),
+        stats.slaVencidas>0&&React.createElement("div",{style:{flex:1,minWidth:180,background:C.orange+"15",border:"1px solid "+C.orange+"55",borderRadius:10,padding:"12px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:12},onClick:()=>setTab("sla")},
+          React.createElement("div",{style:{fontSize:28}},"⏰"),
+          React.createElement("div",null,
+            React.createElement("div",{style:{fontSize:22,fontWeight:800,color:C.orange}},stats.slaVencidas),
+            React.createElement("div",{style:{fontSize:11,color:C.muted}},"OS com SLA vencido")
+          )
+        ),
+        stats.prevAtrasadas>0&&React.createElement("div",{style:{flex:1,minWidth:180,background:C.yellow+"15",border:"1px solid "+C.yellow+"55",borderRadius:10,padding:"12px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:12},onClick:()=>setTab("preventivas")},
+          React.createElement("div",{style:{fontSize:28}},"📋"),
+          React.createElement("div",null,
+            React.createElement("div",{style:{fontSize:22,fontWeight:800,color:C.yellow}},stats.prevAtrasadas),
+            React.createElement("div",{style:{fontSize:11,color:C.muted}},"Preventivas atrasadas")
+          )
+        )
+      ),
 
       // KPIs principais — lógica: menos OS no mês = melhor
       React.createElement(Grid,{cols:5,mb:16},
@@ -1968,6 +2066,44 @@ function Dashboard({setTab}){
           )
         )
       ),
+      // ── ALERTAS OPERACIONAIS ──
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginTop:10}},
+        React.createElement("div",{style:{background:(stats.osAltaAberta>0?C.red:C.green)+"11",border:"1px solid "+(stats.osAltaAberta>0?C.red:C.green)+"44",borderRadius:12,padding:16,cursor:"pointer"},onClick:function(){setTab("os");}},
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:4}},"🔴 OS Alta Prioridade"),
+          React.createElement("div",{style:{fontSize:32,fontWeight:800,color:stats.osAltaAberta>0?C.red:C.green}},stats.osAltaAberta||0),
+          React.createElement("div",{style:{fontSize:11,color:C.dim}},"em aberto"+(stats.osMediaAberta?" · "+stats.osMediaAberta+" média":""))
+        ),
+        React.createElement("div",{style:{background:(stats.prevAtrasadas>0?C.orange:C.green)+"11",border:"1px solid "+(stats.prevAtrasadas>0?C.orange:C.green)+"44",borderRadius:12,padding:16,cursor:"pointer"},onClick:function(){setTab("preventivas");}},
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:4}},"📅 Preventivas Atrasadas"),
+          React.createElement("div",{style:{fontSize:32,fontWeight:800,color:stats.prevAtrasadas>0?C.orange:C.green}},stats.prevAtrasadas||0),
+          React.createElement("div",{style:{fontSize:11,color:C.dim}},"retorno vencido")
+        ),
+        React.createElement("div",{style:{background:(stats.slaVencidas>0?C.red:C.green)+"11",border:"1px solid "+(stats.slaVencidas>0?C.red:C.green)+"44",borderRadius:12,padding:16,cursor:"pointer"},onClick:function(){setTab("sla");}},
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:4}},"⏱ SLA Vencido"),
+          React.createElement("div",{style:{fontSize:32,fontWeight:800,color:stats.slaVencidas>0?C.red:C.green}},stats.slaVencidas||0),
+          React.createElement("div",{style:{fontSize:11,color:C.dim}},"OS fora do prazo")
+        )
+      ),
+      // ── OS POR TIPO DE EQUIPAMENTO ──
+      React.createElement("div",{style:{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:16,marginTop:10}},
+        React.createElement("div",{style:{fontWeight:700,fontSize:13,marginBottom:12,color:C.blue}},"🔧 OS por Tipo de Problema"),
+        (stats.osPorEquip||[]).length===0
+          ?React.createElement("div",{style:{color:C.dim,fontSize:12,textAlign:"center",padding:10}},"Sem dados")
+          :React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px 16px"}},
+              (stats.osPorEquip||[]).map(function(e){
+                var max=(stats.osPorEquip[0]||{qtd:1}).qtd;
+                return React.createElement("div",{key:e.nome,style:{marginBottom:4}},
+                  React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2}},
+                    React.createElement("span",{style:{color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"80%"}},e.nome),
+                    React.createElement("span",{style:{color:C.blue,fontWeight:700}},e.qtd)
+                  ),
+                  React.createElement("div",{style:{background:C.border,borderRadius:4,height:5}},
+                    React.createElement("div",{style:{height:"100%",width:Math.round(e.qtd/max*100)+"%",background:C.blue,borderRadius:4}})
+                  )
+                );
+              })
+            )
+      ),
       // ── TOP TÉCNICOS + TOP CONDOMÍNIOS + TEMPO MÉDIO ──
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginTop:10}},
         // Top Técnicos
@@ -2027,6 +2163,26 @@ function Dashboard({setTab}){
           )
         )
       ),
+      // ── OS POR TIPO DE EQUIPAMENTO ──
+      React.createElement("div",{style:{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:14,marginTop:10}},
+        React.createElement("div",{style:{fontWeight:700,fontSize:12,marginBottom:10,color:C.cyan}},"🔧 OS por Tipo de Problema"),
+        (stats.osPorEquip||[]).length===0
+          ?React.createElement("div",{style:{color:C.dim,fontSize:11,textAlign:"center",padding:8}},"Sem dados")
+          :React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+              (stats.osPorEquip||[]).map(function(e){
+                var max=(stats.osPorEquip[0]||{qtd:1}).qtd;
+                return React.createElement("div",{key:e.nome},
+                  React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}},
+                    React.createElement("span",{style:{color:C.text}},e.nome),
+                    React.createElement("span",{style:{color:C.cyan,fontWeight:700}},e.qtd+" OS")
+                  ),
+                  React.createElement("div",{style:{background:C.border,borderRadius:5,height:8}},
+                    React.createElement("div",{style:{height:"100%",width:Math.round(e.qtd/max*100)+"%",background:"linear-gradient(90deg,"+C.cyan+","+C.blue+")",borderRadius:5}})
+                  )
+                );
+              })
+            )
+      ),
       React.createElement(IaDashboard,null)
     )
   );
@@ -2054,6 +2210,7 @@ function Preventivas({onSave}){
   const [modal,setModal]=useState(null);
   const [detalhe,setDetalhe]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
+  const [pagina,setPagina]=useState(1);
 
   const STATUS_COR={"Pendente":C.yellow,"Em andamento":C.blue,"Concluída":C.green};
   const STATUS_OPTS=["Todos","Pendente","Em andamento","Concluída"];
@@ -2084,6 +2241,8 @@ function Preventivas({onSave}){
       return mb&&ms;
     });
   },[data,busca,filtStatus]);
+  const paginados=(filtered||[]).slice((pagina-1)*POR_PAG,pagina*POR_PAG);
+  const totalPag=Math.ceil((filtered||[]).length/POR_PAG);
 
   const save=async function(item){
     var it={id:item.id||uid(),cond:item.cond||"",tecnico:item.tecnico||"",
@@ -2688,7 +2847,7 @@ function Preventivas({onSave}){
         React.createElement("div",{style:{position:"relative",flex:1,minWidth:180}},
           React.createElement("input",{style:{...base.inp,paddingLeft:34,margin:0},
             placeholder:"Buscar condomínio ou técnico...",value:busca,
-            onChange:function(e){setBusca(e.target.value);}}),
+            onChange:function(e){setBusca(e.target.value);setPagina(1);}}),
           React.createElement("span",{style:{position:"absolute",left:10,top:12,color:C.muted,fontSize:13}},"🔍")
         ),
         STATUS_OPTS.map(function(s){
@@ -2717,7 +2876,7 @@ function Preventivas({onSave}){
           :React.createElement(Card,null,
             React.createElement(Table,{
               cols:["Condomínio","Técnico","Status","1ª Visita","Retorno","Anexos","Ações"],
-              rows:filtered.map(function(d){
+              rows:paginados.map(function(d){
                 var cor=STATUS_COR[d.status]||C.dim;
                 return [
                   React.createElement("div",null,
@@ -2760,9 +2919,10 @@ function Preventivas({onSave}){
             })
           )
     ),
+    React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||data||[]).length,setPagina}),
     modal!==null&&React.createElement(EditModal,{item:modal&&modal.id?modal:null,onClose:function(){setModal(null);}}),
     detalhe&&React.createElement(DetalheModal,{item:detalhe,onClose:function(){setDetalhe(null);}}),
-    confirmDel&&React.createElement(Confirm,{msg:"Excluir esta preventiva?",onYes:function(){del(confirmDel);},onNo:function(){setConfirmDel(null);}})
+      confirmDel&&React.createElement(Confirm,{msg:"Excluir esta preventiva?",onYes:function(){del(confirmDel);},onNo:function(){setConfirmDel(null);}})
   );
 }
 
@@ -2777,6 +2937,7 @@ function Condominios({onSave}){
   const [filtArea,setFiltArea]=useState("");
   const [verArea,setVerArea]=useState(false);
   const [verObs,setVerObs]=useState(null);
+  const [pagina,setPagina]=useState(1);
   const load=useCallback(async()=>{
     setLoading(true);
     const{data:rows}=await sb.from("condominios").select("*").order("nome",{ascending:true});
@@ -2789,6 +2950,8 @@ function Condominios({onSave}){
     (!filtTec||d.tecnico===filtTec)&&
     (!filtArea||d.area_tecnico===filtArea)
   ),[data,busca,filtTec,filtArea]);
+  const paginados=useMemo(function(){return filtered.slice((pagina-1)*POR_PAG,pagina*POR_PAG);},[filtered,pagina]);
+  const totalPag=Math.ceil(filtered.length/POR_PAG);
   const exportarPDF=()=>{
     const w=window.open("","_blank");
     var html="<!DOCTYPE html><html><head><meta charset=\"UTF-8\">";
@@ -2888,11 +3051,11 @@ function Condominios({onSave}){
         React.createElement(KPI,{label:"Com Técnico",value:comTec,color:C.cyan})
       ),
       React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
-        React.createElement("input",{style:{...base.inp,width:240},placeholder:"Buscar nome ou endereço...",value:busca,onChange:e=>setBusca(e.target.value)}),
-        React.createElement("select",{style:{...base.sel,width:180},value:filtTec,onChange:e=>setFiltTec(e.target.value)},
+        React.createElement("input",{style:{...base.inp,width:240},placeholder:"Buscar nome ou endereço...",value:busca,onChange:e=>{setBusca(e.target.value);setPagina(1);}}),
+        React.createElement("select",{style:{...base.sel,width:180},value:filtTec,onChange:e=>{setFiltTec(e.target.value);setPagina(1);}},
           React.createElement("option",{value:""},"Todos técnicos"),...TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome))
         ),
-        React.createElement("select",{style:{...base.sel,width:170},value:filtArea,onChange:e=>setFiltArea(e.target.value)},
+        React.createElement("select",{style:{...base.sel,width:170},value:filtArea,onChange:e=>{setFiltArea(e.target.value);setPagina(1);}},
           React.createElement("option",{value:""},"Todas as áreas"),
           ...areas.map(a=>React.createElement("option",{key:a,value:a},a))
         ),
@@ -2981,7 +3144,7 @@ function Condominios({onSave}){
         React.createElement("div",{style:{fontSize:12,color:C.dim,marginBottom:8}},`${filtered.length} registros`),
         React.createElement(Table,{
           cols:["#","Nome","🗂 Área","Endereço","Técnico Resp.","Obs/IPs","Ações"],
-          rows:filtered.map((d,i)=>[
+          rows:paginados.map((d,i)=>[
             React.createElement("span",{style:{color:C.dim,fontSize:11}},i+1),
             React.createElement("span",{style:{fontWeight:600}},d.nome),
             d.area_tecnico
@@ -3025,6 +3188,7 @@ function Tecnicos({onSave}){
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
+  const [pagina,setPagina]=useState(1);
   const [filtStatus,setFiltStatus]=useState("Todos");
   const [busca,setBusca]=useState("");
   const stColors={"Online":C.green,"Campo":C.yellow,"Offline":C.dim};
@@ -3035,6 +3199,8 @@ function Tecnicos({onSave}){
   },[]);
   useEffect(()=>{load();},[load]);
   const filtered=data.filter(t=>(filtStatus==="Todos"||t.status===filtStatus)&&(!busca||t.nome.toLowerCase().includes(busca.toLowerCase())));
+  const paginados=(filtered||[]).slice((pagina-1)*POR_PAG,pagina*POR_PAG);
+  const totalPag=Math.ceil((filtered||[]).length/POR_PAG);
   const save=async item=>{
     if(item.id&&data.find(x=>x.id===item.id)){await sb.from("tecnicos").update(item).eq("id",item.id);}
     else{await sb.from("tecnicos").insert(item);}
@@ -3042,11 +3208,11 @@ function Tecnicos({onSave}){
   };
   const del=async id=>{await sb.from("tecnicos").delete().eq("id",id);setConfirmDel(null);load();if(onSave)onSave();};
   const EditModal=({item,onClose})=>{
-    const [f,setF]=useState(item||{nome:"",mat:"",escala:"Comercial",tipo:"Tecnico Manutencao",status:"Online",telefone:"",obs:"",foto_url:""});
+    const [f,setF]=useState(item||{nome:"",mat:"",escala:"Comercial",tipo:"Técnico Manutenção",status:"Online",telefone:"",obs:"",foto_url:""});
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
     const handleFoto=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>setF(p=>({...p,foto_url:ev.target.result}));r.readAsDataURL(file);};
-    const fotoAtual=f.foto_url||(TECNICOS.find(t=>t.nome===f.nome)?.foto||"");
-    return React.createElement(Modal,{title:item?.id?"Editar Técnico":"Novo Técnico",onClose},
+    const fotoAtual=f.foto_url||((TECNICOS.find(t=>t.nome===f.nome)||{}).foto||"");
+    return React.createElement(Modal,{title:item&&item.id?"Editar Técnico":"Novo Técnico",onClose},
       React.createElement("div",{style:{textAlign:"center",marginBottom:12}},
         fotoAtual
           ?React.createElement("img",{src:fotoAtual,style:{width:72,height:72,borderRadius:"50%",objectFit:"cover",border:`3px solid ${C.blue}`}})
@@ -3060,7 +3226,7 @@ function Tecnicos({onSave}){
         React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Nome *"),React.createElement("input",{style:base.inp,value:f.nome,onChange:upd("nome")})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Matrícula"),React.createElement("input",{style:base.inp,value:f.mat||"",onChange:upd("mat")})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Telefone"),React.createElement("input",{style:base.inp,value:f.telefone||"",onChange:upd("telefone")})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Tipo"),React.createElement("select",{style:base.sel,value:f.tipo||"",onChange:upd("tipo")},["Tecnico Manutencao","Tecnico Instalacao","Tecnico Senior","Supervisor","Coordenador"].map(s=>React.createElement("option",{key:s},s)))),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Tipo"),React.createElement("select",{style:base.sel,value:f.tipo||"",onChange:upd("tipo")},["Técnico Manutenção","Técnico Instalação","Técnico Sênior","Supervisor","Coordenador"].map(s=>React.createElement("option",{key:s},s)))),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Escala"),React.createElement("select",{style:base.sel,value:f.escala||"",onChange:upd("escala")},["Comercial","Plantonista Dia","Plantonista Noite","Sobreaviso","Folga"].map(s=>React.createElement("option",{key:s},s)))),
         React.createElement("div",{style:{gridColumn:"1/-1"}},
           React.createElement("label",{style:base.lbl},"Status"),
@@ -3088,14 +3254,14 @@ function Tecnicos({onSave}){
         React.createElement(KPI,{label:"Campo",value:data.filter(t=>t.status==="Campo").length,color:C.yellow})
       ),
       React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},
-        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar...",value:busca,onChange:e=>setBusca(e.target.value)}),
+        React.createElement("input",{style:{...base.inp,width:200},placeholder:"Buscar...",value:busca,onChange:e=>{setBusca(e.target.value);setPagina(1);}}),
         ["Todos","Online","Campo","Offline"].map(s=>React.createElement("button",{key:s,style:btnStyle(s==="Online"?C.green:s==="Campo"?C.yellow:s==="Offline"?C.dim:C.blue,filtStatus!==s),onClick:()=>setFiltStatus(s)},s))
       ),
       loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:12}},
-        filtered.map(t=>React.createElement(Card,{key:t.id},
+        paginados.map(t=>React.createElement(Card,{key:t.id},
           React.createElement("div",{style:{display:"flex",gap:12,alignItems:"flex-start"}},
-            (()=>{const fotoSrc=t.foto_url||(TECNICOS.find(x=>x.nome===t.nome)?.foto||"");return fotoSrc?React.createElement("img",{src:fotoSrc,style:{width:44,height:44,borderRadius:"50%",objectFit:"cover",border:`2px solid ${stColors[t.status]||C.dim}`}}):React.createElement("div",{style:{width:44,height:44,borderRadius:"50%",background:(stColors[t.status]||C.dim)+"33",border:`2px solid ${stColors[t.status]||C.dim}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:700,color:stColors[t.status]||C.dim}},t.nome?t.nome[0]:"?");})(),
+            (()=>{const fotoSrc=t.foto_url||((TECNICOS.find(x=>x.nome===t.nome)||{}).foto||"");return fotoSrc?React.createElement("img",{src:fotoSrc,style:{width:44,height:44,borderRadius:"50%",objectFit:"cover",border:`2px solid ${stColors[t.status]||C.dim}`}}):React.createElement("div",{style:{width:44,height:44,borderRadius:"50%",background:(stColors[t.status]||C.dim)+"33",border:`2px solid ${stColors[t.status]||C.dim}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:700,color:stColors[t.status]||C.dim}},t.nome?t.nome[0]:"?");})(),
             React.createElement("div",{style:{flex:1}},
               React.createElement("div",{style:{fontWeight:600}},t.nome),
               React.createElement("div",{style:{fontSize:11,color:C.muted}},t.tipo),
@@ -3111,7 +3277,8 @@ function Tecnicos({onSave}){
         ))
       )
     ),
-    modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
+    React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||data||[]).length,setPagina}),
+    modal!==null&&React.createElement(EditModal,{item:modal&&modal.id?modal:null,onClose:()=>setModal(null)}),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir este técnico?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
   );
 }
@@ -4127,6 +4294,7 @@ function SLA(){
   const [filtro,setFiltro]=useState("Todas");
   const [busca,setBusca]=useState("");
   const [filtTec,setFiltTec]=useState("");
+  const [filtPri,setFiltPri]=useState("");
   const [filtAno,setFiltAno]=useState(String(new Date().getFullYear()));
   const [filtMes,setFiltMes]=useState(String(new Date().getMonth()+1).padStart(2,"0"));
   const [detalhe,setDetalhe]=useState(null);
@@ -4213,13 +4381,14 @@ function SLA(){
       if(os.status==="Fechado"){
         situacao=horasUteis<=48?"Dentro do SLA":"Fora do SLA";
       }else{
-        situacao=vencido?"Vencida":"Em andamento";
+        var horasAtuais=calcHorasUteis(os.data,null);
+        situacao=vencido?"Vencida":(horasAtuais>=40?"Em risco":"Em andamento");
       }
       return {...os,prazo,vencido,horasRestantes,horasUteis,situacao};
     }).filter(Boolean);
   },[data,calcHorasUteis,calcPrazo]);
 
-  const corSituacao=s=>s==="Dentro do SLA"?C.green:s==="Fora do SLA"?C.red:s==="Vencida"?C.red:C.yellow;
+  const corSituacao=s=>s==="Dentro do SLA"?C.green:s==="Fora do SLA"?C.red:s==="Vencida"?C.red:s==="Em risco"?C.orange:C.yellow;
 
   const anos=useMemo(()=>[...new Set(data.map(d=>d.data?.slice(0,4)).filter(Boolean))].sort().reverse(),[data]);
   const tecs=useMemo(()=>[...new Set(data.map(d=>d.tec).filter(Boolean))].sort(),[data]);
@@ -4230,6 +4399,7 @@ function SLA(){
       const matchFiltro=filtro==="Todas"||(filtro==="Abertas"&&os.status==="Aberto")||(filtro==="Fechadas"&&os.status==="Fechado")||(filtro==="Vencidas"&&os.situacao==="Vencida")||(filtro==="Fora do SLA"&&os.situacao==="Fora do SLA");
       const matchBusca=!busca||(os.num||"").includes(busca)||(os.cond||"").toLowerCase().includes(busca.toLowerCase());
       const matchTec=!filtTec||os.tec===filtTec;
+      const matchPri=!filtPri||os.pri===filtPri;
       const matchAno=!filtAno||p[0]===filtAno;
       const matchMes=!filtMes||p[1]===filtMes;
       return matchFiltro&&matchBusca&&matchTec&&matchAno&&matchMes;
@@ -4249,6 +4419,7 @@ function SLA(){
       total:osComSLA.length,
       abertas:osComSLA.filter(o=>o.status==="Aberto").length,
       vencidas:osComSLA.filter(o=>o.situacao==="Vencida").length,
+      emRisco:osComSLA.filter(o=>o.situacao==="Em risco").length,
       dentroSLA,
       foraSLA,
       pctSLA,
@@ -4259,7 +4430,7 @@ function SLA(){
 
   const totalPags=Math.ceil(filtered.length/POR_PAG);
   const paginado=filtered.slice((pagina-1)*POR_PAG,pagina*POR_PAG);
-  useEffect(()=>{setPagina(1);},[filtro,busca,filtTec,filtAno,filtMes]);
+  useEffect(()=>{setPagina(1);},[filtro,busca,filtTec,filtPri,filtAno,filtMes]);
 
   return React.createElement("div",null,
     React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`}},
@@ -4304,6 +4475,12 @@ function SLA(){
       // Filtros secundários
       React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
         React.createElement("input",{style:{...base.inp,width:160},placeholder:"Buscar OS ou cond...",value:busca,onChange:e=>{setBusca(e.target.value);setPagina(1);}}),
+        React.createElement("select",{style:{...base.sel,width:100},value:filtPri,onChange:function(e){setFiltPri(e.target.value);setPagina(1);}},
+          React.createElement("option",{value:""},"Prioridade"),
+          React.createElement("option",{value:"Alta"},"🔴 Alta"),
+          React.createElement("option",{value:"Media"},"🟡 Média"),
+          React.createElement("option",{value:"Baixa"},"🟢 Baixa")
+        ),
         React.createElement("select",{style:{...base.sel,width:155},value:filtTec,onChange:e=>{setFiltTec(e.target.value);setPagina(1);}},
           React.createElement("option",{value:""},"Todos técnicos"),
           ...tecs.map(t=>React.createElement("option",{key:t,value:t},t))
@@ -4321,10 +4498,11 @@ function SLA(){
     ),
     React.createElement("div",{style:{padding:"20px 24px"}},
       // KPIs
-      React.createElement(Grid,{cols:6,mb:16},
+      React.createElement(Grid,{cols:7,mb:16},
         React.createElement(KPI,{label:"Total OS",value:stats.total,color:C.blue}),
         React.createElement(KPI,{label:"🔴 Abertas",value:stats.abertas,color:C.red}),
         React.createElement(KPI,{label:"🚨 Vencidas",value:stats.vencidas,color:stats.vencidas>0?C.red:C.green}),
+        React.createElement(KPI,{label:"⚠ Em Risco (40h+)",value:stats.emRisco,color:stats.emRisco>0?C.orange:C.green}),
         React.createElement(KPI,{label:"✅ Dentro SLA",value:stats.dentroSLA,color:C.green}),
         React.createElement("div",{style:{background:C.card,borderRadius:12,padding:16,textAlign:"center",border:`1px solid ${stats.pctSLA>=90?C.green:stats.pctSLA>=70?C.yellow:C.red}44`}},
           React.createElement("div",{style:{fontSize:26,fontWeight:800,color:stats.pctSLA>=90?C.green:stats.pctSLA>=70?C.yellow:C.red}},stats.pctSLA+"%"),
@@ -4651,6 +4829,7 @@ function Instalacoes({onSave}){
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
+  const [pagina,setPagina]=useState(1);
   const STATUS_INST={"Em andamento":{c:C.blue},"Concluída no prazo":{c:C.green},"Concluída com atraso":{c:C.orange},"Cancelada":{c:C.dim}};
 
   function prazo30(dataInicio){
@@ -4671,6 +4850,10 @@ function Instalacoes({onSave}){
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
+
+  const filtered=data;
+  const paginados=(filtered||[]).slice((pagina-1)*POR_PAG,pagina*POR_PAG);
+  const totalPag=Math.ceil((filtered||[]).length/POR_PAG);
 
   const save=async item=>{
     if(item.id&&data.find(x=>x.id===item.id)){await sb.from("instalacoes").update(item).eq("id",item.id);}
@@ -4717,8 +4900,8 @@ function Instalacoes({onSave}){
             style:{...btnStyle(C.green,true),fontSize:11,padding:"7px 14px"},
             onClick:function(){
               try{
-                var linhas=(paginados||[]).map(function(d){return [d.cond||"",d.tec||"",d.data_inicio||"",d.data_entrega_portaria||"",d.status||"",d.obs||""];});
-                var kpis=servisKPIs([{l:"Total",v:(sorted||[]).length},{l:"Em Andamento",v:(sorted||[]).filter(function(d){return d.status==="Em andamento";}).length},{l:"Concluídas",v:(sorted||[]).filter(function(d){return d.status==="Concluída";}).length}]);
+                var linhas=(data||[]).slice(0,100).map(function(d){return [d.cond||"",d.tec||"",d.data_inicio||"",d.data_entrega_portaria||"",d.status||"",d.obs||""];});
+                var kpis=servisKPIs([{l:"Total",v:(data||[]).length},{l:"Em Andamento",v:(data||[]).filter(function(d){return d.status==="Em andamento";}).length},{l:"Concluídas",v:(data||[]).filter(function(d){return d.status==="Concluída";}).length}]);
                 servisRelatorioPDF("Relatório de Instalações",kpis+servisTabela(["Condomínio","Técnico","Início","Entrega","Status","Obs"],linhas),window._servisUser||"","Instalações — Portarias Novas","CE");
               }catch(e){alert("Erro: "+e.message);}
             }
@@ -4738,7 +4921,7 @@ function Instalacoes({onSave}){
       React.createElement(Card,null,
         React.createElement(Table,{
           cols:["Condomínio","Técnico","Início","Prazo 30DU","Mat.","Obra","Reunião","Dispositivos","Checklist","Entrega","Status","Resultado","Ações"],
-          rows:data.map(function(d){
+          rows:paginados.map(function(d){
             var prazo=prazo30(d.data_inicio);
             var aval=avaliarInstalacao(d);
             var atrasada=d.status==="Em andamento"&&prazo&&hoje>prazo;
@@ -4764,6 +4947,7 @@ function Instalacoes({onSave}){
         })
       )
     ),
+    React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||data||[]).length,setPagina}),
     modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir esta instalação?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
   );
@@ -4882,6 +5066,7 @@ function RankingSupervisores(){
   const [os,setOs]=useState([]);
   const [preventivas,setPreventivas]=useState([]);
   const [instalacoes,setInstalacoes]=useState([]);
+  const [tecnicos,setTecnicos]=useState([]);
   const [loading,setLoading]=useState(true);
   const [mesSel,setMesSel]=useState(String(new Date().getMonth()+1).padStart(2,"0"));
   const [anoSel,setAnoSel]=useState(String(new Date().getFullYear()));
@@ -4891,11 +5076,13 @@ function RankingSupervisores(){
 
   const load=useCallback(async()=>{
     setLoading(true);
-    const[{data:osData},{data:prevData},{data:instData}]=await Promise.all([
+    const[{data:osData},{data:prevData},{data:instData},{data:tecData}]=await Promise.all([
       sb.from("os").select("*"),
       sb.from("preventivas").select("*"),
-      sb.from("instalacoes").select("*")
+      sb.from("instalacoes").select("*"),
+      sb.from("tecnicos").select("id,nome,mat,tipo,status").eq("status","Ativo")
     ]);
+    setTecnicos(tecData||[]);
     setOs(osData||[]);setPreventivas(prevData||[]);setInstalacoes(instData||[]);
     setLoading(false);
   },[]);
@@ -4914,13 +5101,16 @@ function RankingSupervisores(){
     return horas;
   }
 
-  var supervisores=[
-    {id:"sup1",nome:"Supervisor Manut. 1",tipo:"manutencao",icon:"🔧"},
-    {id:"sup2",nome:"Supervisor Manut. 2",tipo:"manutencao",icon:"🔧"},
-    {id:"sup_inst",nome:"Supervisor Instalação",tipo:"instalacao",icon:"🏗️"},
-    {id:"tec_prev1",nome:"Técnico de Preventiva 1",tipo:"preventiva",icon:"🔍"},
-    {id:"tec_prev2",nome:"Técnico de Preventiva 2",tipo:"preventiva",icon:"🔍"},
-  ];
+  var supervisores=(tecnicos.length>0?tecnicos:[
+    {id:"sup1",nome:"Wilton",mat:"T01",tipo:"manutencao"},
+    {id:"sup2",nome:"Felipe",mat:"T02",tipo:"manutencao"},
+    {id:"sup3",nome:"John",mat:"T03",tipo:"manutencao"},
+    {id:"sup4",nome:"Pedro",mat:"T04",tipo:"manutencao"},
+  ]).map(function(t){
+    var tipo=t.tipo||"manutencao";
+    var icon=tipo==="instalacao"?"🏗️":tipo==="preventiva"?"🔍":"🔧";
+    return {id:t.id||t.mat,nome:t.nome,tipo:tipo,icon:icon};
+  });
 
   const pontuacoes=useMemo(()=>{
     var hoje=new Date();
@@ -5012,16 +5202,21 @@ function RankingSupervisores(){
         style:{...btnStyle(C.green,true),fontSize:11,padding:"7px 14px"},
         onClick:function(){
           try{
-            var linhas=(ranking||[]).map(function(r,i){
-              return [String(i+1),r.nome||"",String(r.osFechadas||0),String(r.osAbertas||0),(r.eficiencia||0)+"%",(r.tempoMedio||0).toFixed(1)+"h",(r.retrabalho||0)+"%",String(r.pontos||0)];
+            var pontOrdem=[].concat(pontuacoes||[]).sort(function(a,b){return (b.nota||0)-(a.nota||0);});
+            var linhas=pontOrdem.map(function(r,i){
+              var s=r.sup||{};
+              var p=r.pts||{};
+              var prazo=p.prazo!=null?String(p.prazo)+"%":"—";
+              var qual=p.qualidade!=null?String(p.qualidade)+"%":"—";
+              return [String(i+1),s.nome||"",s.tipo||"",String(r.nota||0)+"/100",r.pior||"—",prazo,qual];
             });
             var kpis=servisKPIs([
               {l:"Técnicos",v:(ranking||[]).length},
-              {l:"Total OS",v:(ranking||[]).reduce(function(s,r){return s+(r.osFechadas||0);},0)},
-              {l:"Melhor Eficiência",v:(ranking||[])[0]?(ranking[0].eficiencia||0)+"%":"—"},
-              {l:"Período",v:filtMes?filtMes+"/"+filtAno:filtAno||"2026"},
+              {l:"Total Supervisores",v:(pontuacoes||[]).length},
+              {l:"Melhor Nota",v:(function(){var s=[].concat(pontuacoes||[]).sort(function(a,b){return (b.nota||0)-(a.nota||0);});return s.length>0?((s[0].sup||{}).nome||"")+" "+s[0].nota+"/100":"—";})()} ,
+              {l:"Período",v:mesSel?mesSel+"/"+anoSel:anoSel||"2026"},
             ]);
-            servisRelatorioPDF("Ranking de Desempenho — Técnicos",kpis+servisTabela(["#","Técnico","OS Fech.","OS Ab.","Eficiência","T.Médio","Retrabalho","Pontos"],linhas),window._servisUser||"","Período: "+(filtAno||"2026"),"CE");
+            servisRelatorioPDF("Ranking de Desempenho — Técnicos",kpis+servisTabela(["#","Nome","Tipo","Nota","Ponto Fraco","Prazo %","Qualidade %"],linhas),window._servisUser||"","Período: "+mesSel+"/"+anoSel,"CE");
           }catch(e){alert("Erro: "+e.message);}
         }
       },"📄 PDF"),
@@ -5036,15 +5231,15 @@ function RankingSupervisores(){
         React.createElement(Grid,{cols:4,mb:16},
           React.createElement("div",{style:{background:C.card,borderRadius:12,padding:16,borderLeft:`4px solid ${C.yellow}`}},
             React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:4}},"🥇 Melhor do Mês"),
-            React.createElement("div",{style:{fontSize:14,fontWeight:700,color:C.yellow}},melhor?.sup.nome||"—"),
-            React.createElement("div",{style:{fontSize:22,fontWeight:800,color:C.yellow}},melhor?.nota||0),
+            React.createElement("div",{style:{fontSize:14,fontWeight:700,color:C.yellow}},(melhor&&melhor.sup?melhor.sup.nome:"—")||"—"),
+            React.createElement("div",{style:{fontSize:22,fontWeight:800,color:C.yellow}},(melhor?melhor.nota:0)||0),
             React.createElement("div",{style:{fontSize:10,color:C.dim}},"pontos")
           ),
           React.createElement(KPI,{label:"Média Geral",value:media,color:media>=80?C.green:media>=60?C.yellow:C.red}),
           React.createElement("div",{style:{background:C.card,borderRadius:12,padding:16,borderLeft:`4px solid ${C.red}`}},
             React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:4}},"⚠️ Atenção"),
-            React.createElement("div",{style:{fontSize:14,fontWeight:700,color:C.red}},pior2?.sup.nome||"—"),
-            React.createElement("div",{style:{fontSize:22,fontWeight:800,color:C.red}},pior2?.nota||0),
+            React.createElement("div",{style:{fontSize:14,fontWeight:700,color:C.red}},(pior2&&pior2.sup?pior2.sup.nome:"—")||"—"),
+            React.createElement("div",{style:{fontSize:22,fontWeight:800,color:C.red}},(pior2?pior2.nota:0)||0),
             React.createElement("div",{style:{fontSize:10,color:C.dim}},"pontos")
           ),
           React.createElement(KPI,{label:"Avaliados",value:pontuacoes.length,color:C.blue})
@@ -7327,6 +7522,17 @@ function ProdutividadeDiaria({usuario}){
   );
 }
 
+
+
+// ── COMPONENTE PAGINAÇÃO REUTILIZÁVEL ──────────────────
+function PaginacaoBar({pagina,totalPag,total,setPagina}){
+  if(!totalPag||totalPag<=1)return null;
+  return React.createElement("div",{style:{display:"flex",justifyContent:"center",alignItems:"center",gap:8,padding:"12px 0",borderTop:"1px solid "+C.border}},
+    React.createElement("button",{style:{...iBtn(C.blue),padding:"5px 12px",fontSize:12},disabled:pagina<=1,onClick:function(){setPagina(function(p){return p-1;})}},"‹"),
+    React.createElement("span",{style:{fontSize:12,color:C.muted}},pagina+" / "+totalPag+(total?" · "+total+" registros":"")),
+    React.createElement("button",{style:{...iBtn(C.blue),padding:"5px 12px",fontSize:12},disabled:pagina>=totalPag,onClick:function(){setPagina(function(p){return p+1;})}},"›")
+  );
+}
 
 function App(){
   const [usuario,setUsuario]=useState(null);
