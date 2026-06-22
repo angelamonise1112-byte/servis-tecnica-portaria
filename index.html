@@ -775,7 +775,16 @@ function NovaOS({setTab,onSave}){
           // Descrição
           React.createElement("div",{style:{gridColumn:"1/-1"}},
             React.createElement("label",{style:base.lbl},"Descrição adicional"),
-            React.createElement("textarea",{style:{...base.inp,height:70},value:desc,onChange:function(e){setDesc(e.target.value);},placeholder:"Detalhes adicionais..."})
+            React.createElement("textarea",{style:{...base.inp,height:70},value:desc,onChange:function(e){
+            var txt=e.target.value;
+            setDesc(txt);
+            // Classificação automática de prioridade por palavra-chave
+            var t=txt.toLowerCase();
+            var alta=["sem funcionar","parado","não abre","nao abre","não funciona","nao funciona","urgente","emergência","emergencia","sem acesso","portão travado","portao travado","sem imagem","cftv parado","alarme disparando","invasão","invasao","incêndio","incendio","preso","trancado"];
+            var media=["intermitente","às vezes","as vezes","lento","ruído","ruido","barulho","falha","instável","instavel","oscilando"];
+            if(alta.some(function(k){return t.indexOf(k)>=0;})){setPri("Alta");}
+            else if(media.some(function(k){return t.indexOf(k)>=0;})){setPri("Media");}
+          },placeholder:"Detalhes adicionais... (a prioridade é sugerida automaticamente)"})
           ),
           // Erro
           erro&&React.createElement("div",{style:{gridColumn:"1/-1",background:C.red+"22",border:"1px solid "+C.red+"44",borderRadius:8,padding:"10px 14px",fontSize:12,color:C.red}},"⚠ "+erro),
@@ -907,7 +916,9 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
   };
 
   const delOS=async function(id){
+    var reg=data.find(function(x){return x.id===id;});
     await sb.from("os").delete().eq("id",id);
+    servisAudit("exclusão","os",id,{nome:window._servisUser},reg?("OS "+(reg.num||"")+" — "+(reg.cond||"")):"");
     setConfirmDel(null);load();if(onSave)onSave();
   };
 
@@ -1540,6 +1551,24 @@ function servisKPIs(kpis){
   }).join("")+"</div>";
 }
 
+// ── AUDITORIA: registra ações sensíveis (exclusão, edição crítica) ──
+async function servisAudit(acao,tabela,registro,usuario,detalhe){
+  try{
+    await sb.from("auditoria_log").insert({
+      id:"aud_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),
+      acao:acao,
+      tabela:tabela,
+      registro_id:String(registro||""),
+      usuario:(usuario&&usuario.nome)||window._servisUser||"desconhecido",
+      detalhe:detalhe||"",
+      data_hora:new Date().toISOString()
+    });
+  }catch(e){
+    // Se a tabela auditoria_log não existir, falha silenciosa (não bloqueia a operação)
+    console.warn("Auditoria não registrada:",e.message);
+  }
+}
+
 function servisRelatorioPDF(titulo,conteudoHTML,usuario,filtros,filial){
   var filialLabel=filial==="CE"?"Ceará (CE)":filial==="PI"?"Piauí (PI)":filial==="MA"?"Maranhão (MA)":"Consolidado — Todas as Filiais";
   var filialCor=filial==="CE"?"#3b82f6":filial==="PI"?"#10b981":filial==="MA"?"#f97316":"#8b5cf6";
@@ -1646,7 +1675,8 @@ function Dashboard({setTab}){
       setLoading(true);
       const[
         {data:osData},{data:tecData},{data:condData},
-        {data:heData},{data:atData},{data:prevData},{data:pedData}
+        {data:heData},{data:atData},{data:prevData},{data:pedData},
+        {data:areaData},{data:condAreaData}
       ]=await Promise.all([
         (async function(){
           let all=[];let from=0;const step=1000;
@@ -1666,7 +1696,9 @@ function Dashboard({setTab}){
         sb.from("horas_extras").select("status,total_h"),
         sb.from("atestados").select("status,tec,retorno"),
         sb.from("preventivas").select("status,retorno"),
-        sb.from("pedidos").select("status")
+        sb.from("pedidos").select("status"),
+        sb.from("areas_responsaveis").select("area,tecnico"),
+        sb.from("condominios").select("nome,area_tecnico")
       ]);
       const os=osData||[];
       const hoje=new Date();
@@ -1773,6 +1805,18 @@ function Dashboard({setTab}){
           var m={};
           osFech.forEach(function(o){if(o.tec)m[o.tec]=(m[o.tec]||0)+1;});
           return Object.entries(m).sort(function(a,b){return b[1]-a[1];}).slice(0,5).map(function(e){return{nome:e[0],qtd:e[1]};});
+        })(),
+        // Produtividade por equipe (área)
+        topEquipes:(function(){
+          // mapear técnico → área
+          var tecArea={};
+          (areaData||[]).forEach(function(a){if(a.tecnico)tecArea[a.tecnico]=a.area;});
+          var m={};
+          osFech.forEach(function(o){
+            var area=o.tec&&tecArea[o.tec]?tecArea[o.tec]:"Sem área";
+            m[area]=(m[area]||0)+1;
+          });
+          return Object.entries(m).sort(function(a,b){return b[1]-a[1];}).slice(0,6).map(function(e){return{nome:e[0],qtd:e[1]};});
         })(),
         // Top condomínios por OS
         topConds:(function(){
@@ -2104,6 +2148,26 @@ function Dashboard({setTab}){
               })
             )
       ),
+      // ── PRODUTIVIDADE POR EQUIPE ──
+      React.createElement("div",{style:{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:16,marginTop:10}},
+        React.createElement("div",{style:{fontWeight:700,fontSize:13,marginBottom:12,color:C.blue}},"👥 Produtividade por Equipe (OS fechadas por área)"),
+        (stats.topEquipes||[]).length===0
+          ?React.createElement("div",{style:{color:C.dim,fontSize:12,textAlign:"center",padding:10}},"Sem dados")
+          :React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px 16px"}},
+              (stats.topEquipes||[]).map(function(e){
+                var max=(stats.topEquipes[0]||{qtd:1}).qtd;
+                return React.createElement("div",{key:e.nome,style:{marginBottom:4}},
+                  React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2}},
+                    React.createElement("span",{style:{color:C.text}},e.nome),
+                    React.createElement("span",{style:{color:C.green,fontWeight:700}},e.qtd)
+                  ),
+                  React.createElement("div",{style:{background:C.border,borderRadius:4,height:5}},
+                    React.createElement("div",{style:{height:"100%",width:Math.round(e.qtd/max*100)+"%",background:C.green,borderRadius:4}})
+                  )
+                );
+              })
+            )
+      ),
       // ── TOP TÉCNICOS + TOP CONDOMÍNIOS + TEMPO MÉDIO ──
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginTop:10}},
         // Top Técnicos
@@ -2207,6 +2271,7 @@ function Preventivas({onSave}){
   const [loading,setLoading]=useState(true);
   const [busca,setBusca]=useState("");
   const [filtStatus,setFiltStatus]=useState("Todos");
+  const [filtMesConc,setFiltMesConc]=useState("");
   const [modal,setModal]=useState(null);
   const [detalhe,setDetalhe]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
@@ -2238,9 +2303,10 @@ function Preventivas({onSave}){
     return (data||[]).filter(function(d){
       var mb=!busca||(d.cond||"").toLowerCase().includes(busca.toLowerCase())||(d.tecnico||"").toLowerCase().includes(busca.toLowerCase());
       var ms=filtStatus==="Todos"||d.status===filtStatus;
-      return mb&&ms;
+      var mc=!filtMesConc||((d.retorno||"").slice(0,7)===filtMesConc);
+      return mb&&ms&&mc;
     });
-  },[data,busca,filtStatus]);
+  },[data,busca,filtStatus,filtMesConc]);
   const paginados=(filtered||[]).slice((pagina-1)*POR_PAG,pagina*POR_PAG);
   const totalPag=Math.ceil((filtered||[]).length/POR_PAG);
 
@@ -2854,8 +2920,16 @@ function Preventivas({onSave}){
           var c=s==="Todos"?C.blue:STATUS_COR[s]||C.blue;
           return React.createElement("button",{key:s,
             style:{...btnStyle(c,filtStatus!==s),fontSize:11,padding:"8px 12px",whiteSpace:"nowrap"},
-            onClick:function(){setFiltStatus(s);}},s);
-        })
+            onClick:function(){setFiltStatus(s);setPagina(1);}},s);
+        }),
+        React.createElement("input",{type:"month",
+          style:{background:C.card2,border:"1px solid "+(filtMesConc?C.blue:C.border),borderRadius:8,padding:"8px 12px",color:C.text,fontSize:11,whiteSpace:"nowrap"},
+          value:filtMesConc,
+          title:"Filtrar por mês de conclusão (retorno)",
+          onChange:function(e){setFiltMesConc(e.target.value);setPagina(1);}}),
+        filtMesConc&&React.createElement("button",{
+          style:{...btnStyle(C.red,true),fontSize:11,padding:"8px 12px"},
+          onClick:function(){setFiltMesConc("");setPagina(1);}},"✕ Limpar mês")
       )
     ),
     // KPIs
@@ -2977,7 +3051,7 @@ function Condominios({onSave}){
     else{await sb.from("condominios").insert(item);}
     setModal(null);load();if(onSave)onSave();
   };
-  const del=async id=>{await sb.from("condominios").delete().eq("id",id);setConfirmDel(null);load();if(onSave)onSave();};
+  const del=async id=>{var reg=data.find(function(x){return x.id===id;});await sb.from("condominios").delete().eq("id",id);servisAudit("exclusão","condominios",id,{nome:window._servisUser},(reg&&reg.nome)||"");setConfirmDel(null);load();if(onSave)onSave();};
   const comEndereco=data.filter(d=>d.endereco).length;
   const comTec=data.filter(d=>d.tecnico).length;
   const EditModal=({item,onClose})=>{
@@ -3206,7 +3280,7 @@ function Tecnicos({onSave}){
     else{await sb.from("tecnicos").insert(item);}
     setModal(null);load();if(onSave)onSave();
   };
-  const del=async id=>{await sb.from("tecnicos").delete().eq("id",id);setConfirmDel(null);load();if(onSave)onSave();};
+  const del=async id=>{var reg=data.find(function(x){return x.id===id;});await sb.from("tecnicos").delete().eq("id",id);servisAudit("exclusão","tecnicos",id,{nome:window._servisUser},(reg&&reg.nome)||"");setConfirmDel(null);load();if(onSave)onSave();};
   const EditModal=({item,onClose})=>{
     const [f,setF]=useState(item||{nome:"",mat:"",escala:"Comercial",tipo:"Técnico Manutenção",status:"Online",telefone:"",obs:"",foto_url:""});
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
@@ -4424,7 +4498,21 @@ function SLA(){
       foraSLA,
       pctSLA,
       tempoMedio,
-      fechadas:fechadas.length
+      fechadas:fechadas.length,
+      // Taxa de SLA mês a mês (últimos 6 meses)
+      slaPorMes:(function(){
+        var meses={};
+        fechadas.forEach(function(o){
+          if(!o.data)return;
+          var mes=(o.data||"").slice(0,7);
+          if(!meses[mes])meses[mes]={dentro:0,total:0};
+          meses[mes].total++;
+          if(o.horasUteis<=48)meses[mes].dentro++;
+        });
+        return Object.entries(meses).sort(function(a,b){return a[0]<b[0]?-1:1;}).slice(-6).map(function(e){
+          return{mes:e[0],pct:e[1].total>0?Math.round(e[1].dentro/e[1].total*100):0,total:e[1].total};
+        });
+      })()
     };
   },[osComSLA]);
 
@@ -4513,6 +4601,22 @@ function SLA(){
           React.createElement("div",{style:{fontSize:26,fontWeight:800,color:C.purple}},stats.tempoMedio+"h"),
           React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"Tempo médio"),
           React.createElement("div",{style:{fontSize:9,color:C.dim,marginTop:2}},`${stats.fechadas} OS fechadas`)
+        )
+      ),
+      // ── TAXA DE SLA MÊS A MÊS ──
+      (stats.slaPorMes||[]).length>0&&React.createElement("div",{style:{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:16,marginBottom:16}},
+        React.createElement("div",{style:{fontWeight:700,fontSize:13,marginBottom:12,color:C.blue}},"📈 Taxa de Cumprimento de SLA (mês a mês)"),
+        React.createElement("div",{style:{display:"flex",alignItems:"flex-end",gap:12,height:120,paddingTop:10}},
+          (stats.slaPorMes||[]).map(function(m){
+            var cor=m.pct>=90?C.green:m.pct>=70?C.yellow:C.red;
+            var mesLabel=m.mes.slice(5,7)+"/"+m.mes.slice(2,4);
+            return React.createElement("div",{key:m.mes,style:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}},
+              React.createElement("div",{style:{fontSize:12,fontWeight:700,color:cor}},m.pct+"%"),
+              React.createElement("div",{style:{width:"100%",maxWidth:48,height:Math.max(4,m.pct)+"px",background:cor,borderRadius:"4px 4px 0 0",transition:"height .3s"}}),
+              React.createElement("div",{style:{fontSize:10,color:C.muted}},mesLabel),
+              React.createElement("div",{style:{fontSize:9,color:C.dim}},m.total+" OS")
+            );
+          })
         )
       ),
       loading?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
@@ -4824,12 +4928,149 @@ function Rastreamento(){
 }
 
 
+// ── MODAL CRONOGRAMA DE IMPLANTAÇÃO ──────────────────────────
+function ModalCronograma({dados,onClose}){
+  const [d,setD]=useState(dados);
+  const upd=function(campo,valor){setD(function(p){var n={...p};n[campo]=valor;return n;});};
+  const updTarefa=function(i,campo,valor){
+    setD(function(p){
+      var ts=p.tarefas.map(function(t,idx){return idx===i?{...t,[campo]:valor}:t;});
+      return {...p,tarefas:ts};
+    });
+  };
+  const addTarefa=function(){
+    setD(function(p){return {...p,tarefas:p.tarefas.concat([{tarefa:"",resp:"",inicio:"",fim:""}])};});
+  };
+  const delTarefa=function(i){
+    setD(function(p){return {...p,tarefas:p.tarefas.filter(function(_,idx){return idx!==i;})};});
+  };
+
+  const fmtData=function(s){
+    if(!s)return "";
+    var p=String(s).split("-");
+    if(p.length!==3)return s;
+    return p[2]+"/"+p[1]+"/"+p[0].slice(2);
+  };
+
+  const exportarPDF=function(){
+    var logo=window.SERVIS_LOGO||LOGO_SERVIS||"";
+    var inicioFmt=d.inicio?(function(){var dt=new Date(d.inicio+"T12:00:00");return dt.toLocaleDateString("pt-BR",{weekday:"short",day:"numeric",month:"numeric",year:"numeric"});})():"";
+    var linhasHtml=d.tarefas.map(function(t,i){
+      var bg=i%2===0?"#ffffff":"#f3efe6";
+      return "<tr style='background:"+bg+"'>"
+        +"<td style='padding:8px 10px;border:1px solid #ccc;font-size:11px'>"+(t.tarefa||"")+"</td>"
+        +"<td style='padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center'>"+(t.resp||"")+"</td>"
+        +"<td style='padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center;background:#d6cdb8'>"+fmtData(t.inicio)+"</td>"
+        +"<td style='padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center;background:#d6cdb8'>"+fmtData(t.fim)+"</td>"
+        +"</tr>";
+    }).join("");
+
+    var html="<!DOCTYPE html><html><head><meta charset='utf-8'><title>Cronograma de Implantação — "+(d.cond||"")+"</title></head>"
+      +"<body style='font-family:Arial,sans-serif;margin:0;padding:30px;background:#fff'>"
+      +"<div style='display:flex;align-items:center;gap:20px;margin-bottom:10px'>"
+      +(logo?"<img src='"+logo+"' style='height:60px'/>":"")
+      +"<div style='flex:1;text-align:center'><div style='font-size:24px;color:#333'>CRONOGRAMA DE IMPLANTAÇÃO</div></div>"
+      +"</div>"
+      +"<table style='width:100%;border-collapse:collapse;margin-bottom:6px'>"
+      +"<tr><td style='font-weight:700;font-size:13px;padding:4px'>"+(d.cond||"—")+"</td>"
+      +"<td style='text-align:right;font-weight:700;font-size:12px;padding:4px'>Início do projeto:</td>"
+      +"<td style='border:1px solid #999;padding:6px 12px;text-align:center;font-size:12px;text-decoration:underline'>"+inicioFmt+"</td></tr>"
+      +"<tr><td style='font-weight:700;font-size:12px;padding:4px'>SÍNDICO(a): "+(d.sindico||"")+"</td></tr>"
+      +"<tr><td style='font-weight:700;font-size:12px;padding:4px'>SUPERVISOR TÉCNICO: "+(d.supervisor||"")+"</td></tr>"
+      +"</table>"
+      +"<table style='width:100%;border-collapse:collapse'>"
+      +"<tr style='background:#5a5a5a;color:#fff'>"
+      +"<th style='padding:10px;border:1px solid #ccc;font-size:12px;text-align:left;width:45%'>TAREFA</th>"
+      +"<th style='padding:10px;border:1px solid #ccc;font-size:12px;width:28%'>ATRIBUÍDO PARA</th>"
+      +"<th style='padding:10px;border:1px solid #ccc;font-size:12px'>INÍCIO</th>"
+      +"<th style='padding:10px;border:1px solid #ccc;font-size:12px'>TÉRMINO</th></tr>"
+      +"<tr style='background:#E87722;color:#fff'><td colspan='4' style='padding:8px 10px;font-weight:700;font-size:12px'>ATIVIDADES</td></tr>"
+      +linhasHtml
+      +"</table>"
+      +"<div style='margin-top:30px;text-align:center;color:#999;font-size:10px'>Servis Tecnologia em Segurança · Gerado em "+new Date().toLocaleString("pt-BR")+"</div>"
+      +"<div class='no-print' style='position:fixed;bottom:20px;right:20px;display:flex;gap:10px'>"
+      +"<button onclick='window.print()' style='background:#1A5FA8;color:#fff;border:none;border-radius:30px;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)'>🖨️ Imprimir / PDF</button>"
+      +"</div>"
+      +"<style>@media print{.no-print{display:none!important;}}</style>"
+      +"</body></html>";
+    var w=window.open("","_blank");
+    w.document.write(html);
+    w.document.close();
+  };
+
+  var th={padding:"8px 6px",fontSize:11,fontWeight:700,color:"#fff",textAlign:"left",borderBottom:"1px solid "+C.border};
+  var inp={width:"100%",background:C.card2,border:"1px solid "+C.border,borderRadius:6,padding:"6px 8px",color:C.text,fontSize:12,boxSizing:"border-box"};
+
+  return React.createElement(Modal,{title:"📅 Cronograma de Implantação",onClose,width:920},
+    // Cabeçalho editável
+    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}},
+      React.createElement("div",null,
+        React.createElement("label",{style:{fontSize:11,color:C.muted,display:"block",marginBottom:3}},"Condomínio"),
+        React.createElement("input",{style:inp,value:d.cond,onChange:function(e){upd("cond",e.target.value);},placeholder:"Nome do condomínio"})
+      ),
+      React.createElement("div",null,
+        React.createElement("label",{style:{fontSize:11,color:C.muted,display:"block",marginBottom:3}},"Início do projeto"),
+        React.createElement("input",{type:"date",style:inp,value:d.inicio,onChange:function(e){upd("inicio",e.target.value);}})
+      ),
+      React.createElement("div",null,
+        React.createElement("label",{style:{fontSize:11,color:C.muted,display:"block",marginBottom:3}},"Síndico(a)"),
+        React.createElement("input",{style:inp,value:d.sindico,onChange:function(e){upd("sindico",e.target.value);},placeholder:"Nome do síndico"})
+      ),
+      React.createElement("div",null,
+        React.createElement("label",{style:{fontSize:11,color:C.muted,display:"block",marginBottom:3}},"Supervisor Técnico"),
+        React.createElement("input",{style:inp,value:d.supervisor,onChange:function(e){upd("supervisor",e.target.value);},placeholder:"Nome do supervisor"})
+      )
+    ),
+    // Tabela de tarefas editável
+    React.createElement("div",{style:{maxHeight:380,overflowY:"auto",border:"1px solid "+C.border,borderRadius:8}},
+      React.createElement("table",{style:{width:"100%",borderCollapse:"collapse"}},
+        React.createElement("thead",null,
+          React.createElement("tr",{style:{background:"#5a5a5a",position:"sticky",top:0}},
+            React.createElement("th",{style:{...th,width:"40%"}},"TAREFA"),
+            React.createElement("th",{style:{...th,width:"25%"}},"ATRIBUÍDO PARA"),
+            React.createElement("th",{style:{...th,width:"14%"}},"INÍCIO"),
+            React.createElement("th",{style:{...th,width:"14%"}},"TÉRMINO"),
+            React.createElement("th",{style:{...th,width:"7%",textAlign:"center"}},"")
+          )
+        ),
+        React.createElement("tbody",null,
+          d.tarefas.map(function(t,i){
+            return React.createElement("tr",{key:i,style:{background:i%2===0?C.card:C.card2}},
+              React.createElement("td",{style:{padding:4,borderBottom:"1px solid "+C.border}},
+                React.createElement("input",{style:{...inp,fontSize:11},value:t.tarefa,onChange:function(e){updTarefa(i,"tarefa",e.target.value);}})
+              ),
+              React.createElement("td",{style:{padding:4,borderBottom:"1px solid "+C.border}},
+                React.createElement("input",{style:{...inp,fontSize:11},value:t.resp,onChange:function(e){updTarefa(i,"resp",e.target.value);}})
+              ),
+              React.createElement("td",{style:{padding:4,borderBottom:"1px solid "+C.border}},
+                React.createElement("input",{type:"date",style:{...inp,fontSize:10},value:t.inicio,onChange:function(e){updTarefa(i,"inicio",e.target.value);}})
+              ),
+              React.createElement("td",{style:{padding:4,borderBottom:"1px solid "+C.border}},
+                React.createElement("input",{type:"date",style:{...inp,fontSize:10},value:t.fim,onChange:function(e){updTarefa(i,"fim",e.target.value);}})
+              ),
+              React.createElement("td",{style:{padding:4,borderBottom:"1px solid "+C.border,textAlign:"center"}},
+                React.createElement("button",{style:{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:14},onClick:function(){delTarefa(i);},title:"Remover"},"🗑")
+              )
+            );
+          })
+        )
+      )
+    ),
+    // Ações
+    React.createElement("div",{style:{display:"flex",gap:8,marginTop:14,justifyContent:"space-between"}},
+      React.createElement("button",{style:{...btnStyle(C.card2,true),fontSize:12},onClick:addTarefa},"+ Adicionar Tarefa"),
+      React.createElement("button",{style:{...btnStyle(C.blue,true),fontSize:12},onClick:exportarPDF},"📄 Exportar PDF")
+    )
+  );
+}
+
 function Instalacoes({onSave}){
   const [data,setData]=useState([]);
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
   const [pagina,setPagina]=useState(1);
+  const [cronograma,setCronograma]=useState(null);
   const STATUS_INST={"Em andamento":{c:C.blue},"Concluída no prazo":{c:C.green},"Concluída com atraso":{c:C.orange},"Cancelada":{c:C.dim}};
 
   function prazo30(dataInicio){
@@ -4897,6 +5138,27 @@ function Instalacoes({onSave}){
       React.createElement("div",null,React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🔨 Instalações"),React.createElement("div",{style:{fontSize:12,color:C.muted}},"Portarias novas — prazo de 30 dias úteis")),
       React.createElement("div",{style:{display:"flex",gap:6}},
           React.createElement("button",{
+            style:{...btnStyle(C.blue,true),fontSize:11,padding:"7px 14px"},
+            onClick:function(){setCronograma({
+              cond:"",sindico:"",supervisor:"",inicio:todayStr(),
+              tarefas:[
+                {tarefa:"Conferência e aprovação do pedido, técnica e comercial",resp:"Técnica, Comercial e Almoxarifado",inicio:"",fim:""},
+                {tarefa:"Reunião de alinhamento e expectativa com o cliente",resp:"Técnica, Comercial e Cliente",inicio:"",fim:""},
+                {tarefa:"Conferência e separação dos equipamentos junto ao almoxarifado",resp:"Almoxarifado",inicio:"",fim:""},
+                {tarefa:"Cadastro de fichas",resp:"",inicio:"",fim:""},
+                {tarefa:"Fixação de tubulação",resp:"Parceiro Servis",inicio:"",fim:""},
+                {tarefa:"Passagem de cabeamento",resp:"Parceiro Servis",inicio:"",fim:""},
+                {tarefa:"Fixação de equipamentos",resp:"Parceiro Servis",inicio:"",fim:""},
+                {tarefa:"Ligação de equipamentos",resp:"Parceiro Servis",inicio:"",fim:""},
+                {tarefa:"Instalação de link",resp:"TI",inicio:"",fim:""},
+                {tarefa:"Configuração de equipamentos",resp:"",inicio:"",fim:""},
+                {tarefa:"Ajustes",resp:"",inicio:"",fim:""},
+                {tarefa:"Checklist / Período de testes",resp:"",inicio:"",fim:""},
+                {tarefa:"Entrega do sistema",resp:"Técnica e Comercial",inicio:"",fim:""}
+              ]
+            });}
+          },"📅 Cronograma"),
+          React.createElement("button",{
             style:{...btnStyle(C.green,true),fontSize:11,padding:"7px 14px"},
             onClick:function(){
               try{
@@ -4948,7 +5210,8 @@ function Instalacoes({onSave}){
       )
     ),
     React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||data||[]).length,setPagina}),
-    modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
+    modal!==null&&React.createElement(EditModal,{item:modal&&modal.id?modal:null,onClose:()=>setModal(null)}),
+    cronograma&&React.createElement(ModalCronograma,{dados:cronograma,onClose:()=>setCronograma(null)}),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir esta instalação?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
   );
 }
@@ -6414,6 +6677,72 @@ function IaDashboard(){
     setLoading(false);
   };
 
+  // Pergunta livre à IA (Claude) com contexto real dos dados
+  const perguntarIA=async function(q){
+    var p=(q||pergunta).trim();
+    if(!p||loading)return;
+    setLoading(true);setResposta(null);
+    var hoje=new Date();
+    var anoAtual=String(hoje.getFullYear());
+    var mesAtual=String(hoje.getMonth()+1).padStart(2,"0");
+    try{
+      var [rosRes,prevRes,tecRes,condRes,heRes,atRes]=await Promise.all([
+        sb.from("os").select("num,data,status,cond,tec,prob,pri,data_fechamento").gte("data",anoAtual+"-01-01").order("data",{ascending:false}),
+        sb.from("preventivas").select("id,cond,status,tecnico,primeira_visita,retorno"),
+        sb.from("tecnicos").select("nome,status"),
+        sb.from("condominios").select("nome,tecnico,area_tecnico"),
+        sb.from("horas_extras").select("tec,status,total_h"),
+        sb.from("atestados").select("tec,status,retorno")
+      ]);
+      var os=rosRes.data||[],prevs=prevRes.data||[],tecs=tecRes.data||[],conds=condRes.data||[],hes=heRes.data||[],ats=atRes.data||[];
+      var osAb=os.filter(function(o){return o.status==="Aberto";});
+      var osFech=os.filter(function(o){return o.status!=="Aberto";});
+      var osMes=os.filter(function(o){return (o.data||"").slice(5,7)===mesAtual;});
+      var slaVenc=osAb.filter(function(o){return (hoje-new Date(o.data))>72*3600000;});
+
+      // Agregações compactas
+      function topMap(arr,campo,n){
+        var m={};arr.forEach(function(x){if(x[campo])m[x[campo]]=(m[x[campo]]||0)+1;});
+        return Object.entries(m).sort(function(a,b){return b[1]-a[1];}).slice(0,n||10);
+      }
+      var topCondAb=topMap(osAb,"cond",10).map(function(e){return e[0]+"("+e[1]+")";}).join(", ");
+      var topTec=topMap(osFech,"tec",10).map(function(e){return e[0]+"("+e[1]+")";}).join(", ");
+      var topProb=topMap(os,"prob",10).map(function(e){return e[0]+"("+e[1]+")";}).join(", ");
+      var prevPend=prevs.filter(function(x){return x.status!=="Concluída";}).length;
+      var prevAtras=prevs.filter(function(x){return x.retorno&&x.retorno<hoje.toISOString().slice(0,10)&&x.status!=="Concluída";}).length;
+
+      var contexto="DADOS OPERACIONAIS DA SERVIS (empresa de portaria remota, alarmes, CFTV, controle de acesso e equipes de campo) — "+anoAtual+":\n"
+        +"- OS: "+os.length+" no ano, "+osAb.length+" abertas, "+osFech.length+" fechadas, "+osMes.length+" neste mês\n"
+        +"- SLA: "+slaVenc.length+" OS vencidas (>72h em aberto)\n"
+        +"- Condomínios com mais OS abertas: "+(topCondAb||"nenhum")+"\n"
+        +"- Técnicos que mais fecharam OS: "+(topTec||"nenhum")+"\n"
+        +"- Tipos de problema mais frequentes: "+(topProb||"nenhum")+"\n"
+        +"- Preventivas: "+prevs.length+" total, "+prevPend+" pendentes, "+prevAtras+" atrasadas\n"
+        +"- Técnicos ativos: "+tecs.filter(function(t){return t.status==="Ativo";}).length+"\n"
+        +"- Condomínios cadastrados: "+conds.length+"\n"
+        +"- Horas extras: "+hes.length+" registros, "+hes.filter(function(h){return h.status==="Pendente";}).length+" pendentes\n"
+        +"- Atestados: "+ats.length+" registros\n";
+
+      var prompt=contexto+"\n\nPERGUNTA DO GESTOR: "+p+"\n\n"
+        +"Responda como um analista de operações sênior da Servis. Seja direto, objetivo e prático. "
+        +"Use os dados acima. Destaque números relevantes, identifique riscos e dê recomendações acionáveis. "
+        +"Use markdown leve (negrito com **, listas com -). Responda em português do Brasil. Máximo 300 palavras.";
+
+      var resp=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1024,messages:[{role:"user",content:prompt}]})
+      });
+      var dataResp=await resp.json();
+      var textoIA=(dataResp.content||[]).filter(function(b){return b.type==="text";}).map(function(b){return b.text;}).join("\n")||"Não consegui gerar uma resposta. Tente reformular a pergunta.";
+      setResposta({texto:textoIA,pergunta:p,viaIA:true});
+      setHistorico(function(h){return [{p,hora:new Date().toLocaleTimeString("pt-BR")},...h].slice(0,8);});
+    }catch(e){
+      setResposta({texto:"⚠ Não consegui consultar a IA agora ("+e.message+"). Tente usar uma das perguntas sugeridas, que funcionam offline.",pergunta:p});
+    }
+    setLoading(false);
+  };
+
   var COR_DESTAQUE="#6366f1";
 
   return React.createElement("div",{style:{background:C.card,border:"1px solid "+C.border,borderRadius:16,overflow:"hidden",marginTop:16}},
@@ -6426,7 +6755,7 @@ function IaDashboard(){
         React.createElement("div",{style:{width:34,height:34,borderRadius:"50%",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}},"✨"),
         React.createElement("div",null,
           React.createElement("div",{style:{fontSize:14,fontWeight:700,color:"#fff"}},"Assistente de Gestão com IA"),
-          React.createElement("div",{style:{fontSize:10,color:"#a5b4fc"}},"Análise inteligente dos seus dados em tempo real")
+          React.createElement("div",{style:{fontSize:10,color:"#a5b4fc"}},"Pergunte qualquer coisa — a IA analisa seus dados reais e responde")
         )
       ),
       React.createElement("div",{style:{color:"#a5b4fc",fontSize:12}},aberto?"▲ Fechar":"▼ Abrir")
@@ -6440,13 +6769,13 @@ function IaDashboard(){
           placeholder:"Digite sua pergunta sobre os dados do sistema...",
           value:pergunta,
           onChange:function(e){setPergunta(e.target.value);},
-          onKeyDown:function(e){if(e.key==="Enter")perguntar();}
+          onKeyDown:function(e){if(e.key==="Enter")perguntarIA();}
         }),
         React.createElement("button",{
           style:{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",border:"none",borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:(loading||!pergunta.trim())?"not-allowed":"pointer",opacity:(loading||!pergunta.trim())?0.6:1,flexShrink:0},
           disabled:loading||!pergunta.trim(),
-          onClick:function(){perguntar();}
-        },loading?"⏳":"✨ Perguntar")
+          onClick:function(){perguntarIA();}
+        },loading?"⏳":"✨ Perguntar à IA")
       ),
 
       // Categorias de perguntas
@@ -6488,7 +6817,12 @@ function IaDashboard(){
           ),
           React.createElement("button",{style:{background:"none",border:"none",color:C.dim,cursor:"pointer",fontSize:16,padding:"0 4px"},onClick:function(){setResposta(null);setPergunta("");}},"✕")
         ),
-        React.createElement("div",{style:{fontSize:13,color:C.text,lineHeight:1.8,whiteSpace:"pre-wrap"}},resposta.texto)
+        React.createElement("div",{style:{fontSize:13,color:C.text,lineHeight:1.8,whiteSpace:"pre-wrap"}},
+          (resposta.texto||"").split("**").map(function(parte,i){
+            return i%2===1?React.createElement("strong",{key:i,style:{color:"#a5b4fc"}},parte):parte;
+          })
+        ),
+        resposta.viaIA&&React.createElement("div",{style:{fontSize:10,color:"#8b5cf6",marginTop:10,fontStyle:"italic"}},"✨ Resposta gerada por IA com base nos seus dados")
       ),
 
       // Histórico
@@ -6878,33 +7212,34 @@ function MapaCalor({tecsBanco=TECNICOS}){
 
 
 const TABS=[
-  {id:"dashboard",icon:"▦",label:"Dashboard"},
-  {id:"nova-os",icon:"＋",label:"Nova OS"},
-  {id:"os",icon:"◉",label:"Ordens de Serviço"},
-  {id:"preventivas",icon:"◈",label:"Preventivas"},
-  {id:"reincidencias",icon:"↺",label:"Reincidências"},
-  {id:"sla",icon:"◈",label:"SLA & Operação"},
-  {id:"os-pendencia",icon:"⚠",label:"OS em Pendência"},
-  {id:"instalacoes",icon:"🔨",label:"Instalações"},
-  {id:"tecnicos",icon:"◎",label:"Técnicos"},
-  {id:"condominios",icon:"▣",label:"Condomínios"},
-  {id:"atestados",icon:"🏥",label:"Atestados",badge:"at"},
-  {id:"horas-extras",icon:"⏱",label:"Horas Extras",badge:"he"},
-  {id:"problemas",icon:"▲",label:"Problemas"},
-  {id:"ranking",icon:"🏆",label:"Ranking"},
-  {id:"rastreamento",icon:"📍",label:"Rastreamento"},
-  {id:"mapa-calor",icon:"🗺",label:"Mapa de Calor"},
-  {id:"particularidades",icon:"🏷",label:"Particularidades"},
-  {id:"reginaldo",icon:"🔧",label:"Serviço Reginaldo"},
-  {id:"pedidos",icon:"🛒",label:"Pedidos"},
-  {id:"demandas",icon:"📌",label:"Demandas Adm.",badge:"new"},
-  {id:"parametros",icon:"📋",label:"Parâmetros"},
-  {id:"organograma",icon:"🏢",label:"Organograma"},
-  {id:"gestao-areas",icon:"🔧",label:"Gestão de Áreas"},
-  {id:"usuarios",icon:"👤",label:"Usuários"},
-  {id:"calendario",icon:"📅",label:"Calendário"},
-  {id:"produtividade",icon:"⚡",label:"Produtividade"},
+  {id:"dashboard",icon:"▦",label:"Dashboard",cat:"Principal"},
+  {id:"nova-os",icon:"＋",label:"Nova OS",cat:"Operacional"},
+  {id:"os",icon:"◉",label:"Ordens de Serviço",cat:"Operacional"},
+  {id:"preventivas",icon:"◈",label:"Preventivas",cat:"Operacional"},
+  {id:"reincidencias",icon:"↺",label:"Reincidências",cat:"Operacional"},
+  {id:"sla",icon:"◈",label:"SLA & Operação",cat:"Operacional"},
+  {id:"os-pendencia",icon:"⚠",label:"OS em Pendência",cat:"Operacional"},
+  {id:"instalacoes",icon:"🔨",label:"Instalações",cat:"Operacional"},
+  {id:"tecnicos",icon:"◎",label:"Técnicos",cat:"Equipe"},
+  {id:"condominios",icon:"▣",label:"Condomínios",cat:"Operacional"},
+  {id:"atestados",icon:"🏥",label:"Atestados",badge:"at",cat:"Equipe"},
+  {id:"horas-extras",icon:"⏱",label:"Horas Extras",badge:"he",cat:"Equipe"},
+  {id:"problemas",icon:"▲",label:"Problemas",cat:"Gestão"},
+  {id:"ranking",icon:"🏆",label:"Ranking",cat:"Equipe"},
+  {id:"rastreamento",icon:"📍",label:"Rastreamento",cat:"Equipe"},
+  {id:"mapa-calor",icon:"🗺",label:"Mapa de Calor",cat:"Gestão"},
+  {id:"particularidades",icon:"🏷",label:"Particularidades",cat:"Operacional"},
+  {id:"reginaldo",icon:"🔧",label:"Serviço Reginaldo",cat:"Operacional"},
+  {id:"pedidos",icon:"🛒",label:"Pedidos",cat:"Gestão"},
+  {id:"demandas",icon:"📌",label:"Demandas Adm.",badge:"new",cat:"Gestão"},
+  {id:"parametros",icon:"📋",label:"Parâmetros",cat:"Configuração"},
+  {id:"organograma",icon:"🏢",label:"Organograma",cat:"Equipe"},
+  {id:"gestao-areas",icon:"🔧",label:"Gestão de Áreas",cat:"Configuração"},
+  {id:"usuarios",icon:"👤",label:"Usuários",cat:"Configuração"},
+  {id:"calendario",icon:"📅",label:"Calendário",cat:"Gestão"},
+  {id:"produtividade",icon:"⚡",label:"Produtividade",cat:"Gestão"},
 ];
+const CAT_ORDEM=["Principal","Operacional","Equipe","Gestão","Configuração"];
 
 
 const RefreshCtx=React.createContext({tick:0,refresh:function(){}});
@@ -7536,6 +7871,24 @@ function PaginacaoBar({pagina,totalPag,total,setPagina}){
 
 function App(){
   const [usuario,setUsuario]=useState(null);
+  const ultimaAtividade=React.useRef(Date.now());
+  // Timeout de sessão por inatividade (30 minutos)
+  useEffect(function(){
+    if(!usuario)return;
+    function registrarAtividade(){ultimaAtividade.current=Date.now();}
+    var eventos=["mousedown","keydown","touchstart","scroll"];
+    eventos.forEach(function(ev){window.addEventListener(ev,registrarAtividade);});
+    var checador=setInterval(function(){
+      if(Date.now()-ultimaAtividade.current>30*60*1000){
+        setUsuario(null);
+        alert("Sessão encerrada por inatividade. Faça login novamente.");
+      }
+    },60*1000);
+    return function(){
+      eventos.forEach(function(ev){window.removeEventListener(ev,registrarAtividade);});
+      clearInterval(checador);
+    };
+  },[usuario]);
   const [refreshTick,setRefreshTick]=useState(0);
   const refresh=useCallback(function(){setRefreshTick(function(t){return t+1;});},[]);
   const [buscaGlobal,setBuscaGlobal]=useState("");
@@ -7623,7 +7976,7 @@ function App(){
     return TABS.filter(t=>["dashboard"].includes(t.id));
   })();
 
-  if(!usuario)return React.createElement(Login,{onLogin:setUsuario});
+  if(!usuario)return React.createElement(Login,{onLogin:function(u){window._servisUser=(u&&u.nome)||"";setUsuario(u);}});
 
   const renderTab=()=>{
     if(isCentral&&!["dashboard","nova-os","os","preventivas"].includes(tab)){
@@ -7705,7 +8058,12 @@ function App(){
             })
           )
         ),
-        tabsVisiveis.map(t=>{
+        CAT_ORDEM.map(function(cat){
+          var tabsCat=tabsVisiveis.filter(function(t){return (t.cat||"Outros")===cat;});
+          if(tabsCat.length===0)return null;
+          return React.createElement("div",{key:cat},
+            cat!=="Principal"&&React.createElement("div",{style:{fontSize:9,fontWeight:700,color:C.dim,textTransform:"uppercase",letterSpacing:1,padding:"10px 14px 4px"}},cat),
+            tabsCat.map(t=>{
           const active=tab===t.id;
           const badgeVal=t.badge==="at"?atCount:t.badge==="he"?heCount:null;
           return React.createElement("div",{key:t.id,onClick:()=>setTab(t.id),style:{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",cursor:"pointer",background:active?C.blue+"18":"transparent",borderLeft:`3px solid ${active?C.blue:"transparent"}`,color:active?C.blue:C.muted,fontSize:13,userSelect:"none"}},
@@ -7714,6 +8072,8 @@ function App(){
             t.badge==="new"&&React.createElement("span",{style:{background:C.blue,color:"#fff",fontSize:9,padding:"1px 5px",borderRadius:10}},"NEW"),
             t.badge==="he"&&React.createElement("span",null,React.createElement("span",{style:{background:C.orange,color:"#fff",fontSize:9,padding:"1px 5px",borderRadius:10,marginRight:3}},"NEW"),badgeVal>0&&React.createElement("span",{style:{background:C.yellow,color:"#000",fontSize:9,padding:"1px 5px",borderRadius:10}},badgeVal)),
             t.badge==="at"&&badgeVal>0&&React.createElement("span",{style:{background:C.yellow,color:"#000",fontSize:9,padding:"1px 5px",borderRadius:10}},badgeVal)
+          );
+        })
           );
         })
       ),
