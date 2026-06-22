@@ -1552,6 +1552,36 @@ function servisKPIs(kpis){
 }
 
 // ── AUDITORIA: registra ações sensíveis (exclusão, edição crítica) ──
+// ── SEGURANÇA DE SENHAS ──
+async function servisHashSenha(senha){
+  // SHA-256 nativo do browser + salt fixo do sistema
+  try{
+    var txt=new TextEncoder().encode("servis_2026_"+senha);
+    var buf=await crypto.subtle.digest("SHA-256",txt);
+    return "h$"+Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,"0");}).join("");
+  }catch(e){
+    return senha; // fallback se crypto não disponível
+  }
+}
+// Verifica senha contra valor armazenado (compatível com senhas antigas em texto plano)
+async function servisVerificarSenha(senhaDigitada,senhaArmazenada){
+  if(!senhaArmazenada)return false;
+  // Se já está com hash (prefixo h$), comparar hash
+  if(String(senhaArmazenada).indexOf("h$")===0){
+    var h=await servisHashSenha(senhaDigitada);
+    return h===senhaArmazenada;
+  }
+  // Senha antiga em texto plano — comparação direta (será migrada no próximo login)
+  return senhaDigitada===senhaArmazenada;
+}
+// Valida força da senha — retorna mensagem de erro ou null se OK
+function servisValidarSenha(senha){
+  if(senha.length<8)return "A senha deve ter no mínimo 8 caracteres";
+  if(!/[A-Za-z]/.test(senha))return "A senha deve conter ao menos uma letra";
+  if(!/[0-9]/.test(senha))return "A senha deve conter ao menos um número";
+  return null;
+}
+
 async function servisAudit(acao,tabela,registro,usuario,detalhe){
   try{
     await sb.from("auditoria_log").insert({
@@ -3950,11 +3980,14 @@ function Usuarios({usuarioAtual}){
       setErr("");
       if(!f.nome.trim()){setErr("Informe o nome do usuário.");return;}
       if(isNovo&&!f.senha){setErr("Informe uma senha.");return;}
-      if(f.senha&&f.senha.length<6){setErr("A senha deve ter no mínimo 6 caracteres.");return;}
+      if(f.senha){
+        var valErro=servisValidarSenha(f.senha);
+        if(valErro){setErr(valErro);return;}
+      }
       if(f.senha&&f.senha!==senhaConf){setErr("As senhas não coincidem.");return;}
       setSaving(true);
       var payload={nome:f.nome.trim(),nivel:f.nivel,ativo:f.ativo,primeiro_acesso:f.primeiro_acesso,foto_url:f.foto_url||null};
-      if(f.senha)payload.senha=f.senha;
+      if(f.senha)payload.senha=await servisHashSenha(f.senha);
       var res;
       if(isNovo){
         payload.id="usr_"+Date.now();
@@ -4014,8 +4047,9 @@ function Usuarios({usuarioAtual}){
             type:showPass?"text":"password",
             style:{...base.inp,paddingRight:40},
             value:f.senha||"",onChange:upd("senha"),
-            placeholder:isNovo?"Mínimo 6 caracteres":"••••••"
+            placeholder:isNovo?"Mín. 8 caracteres, com letra e número":"••••••"
           }),
+          f.senha&&React.createElement("div",{style:{fontSize:10,marginTop:4,color:servisValidarSenha(f.senha)?C.orange:C.green}},servisValidarSenha(f.senha)||"✓ Senha forte"),
           React.createElement("button",{
             style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:C.dim,fontSize:14},
             onClick:function(){setShowPass(function(p){return !p;});}
@@ -6157,24 +6191,59 @@ function Login({onLogin}){
   const [primeiroAcesso,setPrimeiroAcesso]=useState(null);
   const [novaSenha,setNovaSenha]=useState("");
   const [novaSenha2,setNovaSenha2]=useState("");
+  const [tentativas,setTentativas]=useState(0);
+  const [bloqueadoAte,setBloqueadoAte]=useState(0);
   const submit=async()=>{
-    if(!user.trim()||!pass.trim()){setErr("Preencha usuario e senha");return;}
+    // Bloqueio após 5 tentativas falhas
+    if(bloqueadoAte>Date.now()){
+      var seg=Math.ceil((bloqueadoAte-Date.now())/1000);
+      setErr("Muitas tentativas. Aguarde "+seg+" segundos.");return;
+    }
+    if(!user.trim()||!pass.trim()){setErr("Preencha usuário e senha");return;}
     setLoading(true);setErr("");
     try{
       const{data:rows}=await sb.from("usuarios").select("*").eq("nome",user.trim()).eq("ativo",true);
-      if(!rows||rows.length===0){setErr("Usuario nao encontrado");setLoading(false);return;}
-      const u=rows[0];
-      if(u.senha!==pass){setErr("Senha incorreta");setLoading(false);return;}
+      // Mensagem genérica — não revela se o usuário existe
+      var falhou=false;var u=null;
+      if(!rows||rows.length===0){falhou=true;}
+      else{
+        u=rows[0];
+        var ok=await servisVerificarSenha(pass,u.senha);
+        if(!ok)falhou=true;
+      }
+      if(falhou){
+        var novasTent=tentativas+1;
+        setTentativas(novasTent);
+        if(novasTent>=5){
+          setBloqueadoAte(Date.now()+60*1000); // bloqueia 60s
+          setTentativas(0);
+          setErr("Muitas tentativas falhas. Acesso bloqueado por 60 segundos.");
+        }else{
+          setErr("Usuário ou senha incorretos ("+novasTent+"/5)");
+        }
+        setLoading(false);return;
+      }
+      // Login OK — resetar tentativas
+      setTentativas(0);
+      // Migrar senha antiga (texto plano) para hash automaticamente
+      if(String(u.senha).indexOf("h$")!==0){
+        var h=await servisHashSenha(pass);
+        sb.from("usuarios").update({senha:h}).eq("id",u.id);
+      }
       if(u.primeiro_acesso){setPrimeiroAcesso(u);setLoading(false);return;}
+      servisAudit("login","usuarios",u.id,{nome:u.nome},"Login realizado");
       onLogin({nome:u.nome,nivel:u.nivel,id:u.id});
     }catch(e){setErr("Erro ao conectar. Tente novamente.");}
     setLoading(false);
   };
   const definirSenha=async()=>{
-    if(novaSenha.length<4){setErr("Senha deve ter no minimo 4 caracteres");return;}
-    if(novaSenha!==novaSenha2){setErr("As senhas nao conferem");return;}
+    var valErro=servisValidarSenha(novaSenha);
+    if(valErro){setErr(valErro);return;}
+    if(novaSenha!==novaSenha2){setErr("As senhas não conferem");return;}
     setLoading(true);setErr("");
-    await sb.from("usuarios").update({senha:novaSenha,primeiro_acesso:false}).eq("id",primeiroAcesso.id);
+    var h=await servisHashSenha(novaSenha);
+    await sb.from("usuarios").update({senha:h,primeiro_acesso:false}).eq("id",primeiroAcesso.id);
+    servisAudit("definir_senha","usuarios",primeiroAcesso.id,{nome:primeiroAcesso.nome},"Primeira senha definida");
     onLogin({nome:primeiroAcesso.nome,nivel:primeiroAcesso.nivel,id:primeiroAcesso.id});
     setLoading(false);
   };
