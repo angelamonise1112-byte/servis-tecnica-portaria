@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v2.1 INSTALACOES JUN2026 -->
+<!-- SERVIS v2.2 INSTALACOES JUN2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -5640,7 +5640,7 @@ function Instalacoes({onSave}){
     const avaliacao=f.data_entrega_portaria&&f.data_inicio?(f.data_entrega_portaria<=prazo?"⭐ Entregue no prazo!":"🍍 Entregue com atraso!"):null;
     return React.createElement(Modal,{title:item?"✏️ Editar Instalação":"+ Nova Instalação",onClose,width:600},
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
-        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement("select",{style:base.sel,value:f.cond,onChange:upd("cond")},CONDS.map(c=>React.createElement("option",{key:c},c)))),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement(CondoSearch,{value:f.cond,options:(condosOpcoes&&condosOpcoes.length?condosOpcoes:condosDB),onChange:function(v){setF(p=>({...p,cond:v}));}})),
         React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Técnico Responsável"),React.createElement("select",{style:base.sel,value:f.tec,onChange:upd("tec")},React.createElement("option",{value:""},"Selecionar..."),TECNICOS.map(t=>React.createElement("option",{key:t.mat,value:t.nome},t.nome)))),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"📅 Data de Início"),React.createElement("input",{type:"date",style:base.inp,value:f.data_inicio||"",onChange:upd("data_inicio")})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"⏱ Prazo (30 dias úteis)"),React.createElement("div",{style:{...base.inp,background:C.bg,color:C.green,fontWeight:600}},prazo?fmt(prazo):"—")),
@@ -8653,7 +8653,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v2.1 · jun/2026 · instalações")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v2.2 · jun/2026 · instalações")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
