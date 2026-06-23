@@ -3578,7 +3578,7 @@ function Particularidades({onSave}){
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
     return React.createElement(Modal,{title:item?.id?"Editar":"Nova Particularidade",onClose},
       React.createElement("div",{style:{display:"grid",gap:12}},
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement(CondoSearch,{value:f.cond,options:condosOpcoes,onChange:function(v){setF(p=>({...p,cond:v}));}})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement(CondoSearch,{value:f.cond,options:(condosOpcoes&&condosOpcoes.length?condosOpcoes:condosDB),onChange:function(v){setF(p=>({...p,cond:v}));}})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Tag"),React.createElement("select",{style:base.sel,value:f.tag,onChange:upd("tag")},TAGS.map(t=>React.createElement("option",{key:t},t)))),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Informação *"),React.createElement("textarea",{style:{...base.inp,height:80},value:f.info,onChange:upd("info")})),
         React.createElement("div",null,
