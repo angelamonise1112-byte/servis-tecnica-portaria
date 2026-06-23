@@ -474,7 +474,32 @@ function HorasExtras({tecsBanco=TECNICOS,onSave}){
           ))
         )
       ),
-      React.createElement("div",{style:{margin:"14px 0",position:"relative"}},
+      React.createElement("div",{style:{display:"flex",gap:10,margin:"14px 0 10px",flexWrap:"wrap"}},
+        React.createElement("div",{onClick:function(){setFiltStatus("");setFiltTec("");setBusca("");setPagina(1);},style:{flex:1,minWidth:120,cursor:"pointer",background:C.card,border:"1px solid "+C.border,borderRadius:10,padding:"12px 14px"}},
+          React.createElement("div",{style:{fontSize:22,fontWeight:700,color:C.blue}},kpiTotal),
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"Total")),
+        React.createElement("div",{onClick:function(){setFiltStatus("Em andamento");setPagina(1);},style:{flex:1,minWidth:120,cursor:"pointer",background:C.card,border:"1px solid "+(filtStatus==="Em andamento"?C.blue:C.border),borderRadius:10,padding:"12px 14px"}},
+          React.createElement("div",{style:{fontSize:22,fontWeight:700,color:C.cyan}},kpiAndamento),
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"Em andamento")),
+        React.createElement("div",{onClick:function(){setFiltStatus("Em andamento");setPagina(1);},style:{flex:1,minWidth:120,cursor:"pointer",background:C.card,border:"1px solid "+(kpiAtrasadas>0?C.orange:C.border),borderRadius:10,padding:"12px 14px"}},
+          React.createElement("div",{style:{fontSize:22,fontWeight:700,color:C.orange}},kpiAtrasadas),
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"⚠ Atrasadas")),
+        React.createElement("div",{style:{flex:1,minWidth:120,background:C.card,border:"1px solid "+C.border,borderRadius:10,padding:"12px 14px"}},
+          React.createElement("div",{style:{fontSize:22,fontWeight:700,color:C.green}},kpiConcluidas),
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"Concluídas"))
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}},
+        React.createElement("select",{style:{...base.sel,maxWidth:200},value:filtStatus,onChange:function(e){setFiltStatus(e.target.value);setPagina(1);}},
+          React.createElement("option",{value:""},"Todos os status"),
+          Object.keys(STATUS_INST).map(function(s){return React.createElement("option",{key:s,value:s},s);})
+        ),
+        React.createElement("select",{style:{...base.sel,maxWidth:200},value:filtTec,onChange:function(e){setFiltTec(e.target.value);setPagina(1);}},
+          React.createElement("option",{value:""},"Todos os técnicos"),
+          Array.from(new Set((data||[]).map(function(d){return d.tec;}).filter(Boolean))).sort().map(function(tc){return React.createElement("option",{key:tc,value:tc},tc);})
+        ),
+        (filtStatus||filtTec)&&React.createElement("button",{style:{...btnStyle(C.dim,true),fontSize:11},onClick:function(){setFiltStatus("");setFiltTec("");setPagina(1);}},"✕ Limpar filtros")
+      ),
+      React.createElement("div",{style:{margin:"0 0 14px",position:"relative"}},
         React.createElement("span",{style:{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:15,pointerEvents:"none"}},"🔍"),
         React.createElement("input",{
           style:{...base.inp,paddingLeft:40,paddingRight:busca?70:12},
@@ -3508,6 +3533,15 @@ function Tecnicos({onSave}){
       )
     ),
     React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||data||[]).length,setPagina}),
+    React.createElement(PastaCronogramas,{lista:cronogramasSalvos,onAbrir:function(salvo){
+      var ts;try{ts=JSON.parse(salvo.tarefas);}catch(e){ts=[];}
+      setCronograma({id:salvo.id,cond:salvo.cond,sindico:salvo.sindico||"",supervisor:salvo.supervisor||"",inicio:salvo.inicio||"",tarefas:ts});
+    },onExcluir:async function(salvo){
+      if(!confirm("Excluir o cronograma de "+salvo.cond+"?"))return;
+      await sb.from("cronogramas_obra").delete().eq("id",salvo.id);
+      const{data:crs}=await sb.from("cronogramas_obra").select("*").order("criado_em",{ascending:false});
+      setCronogramasSalvos(crs||[]);
+    }}),
     modal!==null&&React.createElement(EditModal,{item:modal&&modal.id?modal:null,onClose:()=>setModal(null)}),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir este técnico?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
   );
@@ -5143,6 +5177,28 @@ function ModalCronograma({dados,onClose,onSave,condos}){
     return p[2]+"/"+p[1]+"/"+p[0].slice(2);
   };
 
+  const exportarExcel=function(){
+    var linhas=[];
+    linhas.push(["CRONOGRAMA DE IMPLANTACAO - SERVIS"]);
+    linhas.push(["Condominio",d.cond||""]);
+    linhas.push(["Sindico",d.sindico||""]);
+    linhas.push(["Supervisor",d.supervisor||""]);
+    linhas.push(["Inicio",fmtData(d.inicio)||""]);
+    linhas.push([]);
+    linhas.push(["#","Tarefa","Responsavel","Inicio","Termino"]);
+    (d.tarefas||[]).forEach(function(t,i){
+      linhas.push([i+1,t.tarefa||"",t.resp||"",fmtData(t.inicio)||"",fmtData(t.fim)||""]);
+    });
+    var csv=linhas.map(function(row){
+      return row.map(function(cel){return '"'+String(cel==null?"":cel).replace(/"/g,'""')+'"';}).join(";");
+    }).join("\r\n");
+    var blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8;"});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");a.href=url;
+    a.download="Cronograma_"+(d.cond||"obra").replace(/[^a-zA-Z0-9]/g,"_")+".csv";
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  };
   const exportarPDF=function(){
     var logo=window.SERVIS_LOGO||LOGO_SERVIS||"";
     var inicioFmt=d.inicio?(function(){var dt=new Date(d.inicio+"T12:00:00");return dt.toLocaleDateString("pt-BR",{weekday:"short",day:"numeric",month:"numeric",year:"numeric"});})():"";
@@ -5252,11 +5308,119 @@ function ModalCronograma({dados,onClose,onSave,condos}){
       React.createElement("button",{style:{...btnStyle(C.card2,true),fontSize:12},onClick:addTarefa},"+ Adicionar Tarefa"),
       React.createElement("div",{style:{display:"flex",gap:8}},
         React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:12,opacity:salvando?0.6:1},disabled:salvando,onClick:salvar},salvando?"Salvando...":"💾 Salvar"),
-        React.createElement("button",{style:{...btnStyle(C.blue,true),fontSize:12},onClick:exportarPDF},"📄 Exportar PDF")
+        React.createElement("button",{style:{...btnStyle(C.cyan,true),fontSize:12},onClick:exportarExcel},"📊 Excel"),
+        React.createElement("button",{style:{...btnStyle(C.blue,true),fontSize:12},onClick:exportarPDF},"📄 PDF")
       )
     )
   );
 }
+
+function PastaCronogramas({lista,onAbrir,onExcluir}){
+  const [aberta,setAberta]=useState(true);
+  const [fMes,setFMes]=useState("");
+  const [fAno,setFAno]=useState("");
+  const [busca,setBusca]=useState("");
+
+  function fmtD(s){if(!s)return "";var p=String(s).split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0].slice(2):s;}
+
+  // Anos e meses disponíveis (a partir de inicio ou criado_em)
+  function refData(c){return c.inicio||(c.criado_em?String(c.criado_em).split("T")[0]:"");}
+  var anos=Array.from(new Set((lista||[]).map(function(c){var d=refData(c);return d?d.slice(0,4):null;}).filter(Boolean))).sort().reverse();
+  var MESES=["01","02","03","04","05","06","07","08","09","10","11","12"];
+  var MESNOME={"01":"Jan","02":"Fev","03":"Mar","04":"Abr","05":"Mai","06":"Jun","07":"Jul","08":"Ago","09":"Set","10":"Out","11":"Nov","12":"Dez"};
+
+  var filtrada=(lista||[]).filter(function(c){
+    var d=refData(c);
+    if(fAno&&d.slice(0,4)!==fAno)return false;
+    if(fMes&&d.slice(5,7)!==fMes)return false;
+    if(busca.trim()&&(c.cond||"").toLowerCase().indexOf(busca.trim().toLowerCase())<0)return false;
+    return true;
+  });
+
+  function tarefasDe(c){try{return JSON.parse(c.tarefas)||[];}catch(e){return [];}}
+
+  function baixarExcel(c){
+    var ts=tarefasDe(c);
+    var linhas=[];
+    linhas.push(["CRONOGRAMA DE IMPLANTAÇÃO - SERVIS"]);
+    linhas.push(["Condomínio",c.cond||""]);
+    linhas.push(["Síndico",c.sindico||""]);
+    linhas.push(["Supervisor",c.supervisor||""]);
+    linhas.push(["Início",fmtD(c.inicio)]);
+    linhas.push([]);
+    linhas.push(["#","Tarefa","Responsável","Início","Término"]);
+    ts.forEach(function(t,i){linhas.push([i+1,t.tarefa||"",t.resp||"",fmtD(t.inicio),fmtD(t.fim)]);});
+    var csv=linhas.map(function(r){return r.map(function(cel){return '"'+String(cel==null?"":cel).replace(/"/g,'""')+'"';}).join(";");}).join("\r\n");
+    var blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8;"});
+    var a=document.createElement("a");a.href=URL.createObjectURL(blob);
+    a.download="Cronograma_"+(c.cond||"obra").replace(/[^a-zA-Z0-9]/g,"_")+".csv";
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+  }
+
+  function baixarPDF(c){
+    var ts=tarefasDe(c);
+    var logo=window.SERVIS_LOGO||(typeof LOGO_SERVIS!=="undefined"?LOGO_SERVIS:"")||"";
+    var linhasHtml=ts.map(function(t,i){
+      return "<tr><td style='text-align:center'>"+(i+1)+"</td><td>"+(t.tarefa||"")+"</td><td>"+(t.resp||"")+"</td><td style='text-align:center'>"+fmtD(t.inicio)+"</td><td style='text-align:center'>"+fmtD(t.fim)+"</td></tr>";
+    }).join("");
+    var html="<html><head><meta charset='utf-8'><title>Cronograma - "+(c.cond||"")+"</title>"+
+      "<style>body{font-family:Arial,sans-serif;color:#1a2238;padding:24px;}"+
+      ".cab{display:flex;align-items:center;gap:16px;border-bottom:3px solid #E87722;padding-bottom:12px;margin-bottom:16px;}"+
+      ".cab img{height:54px;} h1{font-size:18px;color:#1A5FA8;margin:0;} .sub{font-size:12px;color:#555;margin-top:2px;}"+
+      ".info{font-size:12px;margin:4px 0;} table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12px;}"+
+      "th{background:#1A5FA8;color:#fff;padding:8px;text-align:left;} td{border:1px solid #ccc;padding:7px;}"+
+      "tr:nth-child(even) td{background:#f2f6fb;}</style></head><body>"+
+      "<div class='cab'>"+(logo?"<img src='"+logo+"'/>":"")+"<div><h1>Cronograma de Implantação</h1><div class='sub'>SERVIS - Tecnologia em Segurança</div></div></div>"+
+      "<div class='info'><b>Condomínio:</b> "+(c.cond||"")+"</div>"+
+      "<div class='info'><b>Síndico:</b> "+(c.sindico||"")+" &nbsp;&nbsp; <b>Supervisor:</b> "+(c.supervisor||"")+"</div>"+
+      "<div class='info'><b>Início:</b> "+fmtD(c.inicio)+"</div>"+
+      "<table><thead><tr><th style='width:30px'>#</th><th>Tarefa</th><th>Responsável</th><th>Início</th><th>Término</th></tr></thead><tbody>"+linhasHtml+"</tbody></table>"+
+      "</body></html>";
+    var w=window.open("","_blank");
+    if(w){w.document.write(html);w.document.close();setTimeout(function(){w.print();},400);}
+  }
+
+  return React.createElement("div",{style:{margin:"20px 0",background:C.surface,borderRadius:12,border:"1px solid "+C.border,overflow:"hidden"}},
+    React.createElement("div",{onClick:function(){setAberta(!aberta);},style:{display:"flex",alignItems:"center",gap:8,padding:"12px 16px",cursor:"pointer",background:C.card}},
+      React.createElement("span",{style:{fontSize:16}},"📁"),
+      React.createElement("span",{style:{fontWeight:700,fontSize:14,flex:1}},"Cronogramas Salvos"),
+      React.createElement("span",{style:{background:C.blue+"22",color:C.blue,fontSize:11,fontWeight:700,padding:"2px 9px",borderRadius:10}},(lista||[]).length),
+      React.createElement("span",{style:{fontSize:13,color:C.muted}},aberta?"▲":"▼")
+    ),
+    aberta&&React.createElement("div",{style:{padding:"14px 16px"}},
+      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}},
+        React.createElement("input",{style:{...base.inp,maxWidth:220},placeholder:"🔍 Buscar condomínio...",value:busca,onChange:function(e){setBusca(e.target.value);}}),
+        React.createElement("select",{style:{...base.sel,maxWidth:130},value:fMes,onChange:function(e){setFMes(e.target.value);}},
+          React.createElement("option",{value:""},"Todos os meses"),
+          MESES.map(function(m){return React.createElement("option",{key:m,value:m},MESNOME[m]);})
+        ),
+        React.createElement("select",{style:{...base.sel,maxWidth:120},value:fAno,onChange:function(e){setFAno(e.target.value);}},
+          React.createElement("option",{value:""},"Todos os anos"),
+          anos.map(function(a){return React.createElement("option",{key:a,value:a},a);})
+        ),
+        (fMes||fAno||busca)&&React.createElement("button",{style:{...btnStyle(C.dim,true),fontSize:11},onClick:function(){setFMes("");setFAno("");setBusca("");}},"✕ Limpar")
+      ),
+      filtrada.length===0?React.createElement("div",{style:{textAlign:"center",padding:24,color:C.dim,fontSize:13}},(lista||[]).length===0?"Nenhum cronograma salvo ainda. Crie um pela instalação ou pelo botão de cronograma.":"Nenhum cronograma para o filtro selecionado."):
+      React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+        filtrada.map(function(c){
+          var nT=tarefasDe(c).length;
+          return React.createElement("div",{key:c.id,style:{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:C.card,borderRadius:8,border:"1px solid "+C.border,flexWrap:"wrap"}},
+            React.createElement("span",{style:{fontSize:15}},"📋"),
+            React.createElement("div",{style:{flex:1,minWidth:160}},
+              React.createElement("div",{style:{fontWeight:600,fontSize:13}},c.cond||"(sem condomínio)"),
+              React.createElement("div",{style:{fontSize:11,color:C.muted}},nT+" tarefa(s)"+(c.inicio?" · início "+fmtD(c.inicio):"")+(c.supervisor?" · "+c.supervisor:""))
+            ),
+            React.createElement("button",{style:{...btnStyle(C.purple,true),fontSize:11},onClick:function(){onAbrir(c);}},"✏️ Abrir"),
+            React.createElement("button",{style:{...btnStyle(C.cyan,true),fontSize:11},onClick:function(){baixarExcel(c);}},"📊 Excel"),
+            React.createElement("button",{style:{...btnStyle(C.blue,true),fontSize:11},onClick:function(){baixarPDF(c);}},"📄 PDF"),
+            React.createElement("button",{style:{...btnStyle(C.red,true),fontSize:11},onClick:function(){onExcluir(c);}},"🗑")
+          );
+        })
+      )
+    )
+  );
+}
+
 
 // Normaliza texto p/ busca: minúsculas + remove acentos
 function servisNorm(s){
@@ -5279,7 +5443,7 @@ function CondoSearch({value,onChange,options}){
   useEffect(function(){setQ(value||"");},[value]);
   var filtro=q.trim();
   var lista=filtro?FONTE.filter(function(c){return servisMatch(c,filtro);}):FONTE;
-  var listaCorte=lista.slice(0,60);
+  var listaCorte=lista.slice(0,300);
   function escolher(c){onChange(c);setQ(c);setAberto(false);}
   return React.createElement("div",{style:{position:"relative"}},
     React.createElement("input",{
@@ -5298,7 +5462,7 @@ function CondoSearch({value,onChange,options}){
       onBlur:function(){setTimeout(function(){setAberto(false);},180);}
     }),
     React.createElement("span",{style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:C.muted,pointerEvents:"none"}},"🔍"),
-    aberto&&listaCorte.length>0&&React.createElement("div",{style:{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:C.card,border:"1px solid "+C.borderL,borderRadius:8,maxHeight:240,overflowY:"auto",zIndex:50,boxShadow:"0 8px 24px rgba(0,0,0,0.4)"}},
+    aberto&&listaCorte.length>0&&React.createElement("div",{style:{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:C.card,border:"1px solid "+C.borderL,borderRadius:8,maxHeight:320,overflowY:"auto",zIndex:50,boxShadow:"0 8px 24px rgba(0,0,0,0.4)"}},
       listaCorte.map(function(c,i){
         return React.createElement("div",{
           key:c,
@@ -5307,7 +5471,7 @@ function CondoSearch({value,onChange,options}){
           style:{padding:"9px 14px",fontSize:13,cursor:"pointer",background:i===hl?C.blue+"22":"transparent",color:i===hl?C.text:C.muted,borderBottom:i<listaCorte.length-1?"1px solid "+C.border:"none",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}
         },c);
       }),
-      lista.length>60&&React.createElement("div",{style:{padding:"6px 14px",fontSize:11,color:C.dim,textAlign:"center"}},"+"+(lista.length-60)+" — refine a busca")
+      lista.length>300&&React.createElement("div",{style:{padding:"6px 14px",fontSize:11,color:C.dim,textAlign:"center"}},"+"+(lista.length-300)+" — refine a busca")
     ),
     aberto&&listaCorte.length===0&&React.createElement("div",{style:{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:C.card,border:"1px solid "+C.borderL,borderRadius:8,padding:"12px 14px",fontSize:12,color:C.dim,zIndex:50}},"Nenhum condomínio encontrado")
   );
@@ -5352,6 +5516,8 @@ function Instalacoes({onSave}){
   const [pagina,setPagina]=useState(1);
   const [cronograma,setCronograma]=useState(null);
   const [busca,setBusca]=useState("");
+  const [filtStatus,setFiltStatus]=useState("");
+  const [filtTec,setFiltTec]=useState("");
   const [condosDB,setCondosDB]=useState([]);
   const [cronogramasSalvos,setCronogramasSalvos]=useState([]);
   const STATUS_INST={"Em andamento":{c:C.blue},"Concluída no prazo":{c:C.green},"Concluída com atraso":{c:C.orange},"Cancelada":{c:C.dim}};
@@ -5404,13 +5570,26 @@ function Instalacoes({onSave}){
   },[carregarCondos]);
 
   const salvarCronograma=async function(cr){
+    if(!cr.cond){alert("Selecione o condomínio antes de salvar o cronograma.");return;}
     var existente=cronogramasSalvos.find(function(x){return x.cond===cr.cond;});
     var registro={cond:cr.cond,sindico:cr.sindico||"",supervisor:cr.supervisor||"",inicio:cr.inicio||"",tarefas:JSON.stringify(cr.tarefas||[]),criado_em:new Date().toISOString()};
+    var res;
     if(existente){
-      await sb.from("cronogramas_obra").update(registro).eq("id",existente.id);
+      res=await sb.from("cronogramas_obra").update(registro).eq("id",existente.id);
     }else{
       registro.id=uid();
-      await sb.from("cronogramas_obra").insert(registro);
+      res=await sb.from("cronogramas_obra").insert(registro);
+    }
+    if(res&&res.error){
+      var m=res.error.message||"";
+      if(m.indexOf("does not exist")>=0||res.error.code==="42P01"||m.indexOf("Could not find the table")>=0){
+        alert("⚠️ A tabela 'cronogramas_obra' ainda não existe no banco.\n\nÉ preciso criá-la uma vez no Supabase (SQL Editor) para o cronograma poder salvar.");
+      }else if(res.error.code==="RO_BLOCK"){
+        alert("Seu perfil tem acesso somente de leitura. Não é possível salvar o cronograma.");
+      }else{
+        alert("Erro ao salvar o cronograma: "+m);
+      }
+      return;
     }
     const{data:crs}=await sb.from("cronogramas_obra").select("*").order("criado_em",{ascending:false});
     if(crs)setCronogramasSalvos(crs);
@@ -5419,15 +5598,33 @@ function Instalacoes({onSave}){
   useEffect(()=>{load();},[load]);
 
   const filtered=(function(){
-    if(!busca.trim())return data;
-    return data.filter(function(d){
-      return servisMatch(d.cond,busca)||servisMatch(d.tec,busca);
+    return (data||[]).filter(function(d){
+      if(busca.trim()&&!(servisMatch(d.cond,busca)||servisMatch(d.tec,busca)))return false;
+      if(filtStatus&&d.status!==filtStatus)return false;
+      if(filtTec&&d.tec!==filtTec)return false;
+      return true;
     });
   })();
+  // Resumo para KPIs
+  const hojeKpi=new Date().toISOString().split("T")[0];
+  const kpiTotal=(data||[]).length;
+  const kpiAndamento=(data||[]).filter(function(d){return d.status==="Em andamento";}).length;
+  const kpiAtrasadas=(data||[]).filter(function(d){var pz=prazo30(d.data_inicio);return d.status==="Em andamento"&&pz&&hojeKpi>pz;}).length;
+  const kpiConcluidas=(data||[]).filter(function(d){return d.status&&d.status.indexOf("Concluída")===0;}).length;
   const paginados=(filtered||[]).slice((pagina-1)*POR_PAG,pagina*POR_PAG);
   const totalPag=Math.ceil((filtered||[]).length/POR_PAG);
 
   const save=async item=>{
+    // Validação básica
+    if(!item.cond){alert("Selecione o condomínio.");return;}
+    if(item.data_entrega_portaria&&item.data_inicio&&item.data_entrega_portaria<item.data_inicio){
+      alert("A data de entrega não pode ser anterior à data de início.");return;
+    }
+    // Status automático: se entregou e ainda está "Em andamento", classifica por prazo
+    if(item.data_entrega_portaria&&item.data_inicio&&(item.status==="Em andamento"||!item.status)){
+      var pz=prazo30(item.data_inicio);
+      item.status=(pz&&item.data_entrega_portaria<=pz)?"Concluída no prazo":"Concluída com atraso";
+    }
     if(item.id&&data.find(x=>x.id===item.id)){await sb.from("instalacoes").update(item).eq("id",item.id);}
     else{await sb.from("instalacoes").insert(item);}
     setModal(null);load();if(onSave)onSave();
@@ -5436,7 +5633,7 @@ function Instalacoes({onSave}){
 
   const EditModal=({item,onClose})=>{
     const ehNovo=!item?.id;
-    const [f,setF]=useState(item||{cond:CONDS[0],tec:"",data_inicio:todayStr(),data_retirada_material:"",data_inicio_obra:"",data_reuniao_alinhamento:"",data_entrega_dispositivo:"",data_checklist:"",data_entrega_portaria:"",status:"Em andamento",obs:""});
+    const [f,setF]=useState(item||{cond:"",tec:"",data_inicio:todayStr(),data_retirada_material:"",data_inicio_obra:"",data_reuniao_alinhamento:"",data_entrega_dispositivo:"",data_checklist:"",data_entrega_portaria:"",status:"Em andamento",obs:""});
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
     const prazo=prazo30(f.data_inicio);
     const avaliacao=f.data_entrega_portaria&&f.data_inicio?(f.data_entrega_portaria<=prazo?"⭐ Entregue no prazo!":"🍍 Entregue com atraso!"):null;
