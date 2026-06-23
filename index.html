@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v2.2 INSTALACOES JUN2026 -->
+<!-- SERVIS v2.3 INSTALACOES JUN2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -3704,30 +3704,7 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
       ),
       React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16,flexWrap:"wrap"}},
         React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
-        React.createElement("button",{style:btnStyle(C.purple),onClick:async function(){
-          if(!f.cond){alert("Selecione o condomínio antes de criar o cronograma.");return;}
-          var item={...f,id:f.id||uid()};
-          await save(item);
-          // abre o cronograma já preenchido com os marcos desta instalação
-          var salvo=cronogramasSalvos.find(function(x){return x.cond===item.cond;});
-          if(salvo){
-            var ts; try{ts=JSON.parse(salvo.tarefas);}catch(e){ts=[];}
-            setCronograma({id:salvo.id,cond:salvo.cond,sindico:salvo.sindico||"",supervisor:salvo.supervisor||"",inicio:salvo.inicio||"",tarefas:ts});
-          }else{
-            setCronograma({
-              cond:item.cond||"",sindico:"",supervisor:item.tec||"",inicio:item.data_inicio||todayStr(),
-              tarefas:[
-                {tarefa:"Conferência e aprovação do projeto",resp:item.tec||"",inicio:item.data_inicio||"",fim:""},
-                {tarefa:"Retirada de material",resp:item.tec||"",inicio:item.data_retirada_material||"",fim:""},
-                {tarefa:"Início da obra",resp:item.tec||"",inicio:item.data_inicio_obra||"",fim:""},
-                {tarefa:"Reunião de alinhamento",resp:item.tec||"",inicio:item.data_reuniao_alinhamento||"",fim:""},
-                {tarefa:"Entrega de dispositivos",resp:item.tec||"",inicio:item.data_entrega_dispositivo||"",fim:""},
-                {tarefa:"Checklist final",resp:item.tec||"",inicio:item.data_checklist||"",fim:""},
-                {tarefa:"Entrega da portaria",resp:item.tec||"",inicio:item.data_entrega_portaria||"",fim:""}
-              ]
-            });
-          }
-        }},"📅 Salvar e criar cronograma"),
+        
         React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"💾 Salvar")
       )
     );
@@ -5654,8 +5631,9 @@ function Instalacoes({onSave}){
         React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Obs"),React.createElement("textarea",{style:{...base.inp,height:50},value:f.obs||"",onChange:upd("obs")}))
       ),
       avaliacao&&React.createElement("div",{style:{background:f.data_entrega_portaria<=prazo?C.green+"22":C.orange+"22",borderRadius:8,padding:"10px 14px",marginTop:8,textAlign:"center",fontWeight:700,fontSize:14}},avaliacao),
-      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16,flexWrap:"wrap"}},
         React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+        React.createElement("button",{style:btnStyle(C.purple),onClick:async function(){if(!f.cond){alert("Selecione o condomínio antes de criar o cronograma.");return;}var item={...f,id:f.id||uid()};await save(item);var salvo=cronogramasSalvos.find(function(x){return x.cond===item.cond;});if(salvo){var ts;try{ts=JSON.parse(salvo.tarefas);}catch(e){ts=[];}setCronograma({id:salvo.id,cond:salvo.cond,sindico:salvo.sindico||"",supervisor:salvo.supervisor||"",inicio:salvo.inicio||"",tarefas:ts});}else{setCronograma({cond:item.cond||"",sindico:"",supervisor:item.tec||"",inicio:item.data_inicio||todayStr(),tarefas:[{tarefa:"Conferência e aprovação do projeto",resp:item.tec||"",inicio:item.data_inicio||"",fim:""},{tarefa:"Retirada de material",resp:item.tec||"",inicio:item.data_retirada_material||"",fim:""},{tarefa:"Início da obra",resp:item.tec||"",inicio:item.data_inicio_obra||"",fim:""},{tarefa:"Reunião de alinhamento",resp:item.tec||"",inicio:item.data_reuniao_alinhamento||"",fim:""},{tarefa:"Entrega de dispositivos",resp:item.tec||"",inicio:item.data_entrega_dispositivo||"",fim:""},{tarefa:"Checklist final",resp:item.tec||"",inicio:item.data_checklist||"",fim:""},{tarefa:"Entrega da portaria",resp:item.tec||"",inicio:item.data_entrega_portaria||"",fim:""}]});}}},"📅 Salvar e criar cronograma"),
         React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"💾 Salvar")
       )
     );
@@ -8653,7 +8631,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v2.2 · jun/2026 · instalações")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v2.3 · jun/2026 · instalações")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
