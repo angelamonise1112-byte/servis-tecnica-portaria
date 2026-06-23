@@ -3204,9 +3204,10 @@ function Condominios({onSave}){
   const save=async item=>{
     if(item.id&&data.find(x=>x.id===item.id)){await sb.from("condominios").update(item).eq("id",item.id);}
     else{await sb.from("condominios").insert(item);}
+    try{var bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"condominios"});bc.close();}catch(e){}
     setModal(null);load();if(onSave)onSave();
   };
-  const del=async id=>{var reg=data.find(function(x){return x.id===id;});await sb.from("condominios").delete().eq("id",id);servisAudit("exclusão","condominios",id,{nome:window._servisUser},(reg&&reg.nome)||"");setConfirmDel(null);load();if(onSave)onSave();};
+  const del=async id=>{var reg=data.find(function(x){return x.id===id;});await sb.from("condominios").delete().eq("id",id);servisAudit("exclusão","condominios",id,{nome:window._servisUser},(reg&&reg.nome)||"");try{var bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"condominios"});bc.close();}catch(e){}setConfirmDel(null);load();if(onSave)onSave();};
   const comEndereco=data.filter(d=>d.endereco).length;
   const comTec=data.filter(d=>d.tecnico).length;
   const EditModal=({item,onClose})=>{
@@ -3543,7 +3544,7 @@ function Particularidades({onSave}){
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
     return React.createElement(Modal,{title:item?.id?"Editar":"Nova Particularidade",onClose},
       React.createElement("div",{style:{display:"grid",gap:12}},
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement(CondoSearch,{value:f.cond,options:condosDB,onChange:function(v){setF(p=>({...p,cond:v}));}})),
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Condomínio *"),React.createElement(CondoSearch,{value:f.cond,options:condosOpcoes,onChange:function(v){setF(p=>({...p,cond:v}));}})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Tag"),React.createElement("select",{style:base.sel,value:f.tag,onChange:upd("tag")},TAGS.map(t=>React.createElement("option",{key:t},t)))),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"Informação *"),React.createElement("textarea",{style:{...base.inp,height:80},value:f.info,onChange:upd("info")})),
         React.createElement("div",null,
@@ -5369,15 +5370,38 @@ function Instalacoes({onSave}){
 
   const load=useCallback(async()=>{
     setLoading(true);
-    // Carrega condomínios e cronogramas em paralelo (não depende das instalações)
-    sb.from("condominios").select("nome").order("nome",{ascending:true}).then(function(res){
-      var cds=res&&res.data;
-      if(cds&&cds.length){setCondosDB(cds.map(function(c){return c.nome;}).filter(Boolean));}
-    });
     try{sb.from("cronogramas_obra").select("*").order("criado_em",{ascending:false}).then(function(res){if(res&&res.data)setCronogramasSalvos(res.data);});}catch(e){}
     const{data:rows}=await sb.from("instalacoes").select("*").order("data_inicio",{ascending:false});
     setData(rows||[]);setLoading(false);
   },[]);
+
+  // Lista final p/ o seletor: banco + nomes já usados em instalações (sem duplicar)
+  const condosOpcoes=useMemo(function(){
+    var set={};
+    (condosDB||[]).forEach(function(n){if(n)set[n]=true;});
+    (data||[]).forEach(function(d){if(d&&d.cond)set[d.cond]=true;});
+    return Object.keys(set).sort(function(a,b){return a.localeCompare(b,"pt");});
+  },[condosDB,data]);
+
+  // Carrega TODOS os condomínios do banco (independente das instalações)
+  const carregarCondos=useCallback(function(){
+    sb.from("condominios").select("nome").order("nome",{ascending:true}).then(function(res){
+      if(res&&res.error){console.error("Erro ao carregar condomínios:",res.error.message);return;}
+      var cds=(res&&res.data)||[];
+      var nomes=cds.map(function(c){return c.nome;}).filter(Boolean);
+      if(nomes.length)setCondosDB(nomes);
+    });
+  },[]);
+  useEffect(function(){carregarCondos();},[carregarCondos]);
+  // Sincroniza quando um condomínio é criado/editado/excluído em outra aba
+  useEffect(function(){
+    var bc;
+    try{
+      bc=new BroadcastChannel("servis_refresh");
+      bc.onmessage=function(ev){ if(ev&&ev.data&&ev.data.type==="condominios"){carregarCondos();} };
+    }catch(e){}
+    return function(){try{if(bc)bc.close();}catch(e){}};
+  },[carregarCondos]);
 
   const salvarCronograma=async function(cr){
     var existente=cronogramasSalvos.find(function(x){return x.cond===cr.cond;});
