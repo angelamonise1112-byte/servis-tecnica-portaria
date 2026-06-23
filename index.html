@@ -3666,8 +3666,32 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
           React.createElement("textarea",{style:{...base.inp,height:60},value:f.obs||"",onChange:upd("obs"),placeholder:"Observações adicionais..."})
         )
       ),
-      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16,flexWrap:"wrap"}},
         React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+        React.createElement("button",{style:btnStyle(C.purple),onClick:async function(){
+          if(!f.cond){alert("Selecione o condomínio antes de criar o cronograma.");return;}
+          var item={...f,id:f.id||uid()};
+          await save(item);
+          // abre o cronograma já preenchido com os marcos desta instalação
+          var salvo=cronogramasSalvos.find(function(x){return x.cond===item.cond;});
+          if(salvo){
+            var ts; try{ts=JSON.parse(salvo.tarefas);}catch(e){ts=[];}
+            setCronograma({id:salvo.id,cond:salvo.cond,sindico:salvo.sindico||"",supervisor:salvo.supervisor||"",inicio:salvo.inicio||"",tarefas:ts});
+          }else{
+            setCronograma({
+              cond:item.cond||"",sindico:"",supervisor:item.tec||"",inicio:item.data_inicio||todayStr(),
+              tarefas:[
+                {tarefa:"Conferência e aprovação do projeto",resp:item.tec||"",inicio:item.data_inicio||"",fim:""},
+                {tarefa:"Retirada de material",resp:item.tec||"",inicio:item.data_retirada_material||"",fim:""},
+                {tarefa:"Início da obra",resp:item.tec||"",inicio:item.data_inicio_obra||"",fim:""},
+                {tarefa:"Reunião de alinhamento",resp:item.tec||"",inicio:item.data_reuniao_alinhamento||"",fim:""},
+                {tarefa:"Entrega de dispositivos",resp:item.tec||"",inicio:item.data_entrega_dispositivo||"",fim:""},
+                {tarefa:"Checklist final",resp:item.tec||"",inicio:item.data_checklist||"",fim:""},
+                {tarefa:"Entrega da portaria",resp:item.tec||"",inicio:item.data_entrega_portaria||"",fim:""}
+              ]
+            });
+          }
+        }},"📅 Salvar e criar cronograma"),
         React.createElement("button",{style:btnStyle(C.blue),onClick:()=>save({...f,id:f.id||uid()})},"💾 Salvar")
       )
     );
@@ -5233,20 +5257,33 @@ function ModalCronograma({dados,onClose,onSave,condos}){
   );
 }
 
+// Normaliza texto p/ busca: minúsculas + remove acentos
+function servisNorm(s){
+  return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+}
+// Casa se TODAS as palavras digitadas aparecem no alvo (qualquer posição/ordem)
+function servisMatch(alvo,consulta){
+  var a=servisNorm(alvo);
+  var termos=servisNorm(consulta).split(/\s+/).filter(Boolean);
+  if(!termos.length)return true;
+  return termos.every(function(t){return a.indexOf(t)>=0;});
+}
 function CondoSearch({value,onChange,options}){
-  var FONTE=(options&&options.length)?options:CONDS;
+  var temBanco=options&&options.length>0;
+  var FONTE=temBanco?options:CONDS;
+  var ph=temBanco?("Buscar entre "+FONTE.length+" condomínios..."):"Digite para buscar condomínio...";
   const [q,setQ]=useState(value||"");
   const [aberto,setAberto]=useState(false);
   const [hl,setHl]=useState(0);
   useEffect(function(){setQ(value||"");},[value]);
-  var filtro=q.trim().toLowerCase();
-  var lista=filtro?FONTE.filter(function(c){return c.toLowerCase().indexOf(filtro)>=0;}):FONTE;
+  var filtro=q.trim();
+  var lista=filtro?FONTE.filter(function(c){return servisMatch(c,filtro);}):FONTE;
   var listaCorte=lista.slice(0,60);
   function escolher(c){onChange(c);setQ(c);setAberto(false);}
   return React.createElement("div",{style:{position:"relative"}},
     React.createElement("input",{
       style:{...base.inp,paddingRight:30},
-      placeholder:"Digite para buscar condomínio...",
+      placeholder:ph,
       value:q,
       onChange:function(e){setQ(e.target.value);setAberto(true);setHl(0);onChange(e.target.value);},
       onFocus:function(){setAberto(true);},
@@ -5332,11 +5369,14 @@ function Instalacoes({onSave}){
 
   const load=useCallback(async()=>{
     setLoading(true);
+    // Carrega condomínios e cronogramas em paralelo (não depende das instalações)
+    sb.from("condominios").select("nome").order("nome",{ascending:true}).then(function(res){
+      var cds=res&&res.data;
+      if(cds&&cds.length){setCondosDB(cds.map(function(c){return c.nome;}).filter(Boolean));}
+    });
+    try{sb.from("cronogramas_obra").select("*").order("criado_em",{ascending:false}).then(function(res){if(res&&res.data)setCronogramasSalvos(res.data);});}catch(e){}
     const{data:rows}=await sb.from("instalacoes").select("*").order("data_inicio",{ascending:false});
     setData(rows||[]);setLoading(false);
-    const{data:cds}=await sb.from("condominios").select("nome").order("nome",{ascending:true});
-    if(cds&&cds.length){setCondosDB(cds.map(function(c){return c.nome;}).filter(Boolean));}
-    try{const{data:crs}=await sb.from("cronogramas_obra").select("*").order("criado_em",{ascending:false});if(crs)setCronogramasSalvos(crs);}catch(e){}
   },[]);
 
   const salvarCronograma=async function(cr){
@@ -5356,9 +5396,8 @@ function Instalacoes({onSave}){
 
   const filtered=(function(){
     if(!busca.trim())return data;
-    var q=busca.trim().toLowerCase();
     return data.filter(function(d){
-      return (d.cond||"").toLowerCase().indexOf(q)>=0||(d.tec||"").toLowerCase().indexOf(q)>=0;
+      return servisMatch(d.cond,busca)||servisMatch(d.tec,busca);
     });
   })();
   const paginados=(filtered||[]).slice((pagina-1)*POR_PAG,pagina*POR_PAG);
