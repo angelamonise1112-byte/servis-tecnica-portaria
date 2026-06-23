@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v2.3 INSTALACOES JUN2026 -->
+<!-- SERVIS v2.4 INSTALACOES JUN2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -3534,15 +3534,7 @@ function Tecnicos({onSave}){
       )
     ),
     React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||data||[]).length,setPagina}),
-    React.createElement(PastaCronogramas,{lista:cronogramasSalvos,onAbrir:function(salvo){
-      var ts;try{ts=JSON.parse(salvo.tarefas);}catch(e){ts=[];}
-      setCronograma({id:salvo.id,cond:salvo.cond,sindico:salvo.sindico||"",supervisor:salvo.supervisor||"",inicio:salvo.inicio||"",tarefas:ts});
-    },onExcluir:async function(salvo){
-      if(!confirm("Excluir o cronograma de "+salvo.cond+"?"))return;
-      await sb.from("cronogramas_obra").delete().eq("id",salvo.id);
-      const{data:crs}=await sb.from("cronogramas_obra").select("*").order("criado_em",{ascending:false});
-      setCronogramasSalvos(crs||[]);
-    }}),
+    
     modal!==null&&React.createElement(EditModal,{item:modal&&modal.id?modal:null,onClose:()=>setModal(null)}),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir este técnico?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
   );
@@ -5717,6 +5709,15 @@ function Instalacoes({onSave}){
       )
     ),
     React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||data||[]).length,setPagina}),
+    React.createElement(PastaCronogramas,{lista:cronogramasSalvos,onAbrir:function(salvo){
+      var ts;try{ts=JSON.parse(salvo.tarefas);}catch(e){ts=[];}
+      setCronograma({id:salvo.id,cond:salvo.cond,sindico:salvo.sindico||"",supervisor:salvo.supervisor||"",inicio:salvo.inicio||"",tarefas:ts});
+    },onExcluir:async function(salvo){
+      if(!confirm("Excluir o cronograma de "+salvo.cond+"?"))return;
+      await sb.from("cronogramas_obra").delete().eq("id",salvo.id);
+      const{data:crs}=await sb.from("cronogramas_obra").select("*").order("criado_em",{ascending:false});
+      setCronogramasSalvos(crs||[]);
+    }}),
     modal!==null&&React.createElement(EditModal,{item:modal&&modal.id?modal:null,onClose:()=>setModal(null)}),
     cronograma&&React.createElement(ModalCronograma,{dados:cronograma,onClose:()=>setCronograma(null),onSave:salvarCronograma,condos:condosDB}),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir esta instalação?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
@@ -8631,7 +8632,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v2.3 · jun/2026 · instalações")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v2.4 · jun/2026 · instalações")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
