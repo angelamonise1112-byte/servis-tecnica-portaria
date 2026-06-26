@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v2.4 INSTALACOES JUN2026 -->
+<!-- SERVIS v2.5 TEMPOREAL JUN2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -97,6 +97,17 @@ const sb=new Proxy(sbRaw,{
     return target[prop];
   }
 });
+
+// ===== Supabase Realtime: avisa o front quando uma tabela muda (entre usuários) =====
+function servisRealtime(tabela, callback){
+  try{
+    var ch=sbRaw.channel("rt_"+tabela+"_"+Math.random().toString(36).slice(2,7));
+    ch.on("postgres_changes",{event:"*",schema:"public",table:tabela},function(){
+      try{callback();}catch(e){}
+    }).subscribe();
+    return function(){ try{sbRaw.removeChannel(ch);}catch(e){} };
+  }catch(e){ return function(){}; }
+}
 // Carregar logo do localStorage
 window.SERVIS_LOGO=localStorage.getItem("servis_logo")||SERVIS_LOGO||"";
 // Sincronizar com a variável global da função de relatório
@@ -631,7 +642,7 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
           ),
           React.createElement("select",{style:{...base.sel,width:130},value:filtStatus,onChange:function(e){setFiltStatus(e.target.value);setPagina(1);}},
             React.createElement("option",{value:""},"Todos status"),
-            ["Pendente","Em Análise","Aprovado","Afastado","Alta"].map(function(s){return React.createElement("option",{key:s},s);})
+            ["Pendente","Em análise","Aprovado","Afastado","Alta"].map(function(s){return React.createElement("option",{key:s},s);})
           )
         )
       ),
@@ -641,7 +652,7 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
             onClick:function(){
               try{
                 var linhas=(filtered||[]).map(function(d){return [d.tec||"",d.mat||"",d.data||"",d.retorno||"",d.status||"",d.obs||""];});
-                var kpis=servisKPIs([{l:"Total",v:(filtered||[]).length},{l:"Afastados",v:(filtered||[]).filter(function(d){return d.status==="Afastado";}).length},{l:"Em Análise",v:(filtered||[]).filter(function(d){return d.status==="Em Análise";}).length},{l:"Alta",v:(filtered||[]).filter(function(d){return d.status==="Alta";}).length}]);
+                var kpis=servisKPIs([{l:"Total",v:(filtered||[]).length},{l:"Afastados",v:(filtered||[]).filter(function(d){return d.status==="Afastado";}).length},{l:"Em análise",v:(filtered||[]).filter(function(d){return d.status==="Em análise";}).length},{l:"Alta",v:(filtered||[]).filter(function(d){return d.status==="Alta";}).length}]);
                 servisRelatorioPDF("Relatório de Atestados",kpis+servisTabela(["Técnico","Mat.","Data","Retorno","Status","Obs"],linhas),window._servisUser||"","Período: "+filtAno+" / "+(filtMes||"todos"),"CE");
               }catch(e){alert("Erro: "+e.message);}
             }
@@ -653,7 +664,7 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
       React.createElement(Grid,{cols:4,mb:16},
         React.createElement(KPI,{label:"Total",value:data.length,color:C.blue}),
         React.createElement(KPI,{label:"Aprovados",value:data.filter(d=>d.status==="Aprovado").length,color:C.green}),
-        React.createElement(KPI,{label:"Em Análise",value:data.filter(d=>d.status==="Em análise").length,color:C.yellow}),
+        React.createElement(KPI,{label:"Em análise",value:data.filter(d=>d.status==="Em análise").length,color:C.yellow}),
         React.createElement(KPI,{label:"Afastados",value:data.filter(d=>{const r=new Date(d.retorno);return r>new Date()&&d.status==="Aprovado";}).length,color:C.red})
       ),
       React.createElement("div",{style:{display:"flex",gap:8,marginBottom:12}},
@@ -965,6 +976,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
   },[]);
 
   useEffect(function(){load();},[load,tick]);
+  useEffect(function(){return servisRealtime("os",function(){load();});},[load]);
 
   const anos=useMemo(function(){
     return [...new Set(data.map(function(d){return d.data?d.data.slice(0,4):"";}).filter(Boolean))].sort().reverse();
@@ -2456,6 +2468,7 @@ function Preventivas({onSave}){
     setData(prevs);setLoading(false);
   },[]);
   useEffect(function(){load();},[load,tick]);
+  useEffect(function(){return servisRealtime("preventivas",function(){load();});},[load]);
 
   const filtered=useMemo(function(){
     return (data||[]).filter(function(d){
@@ -3635,6 +3648,7 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
+  useEffect(function(){return servisRealtime("os_pendencia",function(){load();});},[load]);
 
   const sorted=useMemo(()=>[...data].filter(d=>{
     const matchBusca=!busca||(d.cond||"").toLowerCase().includes(busca.toLowerCase())||(d.num||"").includes(busca)||(d.prob||"").toLowerCase().includes(busca.toLowerCase());
@@ -5566,6 +5580,7 @@ function Instalacoes({onSave}){
     alert("Cronograma de "+cr.cond+" salvo com sucesso!");
   };
   useEffect(()=>{load();},[load]);
+  useEffect(function(){return servisRealtime("instalacoes",function(){load();});},[load]);
 
   const filtered=(function(){
     return (data||[]).filter(function(d){
@@ -5579,7 +5594,8 @@ function Instalacoes({onSave}){
   const hojeKpi=new Date().toISOString().split("T")[0];
   const kpiTotal=(data||[]).length;
   const kpiAndamento=(data||[]).filter(function(d){return d.status==="Em andamento";}).length;
-  const kpiAtrasadas=(data||[]).filter(function(d){var pz=prazo30(d.data_inicio);return d.status==="Em andamento"&&pz&&hojeKpi>pz;}).length;
+  var estaAtrasada=function(d){var pz=prazo30(d.data_inicio);return d.status==="Em andamento"&&pz&&(new Date().toISOString().split("T")[0])>pz;};
+  const kpiAtrasadas=(data||[]).filter(estaAtrasada).length;
   const kpiConcluidas=(data||[]).filter(function(d){return d.status&&d.status.indexOf("Concluída")===0;}).length;
   const paginados=(filtered||[]).slice((pagina-1)*POR_PAG,pagina*POR_PAG);
   const totalPag=Math.ceil((filtered||[]).length/POR_PAG);
@@ -5685,7 +5701,7 @@ function Instalacoes({onSave}){
           rows:paginados.map(function(d){
             var prazo=prazo30(d.data_inicio);
             var aval=avaliarInstalacao(d);
-            var atrasada=d.status==="Em andamento"&&prazo&&hoje>prazo;
+            var atrasada=estaAtrasada(d);
             return [
               React.createElement("span",{style:{fontWeight:600,fontSize:11}},d.cond),
               React.createElement("span",{style:{fontSize:11}},d.tec||"—"),
@@ -8632,7 +8648,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v2.4 · jun/2026 · instalações")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v2.5 · jun/2026 · tempo real")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
