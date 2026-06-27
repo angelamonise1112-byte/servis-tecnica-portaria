@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v2.9 MATERIAIS JUN2026 -->
+<!-- SERVIS v3.0 JUN2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -8334,14 +8334,18 @@ function ProdutividadeDiaria({usuario}){
           React.createElement("div",{style:{fontSize:12,color:"#8899bb",marginTop:2}},hojeLabel+" · "+agora.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}))
         ),
         React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}},
-          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,background:C.card,border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px"}},
-            React.createElement("span",null,"📅"),
+          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:2,background:C.card,border:"1px solid "+C.border,borderRadius:8,padding:"3px 6px"}},
+            React.createElement("button",{type:"button",title:"Dia anterior",style:{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:14,padding:"2px 6px"},onClick:function(){var d=new Date(filtData+"T12:00:00");d.setDate(d.getDate()-1);setFiltData(d.toISOString().split("T")[0]);}},"◀"),
+            React.createElement("span",{style:{cursor:"pointer"},onClick:function(){var el=document.getElementById("prodDateInput");if(el){try{el.showPicker();}catch(e){el.focus();el.click();}}}},"📅"),
             React.createElement("input",{
+              id:"prodDateInput",
               type:"date",
-              style:{background:"transparent",border:"none",color:C.text,fontSize:12,outline:"none",cursor:"pointer"},
+              style:{background:"transparent",border:"none",color:C.text,fontSize:12,outline:"none",cursor:"pointer",colorScheme:"dark"},
               value:filtData,
-              onChange:function(e){setFiltData(e.target.value);}
-            })
+              onChange:function(e){setFiltData(e.target.value);},
+              onClick:function(e){try{e.target.showPicker();}catch(err){}}
+            }),
+            React.createElement("button",{type:"button",title:"Próximo dia",style:{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:14,padding:"2px 6px"},onClick:function(){var d=new Date(filtData+"T12:00:00");d.setDate(d.getDate()+1);setFiltData(d.toISOString().split("T")[0]);}},"▶")
           ),
           React.createElement("button",{
             style:{...btnStyle(C.dim,true),fontSize:11,padding:"6px 12px"},
@@ -8706,7 +8710,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v2.9 · jun/2026 · instalação+materiais")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v3.0 · jun/2026 · data+materiais")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
