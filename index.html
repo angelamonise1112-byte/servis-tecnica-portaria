@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v3.1 PENDENCIAS JUN2026 -->
+<!-- SERVIS v3.2 PENDENCIAS JUN2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -3691,6 +3691,8 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
 
   const sorted=useMemo(()=>[...data].filter(d=>{
     const matchBusca=!busca||(d.cond||"").toLowerCase().includes(busca.toLowerCase())||(d.num||"").includes(busca)||(d.prob||"").toLowerCase().includes(busca.toLowerCase());
+    // Por padrão oculta resolvidas; só aparecem ao filtrar por "Resolvido"
+    if((d.status||"")==="Resolvido"&&filtStatus!=="Resolvido")return false;
     const matchStatus=!filtStatus||d.status===filtStatus;
     const matchPri=!filtPri||d.pri===filtPri;
     return matchBusca&&matchStatus&&matchPri;
@@ -3858,8 +3860,8 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
     ),
     React.createElement("div",{style:{padding:"20px 24px"}},
       React.createElement(Grid,{cols:4,mb:16},
-        React.createElement(KPI,{label:"Total",value:data.length,color:C.blue}),
-        React.createElement(KPI,{label:"🔴 Alta",value:data.filter(d=>d.pri==="Alta").length,color:C.red}),
+        React.createElement(KPI,{label:"Ativas",value:data.filter(d=>d.status!=="Resolvido").length,color:C.blue}),
+        React.createElement(KPI,{label:"🔴 Alta",value:data.filter(d=>d.pri==="Alta"&&d.status!=="Resolvido").length,color:C.red}),
         React.createElement(KPI,{label:"⏳ Pendente",value:data.filter(d=>d.status==="Pendente").length,color:C.yellow}),
         React.createElement(KPI,{label:"🔧 Em andamento",value:data.filter(d=>d.status==="Em andamento").length,color:C.blue})
       ),
@@ -8815,7 +8817,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v3.1 · jun/2026 · pendências")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v3.2 · jun/2026 · pendências")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
