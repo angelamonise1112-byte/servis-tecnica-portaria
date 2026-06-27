@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v3.0 JUN2026 -->
+<!-- SERVIS v3.1 PENDENCIAS JUN2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -935,6 +935,11 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
   const [editOS,setEditOS]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
   const [modalPend,setModalPend]=useState(null);
+  const [pendMotivo,setPendMotivo]=useState("");
+  const [pendResp,setPendResp]=useState("");
+  const [pendDesc,setPendDesc]=useState("");
+  const [pendSalvando,setPendSalvando]=useState(false);
+  var MOTIVOS_PEND=["Aguardando aprovação de orçamento","Aguardando chegada de material","Dependência da empresa do elevador","Dependência do condomínio","Aguardando autorização do cliente","Retorno programado","Outro"];
   const POR_PAG=20;
   const MESES_N=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
@@ -991,6 +996,8 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
 
   const filtered=useMemo(function(){
     return data.filter(function(d){
+      // OS pendente não aparece na lista de execução (a não ser que filtre por Pendente)
+      if((d.status||"")==="Pendente"&&filtStatus!=="Pendente")return false;
       const matchB=!busca||(d.num||"").includes(busca)||(d.cond||"").toLowerCase().includes(busca.toLowerCase());
       const matchS=filtStatus==="Todos"||(d.status||"")===(filtStatus||"");
       const matchT=!filtTec||d.tec===filtTec;
@@ -1043,13 +1050,26 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
   };
 
   const moverParaPendencia=async function(os){
-    await sb.from("os_pendencia").insert({
+    if(!pendMotivo){alert("Selecione o motivo da pendência.");return;}
+    if(pendMotivo==="Outro"&&!pendDesc.trim()){alert("Descreva o motivo da pendência (Outro).");return;}
+    setPendSalvando(true);
+    var hoje=new Date().toISOString().split("T")[0];
+    var resInsert=await sb.from("os_pendencia").insert({
       id:"pend_"+os.num+"_"+Date.now(),
       num:os.num,cond:os.cond,tec:os.tec,prob:os.prob,
-      motivo:"Aguardando peça/material",descricao:"",relato:"",
-      data:os.data,prazo:"",previsao:"",pri:"Media",status:"Pendente",obs:""
+      cliente:os.cliente||os.cond,
+      motivo:pendMotivo,descricao:pendDesc,relato:os.relato||"",
+      responsavel:pendResp||"",
+      data:os.data,data_pendencia:hoje,prazo:"",previsao:"",
+      pri:os.pri||"Media",status:"Pendente",obs:"",os_origem:os.num
     });
-    setModalPend(null);if(onSave)onSave();
+    if(resInsert&&resInsert.error){setPendSalvando(false);alert("Erro ao criar pendência: "+resInsert.error.message);return;}
+    // Tira a OS da lista ativa: muda status para Pendente
+    await sb.from("os").update({status:"Pendente"}).eq("id",os.id);
+    servisAudit("pendência","os",os.id,{nome:window._servisUser},"OS "+os.num+" → Pendente: "+pendMotivo);
+    setPendSalvando(false);
+    setModalPend(null);setPendMotivo("");setPendResp("");setPendDesc("");
+    load();if(onSave)onSave();
   };
 
   function priCor(p){return p==="Alta"?C.red:(p==="Média"||p==="Media")?C.yellow:C.green;}
@@ -1232,10 +1252,25 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
         React.createElement("div",{style:{fontSize:12,color:C.muted}},modalPend.cond),
         React.createElement("div",{style:{fontSize:12,color:C.muted}},modalPend.prob)
       ),
-      React.createElement("div",{style:{background:C.yellow+"11",border:"1px solid "+C.yellow+"44",borderRadius:8,padding:"10px",marginBottom:12,fontSize:12,color:C.yellow}},"A OS será registrada na aba Pendências."),
+      React.createElement("div",{style:{marginBottom:10}},
+        React.createElement("label",{style:base.lbl},"Motivo da pendência *"),
+        React.createElement("select",{style:base.sel,value:pendMotivo,onChange:function(e){setPendMotivo(e.target.value);}},
+          React.createElement("option",{value:""},"Selecione o motivo..."),
+          MOTIVOS_PEND.map(function(m){return React.createElement("option",{key:m,value:m},m);})
+        )
+      ),
+      React.createElement("div",{style:{marginBottom:10}},
+        React.createElement("label",{style:base.lbl},"Responsável pela resolução"),
+        React.createElement("input",{style:base.inp,placeholder:"Quem vai acompanhar a pendência",value:pendResp,onChange:function(e){setPendResp(e.target.value);}})
+      ),
+      React.createElement("div",{style:{marginBottom:12}},
+        React.createElement("label",{style:base.lbl},pendMotivo==="Outro"?"Descrição do motivo *":"Descrição detalhada"),
+        React.createElement("textarea",{style:{...base.inp,height:60},placeholder:"Detalhe a pendência...",value:pendDesc,onChange:function(e){setPendDesc(e.target.value);}})
+      ),
+      React.createElement("div",{style:{background:C.yellow+"11",border:"1px solid "+C.yellow+"44",borderRadius:8,padding:"10px",marginBottom:12,fontSize:12,color:C.yellow}},"A OS sairá da lista de execução e irá para a aba Pendências."),
       React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end"}},
-        React.createElement("button",{style:btnStyle(C.dim,true),onClick:function(){setModalPend(null);}},"Cancelar"),
-        React.createElement("button",{style:btnStyle(C.yellow),onClick:function(){moverParaPendencia(modalPend);}},"\u23F8 Confirmar")
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:function(){setModalPend(null);setPendMotivo("");setPendResp("");setPendDesc("");}},"Cancelar"),
+        React.createElement("button",{style:{...btnStyle(C.yellow),opacity:pendSalvando?0.6:1},disabled:pendSalvando,onClick:function(){moverParaPendencia(modalPend);}},pendSalvando?"Salvando...":"\u23F8 Confirmar Pendência")
       )
     ),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir esta OS?",onYes:function(){delOS(confirmDel);},onNo:function(){setConfirmDel(null);}})
@@ -3639,6 +3674,9 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
   const [modal,setModal]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
   const [detalhe,setDetalhe]=useState(null);
+  const [modalResolver,setModalResolver]=useState(null);
+  const [resObs,setResObs]=useState("");
+  const [resSalvando,setResSalvando]=useState(false);
   const [busca,setBusca]=useState("");
   const [filtStatus,setFiltStatus]=useState("");
   const [filtPri,setFiltPri]=useState("");
@@ -3674,7 +3712,45 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
       }
     }
     setModal(null);load();if(onSave)onSave();
-  };
+  }
+
+  // Resolve a pendência: registra quem/quando/obs, fecha a OS original; opcionalmente gera retorno
+  const resolverPendencia=async function(pend,gerarRetorno){
+    setResSalvando(true);
+    var agora=new Date().toISOString();
+    var hoje=agora.split("T")[0];
+    var quem=window._servisUser||"sistema";
+    // 1) Atualiza a pendência como resolvida
+    var up=await sb.from("os_pendencia").update({status:"Resolvido",resolvido_por:quem,data_resolucao:agora,obs_resolucao:resObs||""}).eq("id",pend.id);
+    if(up&&up.error){setResSalvando(false);alert("Erro ao resolver: "+up.error.message);return;}
+    servisAudit("resolução","os_pendencia",pend.id,{nome:quem},"Pendência da OS "+pend.num+" resolvida"+(gerarRetorno?" + retorno":""));
+    // 2) Fecha a OS original (se não gerar retorno) ou mantém histórico
+    if(pend.os_origem||pend.num){
+      var osQuery=await sbRaw.from("os").select("id").eq("num",pend.os_origem||pend.num).limit(1);
+      var osId=osQuery&&osQuery.data&&osQuery.data[0]&&osQuery.data[0].id;
+      if(osId){
+        await sb.from("os").update({status:"Fechado",data_fechamento:hoje}).eq("id",osId);
+        servisAudit("alteração","os",osId,{nome:quem},"OS "+pend.num+" fechada via resolução de pendência");
+      }
+    }
+    // 3) Gera OS de retorno vinculada
+    if(gerarRetorno){
+      var novoNum=(pend.num||"")+"-R";
+      var novaOS={id:uid(),num:novoNum,data:hoje,cond:pend.cond,tec:pend.tec||"",
+        prob:"Retorno técnico — pendência da OS "+pend.num,descricao:"Gerada a partir da resolução da pendência da OS "+pend.num+". Motivo original: "+(pend.motivo||""),
+        pri:pend.pri||"Media",status:"Aberto"};
+      var insOS=await sb.from("os").insert(novaOS);
+      if(insOS&&insOS.error){
+        // se número duplicado, tenta com timestamp
+        novaOS.num=novoNum+"_"+Date.now().toString().slice(-4);
+        await sb.from("os").insert(novaOS);
+      }
+      await sb.from("os_pendencia").update({os_retorno:novaOS.num}).eq("id",pend.id);
+      servisAudit("criação","os",novaOS.id,{nome:quem},"OS de retorno "+novaOS.num+" gerada da pendência da OS "+pend.num);
+    }
+    setResSalvando(false);setModalResolver(null);setResObs("");
+    load();if(onSave)onSave();
+  };;
   const del=async id=>{await sb.from("os_pendencia").delete().eq("id",id);setConfirmDel(null);load();if(onSave)onSave();};
 
   const EditModal=({item,onClose})=>{
@@ -3805,7 +3881,7 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
                 vencida&&React.createElement(Pill,{c:C.red},"⚠ Vencida")
               ),
               React.createElement("div",{style:{display:"flex",gap:6}},
-                d.status!=="Resolvido"&&React.createElement("button",{style:{...iBtn(C.green),fontSize:10},title:"Marcar como resolvido",onClick:e=>{e.stopPropagation();save({...d,status:"Resolvido"});}
+                d.status!=="Resolvido"&&React.createElement("button",{style:{...iBtn(C.green),fontSize:10},title:"Resolver pendência",onClick:e=>{e.stopPropagation();setResObs("");setModalResolver(d);}
 },"✅"),
                 React.createElement("button",{style:iBtn(C.blue),onClick:e=>{e.stopPropagation();setModal(d);}
 },"✏️"),
@@ -3818,6 +3894,19 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
             React.createElement("div",{style:{fontSize:12,color:C.muted,marginBottom:6}},d.prob||d.descricao),
             // Motivo em destaque
             d.motivo&&d.motivo!=="Pendência — importado da planilha"&&React.createElement("div",{style:{background:C.yellow+"11",border:`1px solid ${C.yellow}33`,borderRadius:8,padding:"5px 10px",marginBottom:6,fontSize:11,color:C.yellow,fontWeight:600}},"⚠ "+d.motivo),
+            // Técnico, responsável e dias em pendência
+            React.createElement("div",{style:{display:"flex",gap:10,flexWrap:"wrap",fontSize:11,color:C.muted,marginBottom:6}},
+              d.tec&&React.createElement("span",null,"👷 "+d.tec),
+              d.responsavel&&React.createElement("span",null,"🧭 "+d.responsavel),
+              (function(){
+                var base=d.data_pendencia||d.data;
+                if(!base||d.status==="Resolvido")return null;
+                var dias=Math.floor((Date.now()-new Date(String(base).slice(0,10)+"T12:00:00").getTime())/86400000);
+                if(isNaN(dias)||dias<0)return null;
+                var cor=dias>15?C.red:dias>7?C.orange:C.green;
+                return React.createElement("span",{style:{color:cor,fontWeight:700}},"⏱ "+dias+" dia"+(dias===1?"":"s")+" em pendência");
+              })()
+            ),
             // Relato do técnico (resumo)
             d.relato&&React.createElement("div",{style:{background:C.blue+"08",borderRadius:8,padding:"5px 10px",marginBottom:6,fontSize:11,color:C.muted,borderLeft:`2px solid ${C.blue}`}},
               React.createElement("span",{style:{color:C.blue,fontWeight:600}},"Técnico: "),
@@ -3838,7 +3927,23 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
     ),
     modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
     detalhe&&React.createElement(DetalheModal,{item:detalhe,onClose:()=>setDetalhe(null)}),
-    confirmDel&&React.createElement(Confirm,{msg:"Excluir esta pendência?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)})
+    confirmDel&&React.createElement(Confirm,{msg:"Excluir esta pendência?",onYes:()=>del(confirmDel),onNo:()=>setConfirmDel(null)}),
+    modalResolver&&React.createElement(Modal,{title:"✅ Resolver Pendência",onClose:function(){setModalResolver(null);setResObs("");},width:520},
+      React.createElement("div",{style:{background:C.bg,borderRadius:8,padding:"10px 14px",marginBottom:12}},
+        React.createElement("div",{style:{fontSize:13,fontWeight:600,color:C.cyan}},"OS #"+modalResolver.num+" — "+modalResolver.cond),
+        modalResolver.motivo&&React.createElement("div",{style:{fontSize:12,color:C.yellow,marginTop:4}},"⚠ "+modalResolver.motivo)
+      ),
+      React.createElement("div",{style:{marginBottom:12}},
+        React.createElement("label",{style:base.lbl},"Observação da resolução"),
+        React.createElement("textarea",{style:{...base.inp,height:70},placeholder:"O que foi feito para resolver...",value:resObs,onChange:function(e){setResObs(e.target.value);}})
+      ),
+      React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:12}},"Será registrado quem resolveu ("+(window._servisUser||"usuário")+") e a data/hora."),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}},
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:function(){setModalResolver(null);setResObs("");}},"Cancelar"),
+        React.createElement("button",{style:{...btnStyle(C.orange),opacity:resSalvando?0.6:1},disabled:resSalvando,onClick:function(){resolverPendencia(modalResolver,true);}},"🔄 Resolver e gerar retorno"),
+        React.createElement("button",{style:{...btnStyle(C.green),opacity:resSalvando?0.6:1},disabled:resSalvando,onClick:function(){resolverPendencia(modalResolver,false);}},resSalvando?"Resolvendo...":"✅ Resolver e fechar OS")
+      )
+    )
   );
 }
 
@@ -8710,7 +8815,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v3.0 · jun/2026 · data+materiais")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v3.1 · jun/2026 · pendências")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
