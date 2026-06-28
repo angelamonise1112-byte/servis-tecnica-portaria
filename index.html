@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v3.5 CATALOGO JUN2026 -->
+<!-- SERVIS v3.9 AUMENTOCHAM JUN2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
 <style>
+.ia-pulse{display:inline-block;animation:iaSpin 1s linear infinite}@keyframes iaSpin{to{transform:rotate(360deg)}}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#080C12;color:#F0F6FF;height:100vh;overflow:hidden}
 input,select,textarea{background:#0F1520;border:1px solid #1E2D45;color:#F0F6FF;border-radius:8px;padding:8px 12px;font-size:13px;width:100%;outline:none;font-family:inherit}
@@ -7227,42 +7228,130 @@ function GestaoAreas({usuario}){
 
 
 // ── IA DASHBOARD ─────────────────────────────────────────────
+// Renderizador de markdown leve para respostas da IA
+function mdInlineIA(txt,keybase){
+  var parts=String(txt).split("**");
+  return parts.map(function(p,i){return i%2===1?React.createElement("strong",{key:keybase+"_"+i,style:{color:"#a5b4fc",fontWeight:700}},p):p;});
+}
+function mdToReactIA(texto){
+  var linhas=String(texto||"").split("\n");
+  var blocos=[];var listaAtual=null;var listaTipo=null;
+  function fecharLista(){
+    if(listaAtual){
+      blocos.push(React.createElement(listaTipo==="ol"?"ol":"ul",{key:"l"+blocos.length,style:{margin:"6px 0",paddingLeft:22,display:"flex",flexDirection:"column",gap:4}},listaAtual));
+      listaAtual=null;listaTipo=null;
+    }
+  }
+  linhas.forEach(function(ln,idx){
+    var l=ln.trim();
+    if(!l){fecharLista();return;}
+    var mh=l.match(/^(#{1,3})\s+(.*)$/);
+    var mb=l.match(/^[-•*]\s+(.*)$/);
+    var mo=l.match(/^(\d+)[.)]\s+(.*)$/);
+    if(mh){fecharLista();var nivel=mh[1].length;var sz=nivel===1?16:nivel===2?14.5:13.5;
+      blocos.push(React.createElement("div",{key:"h"+idx,style:{fontSize:sz,fontWeight:800,color:"#c4b5fd",margin:(blocos.length?"12px 0 4px":"0 0 4px")}},mdInlineIA(mh[2],"h"+idx)));
+    }else if(mb){if(listaTipo!=="ul"){fecharLista();listaAtual=[];listaTipo="ul";}
+      listaAtual.push(React.createElement("li",{key:"li"+idx,style:{fontSize:13,color:"#dbe4f0",lineHeight:1.6}},mdInlineIA(mb[1],"li"+idx)));
+    }else if(mo){if(listaTipo!=="ol"){fecharLista();listaAtual=[];listaTipo="ol";}
+      listaAtual.push(React.createElement("li",{key:"oi"+idx,style:{fontSize:13,color:"#dbe4f0",lineHeight:1.6}},mdInlineIA(mo[2],"oi"+idx)));
+    }else{fecharLista();
+      blocos.push(React.createElement("div",{key:"p"+idx,style:{fontSize:13,color:"#dbe4f0",lineHeight:1.7,margin:"3px 0"}},mdInlineIA(l,"p"+idx)));
+    }
+  });
+  fecharLista();
+  return blocos;
+}
+
 function IaDashboard(){
   const {tick}=React.useContext(RefreshCtx);
   const [pergunta,setPergunta]=useState("");
   const [resposta,setResposta]=useState(null);
   const [loading,setLoading]=useState(false);
   const [historico,setHistorico]=useState([]);
+  const [memoria,setMemoria]=useState([]);
+  const [alertasAuto,setAlertasAuto]=useState(null);
+  const [aumentosAuto,setAumentosAuto]=useState([]);
   const [aberto,setAberto]=useState(true);
+
+  const carregarAlertasAuto=useCallback(async function(){
+    try{
+      var hoje=new Date();var anoAtual=String(hoje.getFullYear());
+      var ym=anoAtual+"-"+String(hoje.getMonth()+1).padStart(2,"0");
+      var mesAnt=new Date(hoje.getFullYear(),hoje.getMonth()-1,1).toISOString().slice(0,7);
+      var r=await Promise.all([
+        sb.from("os").select("num,data,status,cond").gte("data",anoAtual+"-01-01"),
+        sb.from("os_pendencia").select("status,data,data_pendencia,tec"),
+        sb.from("preventivas").select("status,retorno"),
+        sb.from("horas_extras").select("total_h,data")
+      ]);
+      var os=(r[0].data)||[],pend=(r[1].data)||[],prev=(r[2].data)||[],he=(r[3].data)||[];
+      var hojeISO=hoje.toISOString().slice(0,10);
+      var al=[];
+      var osAb=os.filter(function(o){return o.status==="Aberto"||o.status==="Em andamento";});
+      var paradas=osAb.filter(function(o){return o.data&&Math.floor((hoje-new Date(String(o.data).slice(0,10)+"T12:00:00"))/86400000)>15;}).length;
+      if(paradas)al.push({i:"🕐",t:paradas+" OS parada(s) há +15 dias",c:C.orange});
+      var pAtiv=pend.filter(function(p){return p.status!=="Resolvido";});
+      var venc=pAtiv.filter(function(p){var b=p.data_pendencia||p.data;if(!b)return false;return Math.floor((hoje-new Date(String(b).slice(0,10)+"T12:00:00"))/86400000)>15;}).length;
+      if(venc)al.push({i:"⏳",t:venc+" pendência(s) vencida(s) (+15d)",c:C.red});
+      if(pAtiv.length)al.push({i:"📌",t:pAtiv.length+" pendência(s) ativa(s)",c:C.yellow});
+      var pAtr=prev.filter(function(x){return x.retorno&&x.retorno<hojeISO&&x.status!=="Concluída";}).length;
+      if(pAtr)al.push({i:"🔧",t:pAtr+" preventiva(s) atrasada(s)",c:C.orange});
+      var mp={};pAtiv.forEach(function(p){if(p.tec)mp[p.tec]=(mp[p.tec]||0)+1;});
+      Object.entries(mp).forEach(function(e){if(e[1]>=4)al.push({i:"👷",t:"Técnico "+e[0]+": "+e[1]+" pendências",c:C.red});});
+      var cM={},cA={};os.forEach(function(o){var y=String(o.data||"").slice(0,7);if(y===ym&&o.cond)cM[o.cond]=(cM[o.cond]||0)+1;if(y===mesAnt&&o.cond)cA[o.cond]=(cA[o.cond]||0)+1;});
+      var _aumentos=[];
+      Object.keys(cM).forEach(function(c){var a=cA[c]||0,m2=cM[c];if(m2>=4&&m2>a&&m2>=a*1.5){var pct=a>0?Math.round((m2-a)/a*100):100;_aumentos.push({cond:c,antes:a,agora:m2,pct:pct});}});
+      _aumentos.sort(function(x,y){return y.agora-x.agora;});
+      setAumentosAuto(_aumentos);
+      var heH=he.filter(function(h){return String(h.data||"").slice(0,7)===ym;}).reduce(function(s,h){return s+(parseFloat(h.total_h)||0);},0);
+      if(heH>0)al.push({i:"⏱",t:heH.toFixed(1)+"h extras no mês",c:C.cyan});
+      setAlertasAuto(al);
+    }catch(e){setAlertasAuto([]);}
+  },[]);
+  useEffect(function(){if(aberto&&alertasAuto===null)carregarAlertasAuto();},[aberto,alertasAuto,carregarAlertasAuto]);
 
   const CATEGORIAS=[
     {icon:"🏦",label:"Condomínios",perguntas:[
-      "Quais condomínios precisam de vistoria urgente?",
-      "Quais condomínios têm mais OS abertas?",
-      "Qual condomínio teve mais chamados este mês?",
-      "Quais condomínios estão sem preventiva concluída?",
+      "Quais condomínios geram mais chamados?",
+      "Qual condomínio teve aumento de chamados este mês?",
+      "Quais condomínios têm problemas recorrentes?",
+      "Qual condomínio gera maior custo?",
     ]},
     {icon:"👷",label:"Técnicos",perguntas:[
-      "Quais técnicos estão mais produtivos este mês?",
-      "Qual técnico fechou mais OS no ano?",
-      "Como está o desempenho de cada técnico?",
-      "Qual técnico tem mais OS abertas agora?",
+      "Qual técnico fechou mais OS?",
+      "Quais técnicos têm mais pendências?",
+      "Quem fez mais horas extras este mês?",
+      "A carga de trabalho está equilibrada entre os técnicos?",
     ]},
-    {icon:"📋",label:"OS",perguntas:[
-      "Quais OS estão com SLA vencido?",
-      "Quais problemas aparecem com mais frequência?",
-      "Quantas OS foram abertas este mês?",
-      "Qual é a situação geral das OS?",
+    {icon:"📋",label:"OS & Pendências",perguntas:[
+      "Quais OS estão paradas há mais tempo?",
+      "Quantas OS estão aguardando orçamento ou material?",
+      "Quais os problemas/equipamentos que mais falham?",
+      "Quais clientes têm mais pendências?",
     ]},
-    {icon:"◈",label:"Preventivas",perguntas:[
-      "Como estão as preventivas pendentes?",
-      "Qual o percentual de execução das preventivas?",
-      "Quais condomínios estão sem preventiva?",
+    {icon:"💰",label:"Custos",perguntas:[
+      "Quanto gastamos em materiais este mês?",
+      "Qual o custo por condomínio?",
+      "Quais materiais são mais utilizados?",
+      "Qual material está com maior consumo?",
     ]},
-    {icon:"📊",label:"Resumo",perguntas:[
-      "Resumo geral do sistema",
-      "Como está a produtividade da equipe?",
+    {icon:"📅",label:"Planejamento",perguntas:[
+      "Monte a agenda de prioridades para hoje.",
+      "Quais visitas dá para agrupar por área?",
+      "Quais preventivas vencem nos próximos 7 dias?",
+      "Como redistribuir a carga dos técnicos sobrecarregados?",
+    ]},
+    {icon:"📄",label:"Documentos",perguntas:[
+      "Gere um e-mail para o síndico sobre uma OS pendente por falta de material.",
+      "Escreva uma mensagem de WhatsApp avisando o cliente sobre reagendamento.",
+      "Faça um relatório executivo da operação deste mês para a diretoria.",
+      "Monte um laudo técnico para uma manutenção de cerca elétrica.",
+    ]},
+    {icon:"📊",label:"Resumo & Alertas",perguntas:[
       "Quais são os principais alertas agora?",
+      "Resumo geral da operação hoje.",
+      "Onde estão os maiores gargalos?",
+      "O que precisa da minha atenção urgente?",
     ]},
   ];
 
@@ -7279,17 +7368,27 @@ function IaDashboard(){
     var MESES_BR=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
     var mesNome=MESES_BR[hoje.getMonth()];
 
-    var [rosRes,prevRes,tecRes,condRes]=await Promise.all([
+    var [rosRes,prevRes,tecRes,condRes,pendRes,matRes,instRes,heRes,atRes]=await Promise.all([
       sb.from("os").select("num,data,status,cond,tec,prob,pri,data_fechamento").gte("data",anoAtual+"-01-01").order("data",{ascending:false}),
       sb.from("preventivas").select("id,cond,status,tecnico,primeira_visita,retorno"),
       sb.from("tecnicos").select("nome,status"),
-      sb.from("condominios").select("nome,tecnico,area_tecnico,endereco"),
+      sb.from("condominios").select("nome,tecnico,area_tecnico,endereco,regional"),
+      sb.from("os_pendencia").select("num,cond,tec,motivo,responsavel,status,data,data_pendencia"),
+      sb.from("materiais_lancar").select("material,quantidade,valor_unit,valor_total,status,condominio,cod_produto"),
+      sb.from("instalacoes").select("cond,tec,status,data_inicio,data_entrega_portaria"),
+      sb.from("horas_extras").select("tecnico,status,total_h,data"),
+      sb.from("atestados").select("status,tec,retorno")
     ]);
 
     var os=rosRes.data||[];
     var prevs=prevRes.data||[];
     var tecs=tecRes.data||[];
     var conds=condRes.data||[];
+    var pend=(pendRes&&pendRes.data)||[];
+    var mats=(matRes&&matRes.data)||[];
+    var insts=(instRes&&instRes.data)||[];
+    var hes=(heRes&&heRes.data)||[];
+    var ats=(atRes&&atRes.data)||[];
     var osMes=os.filter(function(o){return (o.data||"").slice(5,7)===mesAtual;});
     var osAb=os.filter(function(o){return o.status==="Aberto";});
     var slaVenc=osAb.filter(function(o){return (hoje-new Date(o.data))>72*3600000;});
@@ -7514,6 +7613,52 @@ function IaDashboard(){
       var prevPend=prevs.filter(function(x){return x.status!=="Concluída";}).length;
       var prevAtras=prevs.filter(function(x){return x.retorno&&x.retorno<hoje.toISOString().slice(0,10)&&x.status!=="Concluída";}).length;
 
+      // ── Análises avançadas para a Central de Inteligência ──
+      var hojeISO=hoje.toISOString().slice(0,10);
+      function topMapArr(arr,campo,n){var m={};arr.forEach(function(x){if(x[campo])m[x[campo]]=(m[x[campo]]||0)+1;});return Object.entries(m).sort(function(a,b){return b[1]-a[1];}).slice(0,n||10);}
+      // Pendências
+      var pendAtivas=pend.filter(function(p){return p.status!=="Resolvido";});
+      var pendPorMotivo=topMapArr(pendAtivas,"motivo",8).map(function(e){return e[0]+"("+e[1]+")";}).join(", ");
+      var pendPorTec=topMapArr(pendAtivas,"tec",8).map(function(e){return e[0]+"("+e[1]+")";}).join(", ");
+      function diasPend(p){var b=p.data_pendencia||p.data;if(!b)return 0;var d=Math.floor((hoje-new Date(String(b).slice(0,10)+"T12:00:00"))/86400000);return isNaN(d)||d<0?0:d;}
+      var pendVencidas=pendAtivas.filter(function(p){return diasPend(p)>15;}).length;
+      // Materiais e custos
+      var matMaisUsados=topMapArr(mats,"material",10).map(function(e){return e[0]+"("+e[1]+")";}).join(", ");
+      var custoTotal=mats.reduce(function(s,m){return s+(parseFloat(m.valor_total)||0);},0);
+      var custoPorCond={};mats.forEach(function(m){if(m.condominio)custoPorCond[m.condominio]=(custoPorCond[m.condominio]||0)+(parseFloat(m.valor_total)||0);});
+      var topCustoCond=Object.entries(custoPorCond).sort(function(a,b){return b[1]-a[1];}).slice(0,8).map(function(e){return e[0]+"(R$"+e[1].toFixed(2)+")";}).join(", ");
+      // Instalações
+      var instAndamento=insts.filter(function(x){return x.status==="Em andamento"||x.status==="Planejamento";}).length;
+      var instAtrasadas=insts.filter(function(x){return x.status==="Em andamento"&&x.data_inicio&&(function(){var pz=new Date(x.data_inicio);pz.setDate(pz.getDate()+42);return hojeISO>pz.toISOString().slice(0,10);})();}).length;
+      // Horas extras
+      var heMes=hes.filter(function(h){return h.data&&String(h.data).slice(0,7)===anoAtual+"-"+mesAtual;});
+      var heTotalH=heMes.reduce(function(s,h){return s+(parseFloat(h.total_h)||0);},0);
+      var hePorTec=topMapArr(heMes,"tecnico",8).map(function(e){return e[0];});
+      // OS paradas (abertas há muito tempo)
+      var osParadas=osAb.filter(function(o){return o.data&&(function(){var d=Math.floor((hoje-new Date(String(o.data).slice(0,10)+"T12:00:00"))/86400000);return d>15;})();}).length;
+      // Detecção de aumento de chamados: este mês vs mês anterior por condomínio
+      var mesAnt=new Date(hoje.getFullYear(),hoje.getMonth()-1,1);
+      var ymMes=anoAtual+"-"+mesAtual, ymAnt=mesAnt.toISOString().slice(0,7);
+      var cMes={},cAnt={};
+      os.forEach(function(o){var ym=String(o.data||"").slice(0,7);if(ym===ymMes&&o.cond)cMes[o.cond]=(cMes[o.cond]||0)+1;if(ym===ymAnt&&o.cond)cAnt[o.cond]=(cAnt[o.cond]||0)+1;});
+      var aumentos=[];Object.keys(cMes).forEach(function(c){var a=cAnt[c]||0,m2=cMes[c];if(m2>=4&&m2>=a*1.5&&m2>a)aumentos.push(c+" ("+a+"→"+m2+")");});
+      var aumentoStr=aumentos.slice(0,8).join(", ");
+      // Problemas recorrentes por condomínio (mesmo problema 3+ vezes)
+      var recorr={};os.forEach(function(o){if(o.cond&&o.prob){var k=o.cond+" :: "+o.prob;recorr[k]=(recorr[k]||0)+1;}});
+      var topRecorr=Object.entries(recorr).filter(function(e){return e[1]>=3;}).sort(function(a,b){return b[1]-a[1];}).slice(0,8).map(function(e){return e[0].replace(" :: "," — ")+" ("+e[1]+"x)";}).join("; ");
+
+      // ── ALERTAS AUTOMÁTICOS ──
+      var alertas=[];
+      if(aumentos.length)alertas.push("📈 Aumento de chamados: "+aumentoStr);
+      if(pendVencidas>0)alertas.push("⏳ "+pendVencidas+" pendência(s) vencida(s) (+15 dias)");
+      if(osParadas>0)alertas.push("🕐 "+osParadas+" OS aberta(s) há mais de 15 dias");
+      if(prevAtras>0)alertas.push("🔧 "+prevAtras+" preventiva(s) atrasada(s)");
+      if(instAtrasadas>0)alertas.push("🔨 "+instAtrasadas+" instalação(ões) atrasada(s)");
+      if(slaVenc.length>0)alertas.push("⚠ "+slaVenc.length+" OS com SLA vencido (+72h)");
+      if(heTotalH>0)alertas.push("⏱ "+heTotalH.toFixed(1)+"h extras no mês ("+(hePorTec[0]||"")+" lidera)");
+      (function(){var mp={};pendAtivas.forEach(function(p){if(p.tec)mp[p.tec]=(mp[p.tec]||0)+1;});Object.entries(mp).forEach(function(e){if(e[1]>=4)alertas.push("👷 Técnico "+e[0]+" com "+e[1]+" pendências");});})();
+      if(topRecorr)alertas.push("🔁 Problemas recorrentes detectados (ver análise)");
+
       var contexto="DADOS OPERACIONAIS DA SERVIS (empresa de portaria remota, alarmes, CFTV, controle de acesso e equipes de campo) — "+anoAtual+":\n"
         +"- OS: "+os.length+" no ano, "+osAb.length+" abertas, "+osFech.length+" fechadas, "+osMes.length+" neste mês\n"
         +"- SLA: "+slaVenc.length+" OS vencidas (>72h em aberto)\n"
@@ -7524,21 +7669,53 @@ function IaDashboard(){
         +"- Técnicos ativos: "+tecs.filter(function(t){return t.status==="Ativo";}).length+"\n"
         +"- Condomínios cadastrados: "+conds.length+"\n"
         +"- Horas extras: "+hes.length+" registros, "+hes.filter(function(h){return h.status==="Pendente";}).length+" pendentes\n"
-        +"- Atestados: "+ats.length+" registros\n";
+        +"- Atestados: "+ats.length+" registros\n"
+        +"\n== PENDÊNCIAS ==\n"
+        +"- "+pendAtivas.length+" pendências ativas, "+pendVencidas+" vencidas (+15 dias)\n"
+        +"- Por motivo: "+(pendPorMotivo||"nenhuma")+"\n"
+        +"- Por técnico: "+(pendPorTec||"nenhuma")+"\n"
+        +"\n== MATERIAIS E CUSTOS ==\n"
+        +"- Materiais mais lançados: "+(matMaisUsados||"nenhum")+"\n"
+        +"- Custo total de materiais lançados: R$ "+custoTotal.toFixed(2)+"\n"
+        +"- Maior custo por condomínio: "+(topCustoCond||"nenhum")+"\n"
+        +"\n== INSTALAÇÕES ==\n"
+        +"- "+instAndamento+" em andamento/planejamento, "+instAtrasadas+" atrasadas\n"
+        +"\n== HORAS EXTRAS (mês) ==\n"
+        +"- "+heTotalH.toFixed(1)+"h no mês; técnicos: "+(hePorTec.join(", ")||"nenhum")+"\n"
+        +"\n== ANOMALIAS / PADRÕES ==\n"
+        +"- Condomínios com aumento de chamados (mês ant.→atual): "+(aumentoStr||"nenhum detectado")+"\n"
+        +"- Problemas recorrentes (mesmo problema 3+x no mesmo condomínio): "+(topRecorr||"nenhum")+"\n"
+        +"- OS paradas (abertas +15 dias): "+osParadas+"\n"
+        +"\n== ALERTAS AUTOMÁTICOS DETECTADOS ==\n"
+        +(alertas.length?alertas.map(function(a){return "- "+a;}).join("\n"):"- Nenhum alerta crítico")+"\n";
 
-      var prompt=contexto+"\n\nPERGUNTA DO GESTOR: "+p+"\n\n"
-        +"Responda como um analista de operações sênior da Servis. Seja direto, objetivo e prático. "
-        +"Use os dados acima. Destaque números relevantes, identifique riscos e dê recomendações acionáveis. "
-        +"Use markdown leve (negrito com **, listas com -). Responda em português do Brasil. Máximo 300 palavras.";
+      var sistema="Você é a Central de Inteligência Operacional da Servis (empresa de portaria remota, alarmes, CFTV, controle de acesso e equipes de campo no Ceará (CE). "
+        +"Você é um analista de operações sênior: direto, objetivo e prático. Use SEMPRE os dados fornecidos no contexto. "
+        +"Destaque números, identifique riscos e gargalos, e dê recomendações acionáveis. "
+        +"Quando fizer sentido, sugira ações concretas (substituir equipamento recorrente, redistribuir carga de técnico, agrupar visitas por área, repor material). "
+        +"Se o gestor pedir um documento (laudo, e-mail, WhatsApp, proposta, relatório, ata), gere o texto pronto para uso. "
+        +"Lembre-se do que foi conversado antes nesta sessão e entenda referências como 'agora só os pendentes', 'compare com o mês passado', 'mostre só os de tal condomínio'. "
+        +"Use markdown leve (negrito com **, listas com -). Responda em português do Brasil.";
+
+      // Memória de conversa: reconstrói as mensagens anteriores + a atual (com o contexto de dados na primeira)
+      var msgs=[];
+      var ctxInjetado=false;
+      (memoria||[]).forEach(function(m){
+        if(m.role==="user"&&!ctxInjetado){ msgs.push({role:"user",content:contexto+"\n\nPERGUNTA: "+m.content}); ctxInjetado=true; }
+        else msgs.push({role:m.role,content:m.content});
+      });
+      if(!ctxInjetado){ msgs.push({role:"user",content:contexto+"\n\nPERGUNTA DO GESTOR: "+p}); }
+      else { msgs.push({role:"user",content:p}); }
 
       var resp=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1024,messages:[{role:"user",content:prompt}]})
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,system:sistema,messages:msgs})
       });
       var dataResp=await resp.json();
       var textoIA=(dataResp.content||[]).filter(function(b){return b.type==="text";}).map(function(b){return b.text;}).join("\n")||"Não consegui gerar uma resposta. Tente reformular a pergunta.";
-      setResposta({texto:textoIA,pergunta:p,viaIA:true});
+      setResposta({texto:textoIA,pergunta:p,viaIA:true,alertas:alertas});
+      setMemoria(function(m){return (m||[]).concat([{role:"user",content:p},{role:"assistant",content:textoIA}]).slice(-12);});
       setHistorico(function(h){return [{p,hora:new Date().toLocaleTimeString("pt-BR")},...h].slice(0,8);});
     }catch(e){
       setResposta({texto:"⚠ Não consegui consultar a IA agora ("+e.message+"). Tente usar uma das perguntas sugeridas, que funcionam offline.",pergunta:p});
@@ -7551,34 +7728,76 @@ function IaDashboard(){
   return React.createElement("div",{style:{background:C.card,border:"1px solid "+C.border,borderRadius:16,overflow:"hidden",marginTop:16}},
     // Header clicável
     React.createElement("div",{
-      style:{padding:"14px 20px",background:"linear-gradient(135deg,#1e1b4b,#2e1065)",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"},
+      style:{padding:"16px 22px",background:"linear-gradient(120deg,#1e1b4b 0%,#312e81 50%,#4c1d95 100%)",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",position:"relative",overflow:"hidden"},
       onClick:function(){setAberto(function(a){return !a;});}
     },
-      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
-        React.createElement("div",{style:{width:34,height:34,borderRadius:"50%",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}},"✨"),
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:13,position:"relative",zIndex:1}},
+        React.createElement("div",{style:{width:42,height:42,borderRadius:13,background:"linear-gradient(135deg,#6366f1,#a855f7)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,boxShadow:"0 4px 16px rgba(139,92,246,0.45)"}},"✨"),
         React.createElement("div",null,
-          React.createElement("div",{style:{fontSize:14,fontWeight:700,color:"#fff"}},"Assistente de Gestão com IA"),
-          React.createElement("div",{style:{fontSize:10,color:"#a5b4fc"}},"Pergunte qualquer coisa — a IA analisa seus dados reais e responde")
+          React.createElement("div",{style:{fontSize:15.5,fontWeight:800,color:"#fff",letterSpacing:"0.2px",display:"flex",alignItems:"center",gap:8}},"Central de Inteligência Operacional",
+            React.createElement("span",{style:{display:"inline-flex",alignItems:"center",gap:4,background:"rgba(52,211,153,0.18)",border:"1px solid rgba(52,211,153,0.4)",color:"#6ee7b7",fontSize:9.5,fontWeight:700,padding:"2px 8px",borderRadius:20}},
+              React.createElement("span",{style:{width:6,height:6,borderRadius:"50%",background:"#34d399",boxShadow:"0 0 6px #34d399",display:"inline-block"}}),"ativa")
+          ),
+          React.createElement("div",{style:{fontSize:11,color:"#c4b5fd",marginTop:2}},"Analiso seus dados, gero alertas, respondo perguntas e crio documentos")
         )
       ),
-      React.createElement("div",{style:{color:"#a5b4fc",fontSize:12}},aberto?"▲ Fechar":"▼ Abrir")
+      React.createElement("div",{style:{color:"#c4b5fd",fontSize:12,fontWeight:600,background:"rgba(255,255,255,0.08)",borderRadius:8,padding:"6px 12px",position:"relative",zIndex:1}},aberto?"▲ Recolher":"▼ Abrir")
     ),
 
     aberto&&React.createElement("div",{style:{padding:20}},
+      // Painel de aumento de chamados (anomalias) — destaque visual
+      aumentosAuto&&aumentosAuto.length>0&&React.createElement("div",{style:{marginBottom:16,background:"linear-gradient(135deg,#2a1518,#1a1020)",border:"1px solid "+C.red+"3a",borderRadius:12,padding:"14px 16px"}},
+        React.createElement("div",{style:{fontSize:12,fontWeight:700,color:"#fca5a5",marginBottom:4,display:"flex",alignItems:"center",gap:7,textTransform:"uppercase",letterSpacing:"0.5px"}},"📈 Aumento de chamados",
+          React.createElement("span",{style:{background:C.red+"22",color:"#fca5a5",fontSize:11,fontWeight:800,padding:"1px 8px",borderRadius:10}},aumentosAuto.length)),
+        React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:11}},"Condomínios chamando mais que o mês anterior — vale investigar problema recorrente"),
+        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+          aumentosAuto.map(function(a,idx){
+            return React.createElement("div",{key:idx,style:{display:"flex",alignItems:"center",gap:12,background:"rgba(0,0,0,0.25)",borderRadius:9,padding:"10px 13px"}},
+              React.createElement("div",{style:{flex:1,minWidth:0}},
+                React.createElement("div",{style:{fontSize:13.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},a.cond),
+                React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"mês passado: "+a.antes+" · este mês: "+a.agora)
+              ),
+              React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexShrink:0}},
+                React.createElement("div",{style:{display:"flex",alignItems:"baseline",gap:6}},
+                  React.createElement("span",{style:{fontSize:14,color:C.dim,fontWeight:600}},a.antes),
+                  React.createElement("span",{style:{fontSize:13,color:C.red}},"→"),
+                  React.createElement("span",{style:{fontSize:20,fontWeight:800,color:"#fff"}},a.agora)
+                ),
+                React.createElement("span",{style:{background:C.red,color:"#fff",fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:20,whiteSpace:"nowrap"}},"▲ "+a.pct+"%")
+              )
+            );
+          })
+        )
+      ),
+      // Painel de alertas automáticos
+      alertasAuto&&alertasAuto.length>0&&React.createElement("div",{style:{marginBottom:16}},
+        React.createElement("div",{style:{fontSize:12,fontWeight:700,color:C.muted,marginBottom:9,display:"flex",alignItems:"center",gap:6,textTransform:"uppercase",letterSpacing:"0.5px"}},"🚨 Alertas detectados agora",
+          React.createElement("span",{style:{background:C.red+"22",color:C.red,fontSize:11,fontWeight:800,padding:"1px 8px",borderRadius:10}},alertasAuto.length)),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}},
+          alertasAuto.map(function(a,idx){
+            return React.createElement("div",{key:idx,style:{display:"flex",alignItems:"center",gap:10,background:a.c+"14",border:"1px solid "+a.c+"3a",borderLeft:"3px solid "+a.c,borderRadius:9,padding:"9px 12px"}},
+              React.createElement("span",{style:{fontSize:16}},a.i),
+              React.createElement("span",{style:{flex:1,fontSize:12,color:C.text,fontWeight:500,lineHeight:1.3}},a.t));
+          })
+        )
+      ),
+      alertasAuto&&alertasAuto.length===0&&(!aumentosAuto||aumentosAuto.length===0)&&React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,background:C.green+"11",border:"1px solid "+C.green+"33",borderRadius:10,padding:"11px 14px",marginBottom:16,fontSize:12.5,color:C.green,fontWeight:600}},"✅ Tudo sob controle — nenhum alerta crítico no momento."),
+      alertasAuto===null&&aberto&&React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,color:C.dim,fontSize:12,marginBottom:16,padding:"4px 2px"}},
+        React.createElement("span",{className:"ia-pulse"},"◐")," Analisando seus dados..."),
       // Input principal
-      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:14}},
+      React.createElement("div",{style:{display:"flex",gap:8,marginBottom:16,background:C.bg,border:"1px solid #6366f140",borderRadius:13,padding:6,boxShadow:"0 2px 10px rgba(99,102,241,0.06)"}},
         React.createElement("input",{
-          style:{...base.inp,flex:1,margin:0,fontSize:13,borderColor:"#6366f144"},
-          placeholder:"Digite sua pergunta sobre os dados do sistema...",
+          style:{flex:1,margin:0,fontSize:13.5,background:"transparent",border:"none",outline:"none",color:C.text,padding:"8px 12px"},
+          placeholder:"Pergunte algo, peça uma análise ou um documento...",
           value:pergunta,
           onChange:function(e){setPergunta(e.target.value);},
           onKeyDown:function(e){if(e.key==="Enter")perguntarIA();}
         }),
         React.createElement("button",{
-          style:{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",border:"none",borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:(loading||!pergunta.trim())?"not-allowed":"pointer",opacity:(loading||!pergunta.trim())?0.6:1,flexShrink:0},
+          style:{background:(loading||!pergunta.trim())?"#3a3a55":"linear-gradient(135deg,#6366f1,#a855f7)",color:"#fff",border:"none",borderRadius:9,padding:"10px 22px",fontSize:13.5,fontWeight:700,cursor:(loading||!pergunta.trim())?"not-allowed":"pointer",opacity:(loading||!pergunta.trim())?0.7:1,flexShrink:0,boxShadow:(loading||!pergunta.trim())?"none":"0 3px 12px rgba(139,92,246,0.4)",transition:"all .2s"},
           disabled:loading||!pergunta.trim(),
           onClick:function(){perguntarIA();}
-        },loading?"⏳":"✨ Perguntar à IA")
+        },loading?React.createElement("span",{className:"ia-pulse"},"◐ Analisando"):"✨ Perguntar")
       ),
 
       // Categorias de perguntas
@@ -7612,20 +7831,22 @@ function IaDashboard(){
       ),
 
       // Resposta
-      resposta&&React.createElement("div",{style:{background:C.bg,borderRadius:12,padding:16,border:"1px solid #6366f133",borderLeft:"4px solid #6366f1",marginBottom:historico.length>0?12:0}},
-        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}},
-          React.createElement("div",null,
-            React.createElement("div",{style:{fontSize:10,color:"#818cf8",fontWeight:700,marginBottom:2}},"✨ RESPOSTA DO ASSISTENTE"),
-            React.createElement("div",{style:{fontSize:11,color:C.dim}},"Pergunta: "+resposta.pergunta)
+      resposta&&React.createElement("div",{style:{background:"linear-gradient(180deg,#15131f,#121019)",borderRadius:14,padding:"16px 18px",border:"1px solid #6366f133",boxShadow:"0 4px 20px rgba(99,102,241,0.08)",marginBottom:historico.length>0?12:0}},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,gap:10}},
+          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+            React.createElement("div",{style:{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,#6366f1,#a855f7)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0,boxShadow:"0 2px 10px rgba(139,92,246,0.4)"}},"✨"),
+            React.createElement("div",null,
+              React.createElement("div",{style:{fontSize:12.5,color:"#fff",fontWeight:700}},"Central de Inteligência"),
+              React.createElement("div",{style:{fontSize:10.5,color:C.dim,marginTop:1,maxWidth:380,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},"↳ "+resposta.pergunta)
+            )
           ),
-          React.createElement("button",{style:{background:"none",border:"none",color:C.dim,cursor:"pointer",fontSize:16,padding:"0 4px"},onClick:function(){setResposta(null);setPergunta("");}},"✕")
+          React.createElement("div",{style:{display:"flex",gap:4,flexShrink:0}},
+            React.createElement("button",{title:"Copiar resposta",style:{background:"rgba(255,255,255,0.06)",border:"none",color:C.muted,cursor:"pointer",fontSize:13,padding:"4px 8px",borderRadius:7},onClick:function(){try{navigator.clipboard.writeText(resposta.texto||"");}catch(e){}}},"📋"),
+            React.createElement("button",{title:"Fechar",style:{background:"rgba(255,255,255,0.06)",border:"none",color:C.dim,cursor:"pointer",fontSize:14,padding:"4px 9px",borderRadius:7},onClick:function(){setResposta(null);setPergunta("");}},"✕")
+          )
         ),
-        React.createElement("div",{style:{fontSize:13,color:C.text,lineHeight:1.8,whiteSpace:"pre-wrap"}},
-          (resposta.texto||"").split("**").map(function(parte,i){
-            return i%2===1?React.createElement("strong",{key:i,style:{color:"#a5b4fc"}},parte):parte;
-          })
-        ),
-        resposta.viaIA&&React.createElement("div",{style:{fontSize:10,color:"#8b5cf6",marginTop:10,fontStyle:"italic"}},"✨ Resposta gerada por IA com base nos seus dados")
+        React.createElement("div",{style:{borderTop:"1px solid #ffffff0d",paddingTop:12}},mdToReactIA(resposta.texto||"")),
+        resposta.viaIA&&React.createElement("div",{style:{fontSize:10,color:"#8b5cf6",marginTop:12,display:"flex",alignItems:"center",gap:5,opacity:0.8}},"✨ Gerado por IA com base nos seus dados em tempo real")
       ),
 
       // Histórico
@@ -9112,7 +9333,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v3.5 · jun/2026 · catálogo materiais")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v3.9 · jun/2026 · aumento chamados")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
