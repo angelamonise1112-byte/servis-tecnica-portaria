@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v3.9 AUMENTOCHAM JUN2026 -->
+<!-- SERVIS v4.0 ANALISECLICK JUN2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -7752,10 +7752,10 @@ function IaDashboard(){
         React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:11}},"Condomínios chamando mais que o mês anterior — vale investigar problema recorrente"),
         React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
           aumentosAuto.map(function(a,idx){
-            return React.createElement("div",{key:idx,style:{display:"flex",alignItems:"center",gap:12,background:"rgba(0,0,0,0.25)",borderRadius:9,padding:"10px 13px"}},
+            return React.createElement("div",{key:idx,title:"Clique para a IA analisar este aumento",onClick:function(){var q="Analise o aumento de chamados no condomínio "+a.cond+" (passou de "+a.antes+" no mês passado para "+a.agora+" neste mês). Quais problemas ou equipamentos recorrentes podem estar causando isso e o que você recomenda?";setPergunta(q);perguntar(q);},style:{display:"flex",alignItems:"center",gap:12,background:"rgba(0,0,0,0.25)",borderRadius:9,padding:"10px 13px",cursor:"pointer",transition:"background .15s"},onMouseEnter:function(e){e.currentTarget.style.background="rgba(99,102,241,0.18)";},onMouseLeave:function(e){e.currentTarget.style.background="rgba(0,0,0,0.25)";}},
               React.createElement("div",{style:{flex:1,minWidth:0}},
                 React.createElement("div",{style:{fontSize:13.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},a.cond),
-                React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"mês passado: "+a.antes+" · este mês: "+a.agora)
+                React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"mês passado: "+a.antes+" · este mês: "+a.agora+"  ·  🔍 clique para analisar")
               ),
               React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexShrink:0}},
                 React.createElement("div",{style:{display:"flex",alignItems:"baseline",gap:6}},
@@ -9333,7 +9333,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v3.9 · jun/2026 · aumento chamados")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.0 · jun/2026 · análise clicável")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
