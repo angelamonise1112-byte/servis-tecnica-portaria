@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.0 ANALISECLICK JUN2026 -->
+<!-- SERVIS v4.4 REL3FORMATOS JUN2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -7752,7 +7752,7 @@ function IaDashboard(){
         React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:11}},"Condomínios chamando mais que o mês anterior — vale investigar problema recorrente"),
         React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
           aumentosAuto.map(function(a,idx){
-            return React.createElement("div",{key:idx,title:"Clique para a IA analisar este aumento",onClick:function(){var q="Analise o aumento de chamados no condomínio "+a.cond+" (passou de "+a.antes+" no mês passado para "+a.agora+" neste mês). Quais problemas ou equipamentos recorrentes podem estar causando isso e o que você recomenda?";setPergunta(q);perguntar(q);},style:{display:"flex",alignItems:"center",gap:12,background:"rgba(0,0,0,0.25)",borderRadius:9,padding:"10px 13px",cursor:"pointer",transition:"background .15s"},onMouseEnter:function(e){e.currentTarget.style.background="rgba(99,102,241,0.18)";},onMouseLeave:function(e){e.currentTarget.style.background="rgba(0,0,0,0.25)";}},
+            return React.createElement("div",{key:idx,title:"Clique para a IA analisar este aumento",onClick:function(){var q="Analise o aumento de chamados no condomínio "+a.cond+" (passou de "+a.antes+" no mês passado para "+a.agora+" neste mês). Quais problemas ou equipamentos recorrentes podem estar causando isso e o que você recomenda?";setPergunta(q);perguntarIA(q);},style:{display:"flex",alignItems:"center",gap:12,background:"rgba(0,0,0,0.25)",borderRadius:9,padding:"10px 13px",cursor:"pointer",transition:"background .15s"},onMouseEnter:function(e){e.currentTarget.style.background="rgba(99,102,241,0.18)";},onMouseLeave:function(e){e.currentTarget.style.background="rgba(0,0,0,0.25)";}},
               React.createElement("div",{style:{flex:1,minWidth:0}},
                 React.createElement("div",{style:{fontSize:13.5,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},a.cond),
                 React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"mês passado: "+a.antes+" · este mês: "+a.agora+"  ·  🔍 clique para analisar")
@@ -7815,7 +7815,7 @@ function IaDashboard(){
           CATEGORIAS[catSel].perguntas.map(function(ex){
             return React.createElement("button",{key:ex,
               style:{background:"#6366f10d",color:"#818cf8",border:"1px solid #6366f122",borderRadius:8,padding:"5px 12px",fontSize:11,cursor:"pointer",textAlign:"left"},
-              onClick:function(){setPergunta(ex);perguntar(ex);}
+              onClick:function(){setPergunta(ex);perguntarIA(ex);}
             },ex);
           })
         )
@@ -7856,7 +7856,7 @@ function IaDashboard(){
           historico.map(function(h,i){
             return React.createElement("div",{key:i,
               style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:C.bg,borderRadius:8,cursor:"pointer",border:"1px solid "+C.border},
-              onClick:function(){setPergunta(h.p);perguntar(h.p);}
+              onClick:function(){setPergunta(h.p);perguntarIA(h.p);}
             },
               React.createElement("span",{style:{fontSize:11,color:C.text}},"❓ "+h.p),
               React.createElement("span",{style:{fontSize:10,color:C.dim,flexShrink:0,marginLeft:8}},h.hora)
@@ -8920,6 +8920,72 @@ function ProdutividadeDiaria({usuario}){
 
   var d=dados;
 
+  async function _coletarOSDia(){
+    var alvo=filtData||todayStr();
+    var res=await sbRaw.from("os").select("num,cond,tec,prob,relato,descricao,data,data_fechamento,status").or("data_fechamento.eq."+alvo+",data.eq."+alvo);
+    var rows=(res&&res.data)||[];
+    var lista=rows.filter(function(o){
+      var df=(o.data_fechamento||"").slice(0,10);
+      var da=(o.data||"").slice(0,10);
+      return df===alvo||(!o.data_fechamento&&da===alvo);
+    });
+    lista=[].concat(lista).sort(function(a,b){return (a.cond||"").localeCompare(b.cond||"");});
+    return {alvo:alvo,lista:lista};
+  }
+  function _linhasRel(lista){
+    function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+    return lista.map(function(o,idx){
+      var resol=o.relato||o.descricao||"—";
+      var dataOS=(o.data_fechamento||o.data||"").slice(0,10).split("-").reverse().join("/");
+      return "<tr style=\"background:"+(idx%2?"#f5f8fc":"#ffffff")+"\">"
+        +"<td>"+esc(o.cond)+"</td>"
+        +"<td style=\"text-align:center;font-weight:600\">"+esc(o.num)+"</td>"
+        +"<td>"+esc(o.tec||"—")+"</td>"
+        +"<td>"+esc(o.prob||"—")+"</td>"
+        +"<td>"+esc(resol)+"</td>"
+        +"<td style=\"text-align:center;white-space:nowrap\">"+esc(dataOS)+"</td></tr>";
+    }).join("");
+  }
+  function _baixarArquivo(conteudo,nome,mime){
+    var blob=new Blob([conteudo],{type:mime});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement("a");a.href=url;a.download=nome;document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},800);
+  }
+  async function gerarRelatorioOSDia(formato){
+    var r=await _coletarOSDia();var alvo=r.alvo,lista=r.lista;
+    var dataBR=new Date(alvo+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
+    var linhas=_linhasRel(lista);
+    if(!lista.length)linhas="<tr><td colspan=6 style=\"text-align:center;padding:30px;color:#888\">Nenhuma OS realizada nesta data.</td></tr>";
+    var estiloTabela="table{width:100%;border-collapse:collapse;font-size:12px}th{background:#1A5FA8;color:#fff;text-align:left;padding:9px 8px;font-size:11px}td{padding:8px;border:1px solid #e2e8f0;vertical-align:top}";
+    var cabecalho="<div style=\"border-bottom:3px solid #1A5FA8;padding-bottom:10px;margin-bottom:8px\"><h1 style=\"color:#1A5FA8;font-size:20px;margin:0\">Relatório Diário de Ordens de Serviço</h1><div style=\"color:#E87722;font-weight:700;font-size:13px\">SERVIS — Tecnologia em Segurança</div></div>"
+      +"<div style=\"color:#555;font-size:13px;margin:10px 0 16px\"><b>Data:</b> "+dataBR+" &nbsp;·&nbsp; <b>Total de OS realizadas:</b> "+lista.length+"</div>";
+    var tabela="<table><thead><tr><th>Condomínio</th><th style=text-align:center>Nº OS</th><th>Técnico</th><th>Problema</th><th>Resolução</th><th style=text-align:center>Data</th></tr></thead><tbody>"+linhas+"</tbody></table>";
+
+    if(formato==="excel"){
+      var xls="<html xmlns:o=\"urn:schemas-microsoft-com:office:office\" xmlns:x=\"urn:schemas-microsoft-com:office:excel\" xmlns=\"http://www.w3.org/TR/REC-html40\"><head><meta charset=\"UTF-8\"><style>"+estiloTabela+"</style></head><body>"+cabecalho+tabela+"</body></html>";
+      _baixarArquivo("\ufeff"+xls,"Relatorio_OS_"+alvo+".xls","application/vnd.ms-excel");
+      return;
+    }
+    if(formato==="word"){
+      var doc="<html xmlns:o=\"urn:schemas-microsoft-com:office:office\" xmlns:w=\"urn:schemas-microsoft-com:office:word\" xmlns=\"http://www.w3.org/TR/REC-html40\"><head><meta charset=\"UTF-8\"><style>@page{size:A4 landscape;margin:1.5cm}body{font-family:Arial}"+estiloTabela+"</style></head><body>"+cabecalho+tabela+"<div style=\"margin-top:20px;font-size:11px;color:#888\">Gerado em "+new Date().toLocaleString("pt-BR")+" · Servis Técnica Analytics</div></body></html>";
+      _baixarArquivo("\ufeff"+doc,"Relatorio_OS_"+alvo+".doc","application/msword");
+      return;
+    }
+    // PDF (janela de impressão)
+    var html="<!DOCTYPE html><html lang=pt-BR><head><meta charset=UTF-8><title>Relatório Diário de OS — "+alvo+"</title>"
+      +"<style>*{font-family:Arial,Helvetica,sans-serif;box-sizing:border-box}body{margin:0;padding:32px;color:#222}"
+      +estiloTabela
+      +"td{border-bottom:1px solid #e2e8f0;border-left:none;border-right:none;border-top:none}"
+      +".rodape{margin-top:24px;font-size:11px;color:#888;text-align:center;border-top:1px solid #ddd;padding-top:10px}"
+      +"@media print{body{padding:0}.noprint{display:none}}.btn{background:#1A5FA8;color:#fff;border:none;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}</style></head><body>"
+      +cabecalho+tabela
+      +"<div class=rodape>Gerado em "+new Date().toLocaleString("pt-BR")+" · Servis Técnica Analytics</div>"
+      +"<div class=noprint style=\"text-align:center;margin-top:24px\"><button class=btn onclick=window.print()>🖨 Imprimir / Salvar PDF</button></div></body></html>";
+    var w=window.open("","_blank");
+    if(!w){alert("Permita pop-ups para gerar o relatório em PDF.");return;}
+    w.document.write(html);w.document.close();
+  }
   function gerarPDFProd(){
     if(!dados)return;
     try{
@@ -8976,6 +9042,10 @@ function ProdutividadeDiaria({usuario}){
           React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:11,padding:"7px 14px"},onClick:function(){gerarPDFProd();}},
             "📄 Relatório PDF"
           ),
+          React.createElement("span",{style:{fontSize:11,color:C.muted,alignSelf:"center",marginLeft:4}},"Relatório de OS:"),
+          React.createElement("button",{style:{...btnStyle(C.red,true),fontSize:11,padding:"7px 12px"},title:"Relatório em PDF",onClick:function(){gerarRelatorioOSDia("pdf");}},"📄 PDF"),
+          React.createElement("button",{style:{...btnStyle(C.blue,true),fontSize:11,padding:"7px 12px"},title:"Relatório em Word",onClick:function(){gerarRelatorioOSDia("word");}},"📝 Word"),
+          React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:11,padding:"7px 12px"},title:"Relatório em Excel",onClick:function(){gerarRelatorioOSDia("excel");}},"📊 Excel"),
           React.createElement("button",{style:{...btnStyle(C.blue,true),fontSize:11,padding:"7px 14px"},onClick:load},"↺ Atualizar")
         )
       )
@@ -9333,7 +9403,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.0 · jun/2026 · análise clicável")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.4 · jun/2026 · relatório pdf/word/excel")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
