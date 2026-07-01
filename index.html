@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.6 LIMPEZA JUN2026 -->
+<!-- SERVIS v4.7 PROGRESSOFIX JUN2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -1344,8 +1344,7 @@ function ServicoReginaldo({onSave}){
             )
           )
         ),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Observações"),React.createElement("textarea",{style:{...base.inp,height:50},value:f.obs||"",onChange:upd("obs")})),
-        React.createElement(TimelineObra,{f:f})
+        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Observações"),React.createElement("textarea",{style:{...base.inp,height:50},value:f.obs||"",onChange:upd("obs")}))
       ),
       React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}},
         React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
@@ -5636,6 +5635,7 @@ function CondoSearch({value,onChange,options}){
 
 
 function TimelineObra({f}){
+  f=f||{};
   var marcos=[
     {k:"data_inicio",label:"Início",icon:"📅"},
     {k:"data_retirada_material",label:"Retirada Material",icon:"📦"},
@@ -5879,6 +5879,7 @@ function Instalacoes({onSave}){
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"🔑 Entrega de Dispositivos"),React.createElement("input",{type:"date",style:base.inp,value:f.data_entrega_dispositivo||"",onChange:upd("data_entrega_dispositivo")})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"✅ Checklist"),React.createElement("input",{type:"date",style:base.inp,value:f.data_checklist||"",onChange:upd("data_checklist")})),
         React.createElement("div",null,React.createElement("label",{style:base.lbl},"🏠 Entrega da Portaria"),React.createElement("input",{type:"date",style:base.inp,value:f.data_entrega_portaria||"",onChange:upd("data_entrega_portaria")})),
+        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement(TimelineObra,{f:f})),
         React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Status"),React.createElement("div",{style:{display:"flex",gap:6,flexWrap:"wrap"}},Object.keys(STATUS_INST).map(s=>React.createElement("button",{key:s,style:{...btnStyle(STATUS_INST[s].c,f.status!==s),fontSize:11},onClick:()=>setF(p=>({...p,status:s}))},s)))),
         React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Obs"),React.createElement("textarea",{style:{...base.inp,height:50},value:f.obs||"",onChange:upd("obs")})),
         React.createElement(MateriaisInstalacao,{instalacaoId:f.id})
@@ -9189,7 +9190,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.6 · jun/2026 · limpeza código morto")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.7 · jun/2026 · progresso obra corrigido")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
