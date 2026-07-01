@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.4 REL3FORMATOS JUN2026 -->
+<!-- SERVIS v4.6 LIMPEZA JUN2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -7357,229 +7357,8 @@ function IaDashboard(){
 
   const [catSel,setCatSel]=useState(0);
 
-  const perguntar=async function(q){
-    var p=(q||pergunta).trim();
-    if(!p||loading)return;
-    setLoading(true);setResposta(null);
-    var pLow=p.toLowerCase();
-    var hoje=new Date();
-    var anoAtual=String(hoje.getFullYear());
-    var mesAtual=String(hoje.getMonth()+1).padStart(2,"0");
-    var MESES_BR=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-    var mesNome=MESES_BR[hoje.getMonth()];
+  // (função antiga rule-based removida — agora tudo usa perguntarIA)
 
-    var [rosRes,prevRes,tecRes,condRes,pendRes,matRes,instRes,heRes,atRes]=await Promise.all([
-      sb.from("os").select("num,data,status,cond,tec,prob,pri,data_fechamento").gte("data",anoAtual+"-01-01").order("data",{ascending:false}),
-      sb.from("preventivas").select("id,cond,status,tecnico,primeira_visita,retorno"),
-      sb.from("tecnicos").select("nome,status"),
-      sb.from("condominios").select("nome,tecnico,area_tecnico,endereco,regional"),
-      sb.from("os_pendencia").select("num,cond,tec,motivo,responsavel,status,data,data_pendencia"),
-      sb.from("materiais_lancar").select("material,quantidade,valor_unit,valor_total,status,condominio,cod_produto"),
-      sb.from("instalacoes").select("cond,tec,status,data_inicio,data_entrega_portaria"),
-      sb.from("horas_extras").select("tecnico,status,total_h,data"),
-      sb.from("atestados").select("status,tec,retorno")
-    ]);
-
-    var os=rosRes.data||[];
-    var prevs=prevRes.data||[];
-    var tecs=tecRes.data||[];
-    var conds=condRes.data||[];
-    var pend=(pendRes&&pendRes.data)||[];
-    var mats=(matRes&&matRes.data)||[];
-    var insts=(instRes&&instRes.data)||[];
-    var hes=(heRes&&heRes.data)||[];
-    var ats=(atRes&&atRes.data)||[];
-    var osMes=os.filter(function(o){return (o.data||"").slice(5,7)===mesAtual;});
-    var osAb=os.filter(function(o){return o.status==="Aberto";});
-    var slaVenc=osAb.filter(function(o){return (hoje-new Date(o.data))>72*3600000;});
-
-    // Mapas
-    var condOsMap={};
-    os.forEach(function(o){if(o.cond){if(!condOsMap[o.cond])condOsMap[o.cond]={total:0,abertas:0,fech:0,probs:[]};condOsMap[o.cond].total++;if(o.status==="Aberto")condOsMap[o.cond].abertas++;else condOsMap[o.cond].fech++;if(o.prob)condOsMap[o.cond].probs.push(o.prob);}});
-
-    var condOsMes={};
-    osMes.forEach(function(o){if(o.cond)condOsMes[o.cond]=(condOsMes[o.cond]||0)+1;});
-
-    var tecMap={};
-    os.forEach(function(o){if(!o.tec)return;if(!tecMap[o.tec])tecMap[o.tec]={total:0,fech:0,ab:0};tecMap[o.tec].total++;if(o.status==="Fechado")tecMap[o.tec].fech++;else tecMap[o.tec].ab++;});
-
-    var probMap={};
-    os.forEach(function(o){if(o.prob)probMap[o.prob]=(probMap[o.prob]||0)+1;});
-
-    var condPrevMap={};
-    prevs.forEach(function(p2){if(p2.cond){if(!condPrevMap[p2.cond])condPrevMap[p2.cond]={total:0,concl:0,pend:0};condPrevMap[p2.cond].total++;if(p2.status==="Concluída")condPrevMap[p2.cond].concl++;else condPrevMap[p2.cond].pend++;}});
-
-    var txt="";
-
-    // ── VISTORIA URGENTE ──
-    if(pLow.includes("vistoria")||pLow.includes("urgente")){
-      var urgentes=Object.entries(condOsMap).filter(function(e){return e[1].abertas>=2;}).sort(function(a,b){return b[1].abertas-a[1].abertas;}).slice(0,8);
-      txt="🚨 **Condomínios que precisam de vistoria urgente:**\n\n";
-      if(urgentes.length===0){txt+="✅ Nenhum condomínio com situação crítica no momento.";}
-      else{
-        urgentes.forEach(function(e,i){
-          var nivel=e[1].abertas>=5?"🔴 CRÍTICO":e[1].abertas>=3?"🟠 ALTO":"🟡 MÉDIO";
-          txt+=(i+1)+". **"+e[0]+"** — "+nivel+"\n";
-          txt+="   "+e[1].abertas+" OS abertas | "+e[1].total+" no ano\n";
-        });
-        txt+="\n💡 Condomínios com 2+ OS abertas precisam de atenção imediata.";
-      }
-    }
-    // ── MAIS OS ABERTAS ──
-    else if(pLow.includes("mais os abertas")||pLow.includes("mais chamados")||(pLow.includes("condomin")&&pLow.includes("abertas"))){
-      var topAb=Object.entries(condOsMap).sort(function(a,b){return b[1].abertas-a[1].abertas;}).filter(function(e){return e[1].abertas>0;}).slice(0,8);
-      txt="🔴 **Condomínios com mais OS abertas:**\n\n";
-      if(topAb.length===0){txt+="✅ Nenhuma OS aberta no momento!";}
-      else{topAb.forEach(function(e,i){txt+=(i+1)+". "+e[0]+" — "+e[1].abertas+" abertas ("+e[1].total+" no ano)\n";});}
-    }
-    // ── CHAMADOS NO MÊS ──
-    else if(pLow.includes("chamado")||(pLow.includes("condomin")&&pLow.includes("mes"))){
-      var topMes=Object.entries(condOsMes).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
-      txt="📊 **Condomínios com mais chamados em "+mesNome+":**\n\n";
-      if(topMes.length===0){txt+="Nenhuma OS registrada em "+mesNome+" ainda.";}
-      else{
-        topMes.forEach(function(e,i){txt+=(i+1)+". "+e[0]+" — "+e[1]+" OS\n";});
-        txt+="\nTotal de OS em "+mesNome+": "+osMes.length;
-      }
-    }
-    // ── SEM PREVENTIVA ──
-    else if(pLow.includes("sem preventiva")||pLow.includes("preventiva")&&pLow.includes("condomin")){
-      var semPrev=conds.filter(function(c){return !condPrevMap[c.nome];});
-      var comPend=Object.entries(condPrevMap).filter(function(e){return e[1].pend>0;}).sort(function(a,b){return b[1].pend-a[1].pend;}).slice(0,5);
-      txt="◈ **Situação das Preventivas por Condomínio:**\n\n";
-      txt+="📌 "+semPrev.length+" condomínios SEM preventiva cadastrada:\n";
-      semPrev.slice(0,5).forEach(function(c){txt+="  • "+c.nome+"\n";});
-      if(semPrev.length>5)txt+="  ...e mais "+(semPrev.length-5)+"\n";
-      if(comPend.length>0){
-        txt+="\n⏳ Condomínios com preventivas pendentes:\n";
-        comPend.forEach(function(e){txt+="  • "+e[0]+" — "+e[1].pend+" pendente(s)\n";});
-      }
-    }
-    // ── PRODUTIVIDADE TÉCNICOS ──
-    else if(pLow.includes("produtiv")||pLow.includes("técnico")&&pLow.includes("mes")||pLow.includes("tecnico")&&pLow.includes("mes")){
-      var rankMes=Object.entries((function(){var m={};osMes.filter(function(o){return o.tec&&o.status==="Fechado";}).forEach(function(o){m[o.tec]=(m[o.tec]||0)+1;});return m;})()).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
-      txt="🏆 **Técnicos mais produtivos em "+mesNome+":**\n\n";
-      if(rankMes.length===0){txt+="Nenhuma OS fechada em "+mesNome+" ainda.";}
-      else{
-        rankMes.forEach(function(e,i){
-          var total=tecMap[e[0]]?tecMap[e[0]].fech:0;
-          txt+=(i+1)+". **"+e[0]+"** — "+e[1]+" OS fechadas no mês ("+total+" no ano)\n";
-        });
-      }
-    }
-    // ── MELHOR TÉCNICO ANO ──
-    else if(pLow.includes("fechou mais")||(pLow.includes("técnico")||pLow.includes("tecnico"))&&pLow.includes("ano")){
-      var rankAno=Object.entries(tecMap).sort(function(a,b){return b[1].fech-a[1].fech;}).slice(0,8);
-      txt="🥇 **Técnicos com mais OS fechadas em "+anoAtual+":**\n\n";
-      rankAno.forEach(function(e,i){
-        var pct=e[1].total>0?Math.round(e[1].fech/e[1].total*100):0;
-        var bar=["████████████████████"].join("").slice(0,Math.round(pct/10))+"░░░░░░░░░░".slice(0,10-Math.round(pct/10));
-        txt+=(i+1)+". **"+e[0]+"** — "+e[1].fech+" fechadas | "+bar+" "+pct+"%\n";
-      });
-    }
-    // ── DESEMPENHO TÉCNICOS ──
-    else if(pLow.includes("desempenho")||(pLow.includes("técnico")||pLow.includes("tecnico"))&&(pLow.includes("como")||pLow.includes("situação"))){
-      txt="👷 **Desempenho da equipe — "+anoAtual+":**\n\n";
-      Object.entries(tecMap).sort(function(a,b){return b[1].total-a[1].total;}).forEach(function(e){
-        var pct=e[1].total>0?Math.round(e[1].fech/e[1].total*100):0;
-        var status=pct>=80?"✅":pct>=60?"🟡":"🔴";
-        txt+=status+" **"+e[0]+"**: "+e[1].fech+"/"+e[1].total+" OS ("+pct+"% eficiência)\n";
-      });
-    }
-    // ── TÉCNICO COM MAIS OS ABERTAS ──
-    else if(pLow.includes("técnico")&&pLow.includes("abertas")||pLow.includes("tecnico")&&pLow.includes("abertas")){
-      var rankAb=Object.entries(tecMap).filter(function(e){return e[1].ab>0;}).sort(function(a,b){return b[1].ab-a[1].ab;}).slice(0,8);
-      txt="⚠️ **Técnicos com mais OS abertas:**\n\n";
-      if(rankAb.length===0){txt+="✅ Nenhum técnico com OS abertas!";}
-      else{rankAb.forEach(function(e,i){txt+=(i+1)+". "+e[0]+" — "+e[1].ab+" abertas\n";});}
-    }
-    // ── SLA VENCIDO ──
-    else if(pLow.includes("sla")||pLow.includes("vencid")||pLow.includes("prazo")||pLow.includes("atras")){
-      txt="⏰ **OS com SLA vencido (>72h em aberto):**\n\n";
-      if(slaVenc.length===0){txt+="✅ Nenhuma OS com SLA vencido no momento!";}
-      else{
-        txt+="⚠️ "+slaVenc.length+" OS em atraso:\n\n";
-        slaVenc.slice(0,8).forEach(function(o){
-          var h=Math.round((hoje-new Date(o.data))/3600000);
-          var d=Math.floor(h/24);
-          txt+="• **OS #"+o.num+"** | "+o.cond+"\n";
-          txt+="  👷 "+(o.tec||"—")+" | ⏱ "+d+"d "+h%24+"h em aberto\n";
-        });
-        if(slaVenc.length>8)txt+="\n...e mais "+(slaVenc.length-8)+" OS.";
-      }
-    }
-    // ── PROBLEMAS FREQUENTES ──
-    else if(pLow.includes("problem")||pLow.includes("defeito")||pLow.includes("frequen")){
-      var topProbs=Object.entries(probMap).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
-      txt="🔧 **Problemas mais frequentes em "+anoAtual+":**\n\n";
-      var total2=topProbs.reduce(function(s,e){return s+e[1];},0);
-      topProbs.forEach(function(e,i){
-        var pct=Math.round(e[1]/os.length*100);
-        txt+=(i+1)+". **"+e[0]+"** — "+e[1]+" ocorrências ("+pct+"%)\n";
-      });
-    }
-    // ── OS ABERTAS NO MÊS ──
-    else if(pLow.includes("abertas")&&pLow.includes("mes")||pLow.includes("quantas os")){
-      var fechMes=osMes.filter(function(o){return o.status==="Fechado";}).length;
-      var abMes=osMes.filter(function(o){return o.status==="Aberto";}).length;
-      txt="📋 **OS em "+mesNome+" de "+anoAtual+":**\n\n";
-      txt+="• Total abertas no mês: "+osMes.length+"\n";
-      txt+="• Fechadas: "+fechMes+"\n";
-      txt+="• Ainda em aberto: "+abMes+"\n";
-      txt+="• SLA do mês: "+Math.round(fechMes/Math.max(1,osMes.length)*100)+"%\n";
-    }
-    // ── PREVENTIVAS STATUS ──
-    else if(pLow.includes("preventi")){
-      var concl=prevs.filter(function(p2){return p2.status==="Concluída";}).length;
-      var pend=prevs.filter(function(p2){return p2.status==="Pendente";}).length;
-      var em=prevs.filter(function(p2){return p2.status==="Em andamento";}).length;
-      var pct=prevs.length>0?Math.round(concl/prevs.length*100):0;
-      txt="◈ **Status das Preventivas:**\n\n";
-      txt+="• Total: "+prevs.length+"\n";
-      txt+="• ✅ Concluídas: "+concl+" ("+pct+"%)\n";
-      txt+="• 🔵 Em andamento: "+em+"\n";
-      txt+="• ⏳ Pendentes: "+pend+"\n\n";
-      txt+=pct>=80?"✅ Ótimo! Meta de 80% atingida.":pct>=60?"🟡 Atenção: abaixo da meta de 80%.":"🔴 Crítico: muito abaixo da meta.";
-    }
-    // ── ALERTAS ──
-    else if(pLow.includes("alerta")||pLow.includes("atenção")||pLow.includes("atencao")){
-      txt="🚨 **Principais alertas do sistema:**\n\n";
-      var alertas=[];
-      if(slaVenc.length>0)alertas.push("🔴 "+slaVenc.length+" OS com SLA vencido (>72h)");
-      var condsUrgentes=Object.values(condOsMap).filter(function(c){return c.abertas>=3;}).length;
-      if(condsUrgentes>0)alertas.push("🟠 "+condsUrgentes+" condomínio(s) com 3+ OS abertas");
-      var prevPend=prevs.filter(function(p2){return p2.status==="Pendente";}).length;
-      if(prevPend>5)alertas.push("🟡 "+prevPend+" preventivas pendentes");
-      var semPrev2=conds.filter(function(c){return !condPrevMap[c.nome];}).length;
-      if(semPrev2>0)alertas.push("⚪ "+semPrev2+" condomínios sem preventiva");
-      if(alertas.length===0){txt+="✅ Nenhum alerta crítico no momento!";}
-      else{alertas.forEach(function(a){txt+=a+"\n";});}
-    }
-    // ── RESUMO GERAL ──
-    else{
-      var totalFech=os.filter(function(o){return o.status==="Fechado";}).length;
-      var slaP=Math.round(totalFech/Math.max(1,os.length)*100);
-      var prevConcl=prevs.filter(function(p2){return p2.status==="Concluída";}).length;
-      txt="📊 **Resumo Geral — "+anoAtual+":**\n\n";
-      txt+="📋 OS: "+os.length+" total | "+osAb.length+" abertas | "+totalFech+" fechadas\n";
-      txt+="⏱ SLA: "+slaP+"% cumprimento | "+slaVenc.length+" vencidos\n";
-      txt+="◈ Preventivas: "+prevs.length+" | "+prevConcl+" concluídas\n";
-      txt+="👷 Técnicos: "+tecs.length+" | Condomínios: "+conds.length+"\n\n";
-      if(slaVenc.length>0)txt+="⚠️ ALERTA: "+slaVenc.length+" OS com SLA vencido!\n";
-      if(slaP>=80)txt+="✅ SLA dentro da meta ("+slaP+"%)";
-      else txt+="🔴 SLA abaixo da meta ("+slaP+"% — meta: 80%)";
-      txt+="\n\n💡 **Dica:** Tente perguntar algo mais específico como:\n";
-      txt+="• \"Quais condomínios precisam de vistoria urgente?\"\n";
-      txt+="• \"Quais técnicos estão mais produtivos?\"\n";
-      txt+="• \"Quais problemas aparecem com mais frequência?\"";
-    }
-
-    setResposta({texto:txt,pergunta:p});
-    setHistorico(function(h){return [{p,hora:new Date().toLocaleTimeString("pt-BR")},...h].slice(0,8);});
-    setLoading(false);
-  };
-
-  // Pergunta livre à IA (Claude) com contexto real dos dados
   const perguntarIA=async function(q){
     var p=(q||pergunta).trim();
     if(!p||loading)return;
@@ -8850,6 +8629,7 @@ function ProdutividadeDiaria({usuario}){
 
   const hoje=new Date();
   const [filtData,setFiltData]=useState(todayStr());
+  const [relTec,setRelTec]=useState("");
   const hojeStr=filtData;
   const diaLabel=new Date(filtData+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   var hojeLabel=diaLabel;
@@ -8929,8 +8709,9 @@ function ProdutividadeDiaria({usuario}){
       var da=(o.data||"").slice(0,10);
       return df===alvo||(!o.data_fechamento&&da===alvo);
     });
+    if(relTec){lista=lista.filter(function(o){return (o.tec||"")===relTec;});}
     lista=[].concat(lista).sort(function(a,b){return (a.cond||"").localeCompare(b.cond||"");});
-    return {alvo:alvo,lista:lista};
+    return {alvo:alvo,lista:lista,tec:relTec};
   }
   function _linhasRel(lista){
     function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
@@ -8955,21 +8736,22 @@ function ProdutividadeDiaria({usuario}){
   async function gerarRelatorioOSDia(formato){
     var r=await _coletarOSDia();var alvo=r.alvo,lista=r.lista;
     var dataBR=new Date(alvo+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
+    var tecLabel=r.tec?(" &nbsp;·&nbsp; <b>Técnico:</b> "+r.tec):"";
     var linhas=_linhasRel(lista);
     if(!lista.length)linhas="<tr><td colspan=6 style=\"text-align:center;padding:30px;color:#888\">Nenhuma OS realizada nesta data.</td></tr>";
     var estiloTabela="table{width:100%;border-collapse:collapse;font-size:12px}th{background:#1A5FA8;color:#fff;text-align:left;padding:9px 8px;font-size:11px}td{padding:8px;border:1px solid #e2e8f0;vertical-align:top}";
     var cabecalho="<div style=\"border-bottom:3px solid #1A5FA8;padding-bottom:10px;margin-bottom:8px\"><h1 style=\"color:#1A5FA8;font-size:20px;margin:0\">Relatório Diário de Ordens de Serviço</h1><div style=\"color:#E87722;font-weight:700;font-size:13px\">SERVIS — Tecnologia em Segurança</div></div>"
-      +"<div style=\"color:#555;font-size:13px;margin:10px 0 16px\"><b>Data:</b> "+dataBR+" &nbsp;·&nbsp; <b>Total de OS realizadas:</b> "+lista.length+"</div>";
+      +"<div style=\"color:#555;font-size:13px;margin:10px 0 16px\"><b>Data:</b> "+dataBR+tecLabel+" &nbsp;·&nbsp; <b>Total de OS realizadas:</b> "+lista.length+"</div>";
     var tabela="<table><thead><tr><th>Condomínio</th><th style=text-align:center>Nº OS</th><th>Técnico</th><th>Problema</th><th>Resolução</th><th style=text-align:center>Data</th></tr></thead><tbody>"+linhas+"</tbody></table>";
 
     if(formato==="excel"){
       var xls="<html xmlns:o=\"urn:schemas-microsoft-com:office:office\" xmlns:x=\"urn:schemas-microsoft-com:office:excel\" xmlns=\"http://www.w3.org/TR/REC-html40\"><head><meta charset=\"UTF-8\"><style>"+estiloTabela+"</style></head><body>"+cabecalho+tabela+"</body></html>";
-      _baixarArquivo("\ufeff"+xls,"Relatorio_OS_"+alvo+".xls","application/vnd.ms-excel");
+      _baixarArquivo("\ufeff"+xls,"Relatorio_OS_"+alvo+(r.tec?("_"+r.tec.replace(/[^a-zA-Z0-9]/g,"")):"")+".xls","application/vnd.ms-excel");
       return;
     }
     if(formato==="word"){
       var doc="<html xmlns:o=\"urn:schemas-microsoft-com:office:office\" xmlns:w=\"urn:schemas-microsoft-com:office:word\" xmlns=\"http://www.w3.org/TR/REC-html40\"><head><meta charset=\"UTF-8\"><style>@page{size:A4 landscape;margin:1.5cm}body{font-family:Arial}"+estiloTabela+"</style></head><body>"+cabecalho+tabela+"<div style=\"margin-top:20px;font-size:11px;color:#888\">Gerado em "+new Date().toLocaleString("pt-BR")+" · Servis Técnica Analytics</div></body></html>";
-      _baixarArquivo("\ufeff"+doc,"Relatorio_OS_"+alvo+".doc","application/msword");
+      _baixarArquivo("\ufeff"+doc,"Relatorio_OS_"+alvo+(r.tec?("_"+r.tec.replace(/[^a-zA-Z0-9]/g,"")):"")+".doc","application/msword");
       return;
     }
     // PDF (janela de impressão)
@@ -9043,6 +8825,10 @@ function ProdutividadeDiaria({usuario}){
             "📄 Relatório PDF"
           ),
           React.createElement("span",{style:{fontSize:11,color:C.muted,alignSelf:"center",marginLeft:4}},"Relatório de OS:"),
+          React.createElement("select",{value:relTec,onChange:function(e){setRelTec(e.target.value);},style:{...base.sel,width:150,fontSize:11,padding:"6px 8px"}},
+            React.createElement("option",{value:""},"Todos os técnicos"),
+            ((dados&&dados.tecs)||[]).map(function(t){return React.createElement("option",{key:t.nome,value:t.nome},t.nome);})
+          ),
           React.createElement("button",{style:{...btnStyle(C.red,true),fontSize:11,padding:"7px 12px"},title:"Relatório em PDF",onClick:function(){gerarRelatorioOSDia("pdf");}},"📄 PDF"),
           React.createElement("button",{style:{...btnStyle(C.blue,true),fontSize:11,padding:"7px 12px"},title:"Relatório em Word",onClick:function(){gerarRelatorioOSDia("word");}},"📝 Word"),
           React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:11,padding:"7px 12px"},title:"Relatório em Excel",onClick:function(){gerarRelatorioOSDia("excel");}},"📊 Excel"),
@@ -9403,7 +9189,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.4 · jun/2026 · relatório pdf/word/excel")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.6 · jun/2026 · limpeza código morto")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
