@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.11 SLAAJUSTE JUL2026 -->
+<!-- SERVIS v4.12 PRIORIDADEIA JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -931,6 +931,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
   const [filtTec,setFiltTec]=useState("");
   const [filtAno,setFiltAno]=useState(String(new Date().getFullYear()));
   const [filtMes,setFiltMes]=useState("");
+  const [ordenarPor,setOrdenarPor]=useState("risco");
   const [pagina,setPagina]=useState(1);
   const [detalheOS,setDetalheOS]=useState(null);
   const [editOS,setEditOS]=useState(null);
@@ -1009,8 +1010,38 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
     });
   },[data,busca,filtStatus,filtTec,filtAno,filtMes]);
 
+  // ── Priorização inteligente: escore de risco por OS ──
+  function _calcPrazoUteis(dataAb){
+    var d=new Date(dataAb+"T08:00:00");var h=48;
+    while(h>0){var dow=d.getDay();if(dow!==0&&dow!==6){var hd=Math.min(h,10);d.setHours(d.getHours()+hd);h-=hd;if(d.getHours()>=18){d.setDate(d.getDate()+1);d.setHours(8,0,0,0);}}else{d.setDate(d.getDate()+1);d.setHours(8,0,0,0);}}
+    return d;
+  }
+  const reincMap=useMemo(function(){
+    var m={};var lim=new Date();lim.setDate(lim.getDate()-60);var limStr=lim.toISOString().slice(0,10);
+    (data||[]).forEach(function(o){if(o.cond&&o.prob&&(o.data||"")>=limStr){var k=o.cond+"||"+o.prob;m[k]=(m[k]||0)+1;}});
+    return m;
+  },[data]);
+  function calcRiscoOS(d,hoje){
+    if(!d||(d.status!=="Aberto"&&d.status!=="Em andamento"))return {score:0,nivel:null};
+    var score=0;var vencida=false;
+    if(d.data){var prazo=_calcPrazoUteis(d.data);if(hoje>prazo){score+=100;vencida=true;}else{var hRest=(prazo-hoje)/3600000;score+=Math.max(0,60-hRest);}}
+    if(d.pri==="Alta")score+=40;else if(d.pri==="Média"||d.pri==="Media")score+=20;
+    if(d.data){var dias=Math.floor((hoje-new Date(String(d.data).slice(0,10)+"T12:00:00"))/86400000);if(dias>0)score+=Math.min(30,dias*2);}
+    if(d.cond&&d.prob&&(reincMap[d.cond+"||"+d.prob]||0)>=2)score+=30;
+    var nivel=vencida?"critico":score>=60?"alto":score>=30?"medio":"baixo";
+    return {score:score,nivel:nivel};
+  }
+  const filtradoOrdenado=useMemo(function(){
+    if(ordenarPor!=="risco")return filtered;
+    var hoje=new Date();
+    return [].concat(filtered).map(function(d){return {d:d,r:calcRiscoOS(d,hoje).score};}).sort(function(a,b){
+      if(b.r!==a.r)return b.r-a.r;
+      return (b.d.data||"").localeCompare(a.d.data||"");
+    }).map(function(x){return x.d;});
+  },[filtered,ordenarPor,reincMap]);
+
   const totalPags=Math.ceil(filtered.length/POR_PAG);
-  const paginado=filtered.slice((pagina-1)*POR_PAG,pagina*POR_PAG);
+  const paginado=filtradoOrdenado.slice((pagina-1)*POR_PAG,pagina*POR_PAG);
 
   useEffect(function(){setPagina(1);},[busca,filtStatus,filtTec,filtAno,filtMes]);
 
@@ -1174,7 +1205,12 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
           React.createElement("option",{value:""},"Todos meses"),
           MESES_N.map(function(m,i){return React.createElement("option",{key:m,value:String(i+1).padStart(2,"0")},m);})
         ),
-        React.createElement("span",{style:{fontSize:12,color:C.dim,alignSelf:"center"}},filtered.length+" registros")
+        React.createElement("span",{style:{fontSize:12,color:C.dim,alignSelf:"center"}},filtered.length+" registros"),
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:4,marginLeft:8,alignSelf:"center"}},
+          React.createElement("span",{style:{fontSize:11,color:C.muted}},"Ordenar:"),
+          React.createElement("button",{onClick:function(){setOrdenarPor("risco");},style:{fontSize:11,fontWeight:700,border:"none",borderRadius:6,padding:"6px 10px",cursor:"pointer",background:ordenarPor==="risco"?C.blue:C.card,color:ordenarPor==="risco"?"#fff":C.muted}},"🎯 Risco"),
+          React.createElement("button",{onClick:function(){setOrdenarPor("data");},style:{fontSize:11,fontWeight:700,border:"none",borderRadius:6,padding:"6px 10px",cursor:"pointer",background:ordenarPor==="data"?C.blue:C.card,color:ordenarPor==="data"?"#fff":C.muted}},"📅 Data")
+        )
       )
     ),
     // Corpo
@@ -1187,8 +1223,13 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
               React.createElement(Table,{
                 cols:["Nº OS","Abertura","Fechamento","Condomínio","Endereço","Técnico","Problema / Descrição","Pri","Status","Ações"],
                 rows:paginado.map(function(d){
+                  var _risco=calcRiscoOS(d,new Date());
+                  var _rc={critico:{c:C.red,t:"VENCIDA"},alto:{c:C.orange,t:"Alta urgência"},medio:{c:C.yellow,t:"Atenção"}}[_risco.nivel];
                   return [
-                    React.createElement("span",{style:{color:C.cyan,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"},onClick:function(){setDetalheOS(d);}},d.num),
+                    React.createElement("span",{style:{display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}},
+                      _rc?React.createElement("span",{title:_rc.t,style:{width:9,height:9,borderRadius:"50%",background:_rc.c,flexShrink:0,boxShadow:"0 0 5px "+_rc.c}}):null,
+                      React.createElement("span",{style:{color:C.cyan,fontWeight:700,cursor:"pointer"},onClick:function(){setDetalheOS(d);}},d.num)
+                    ),
                     React.createElement("span",{style:{fontSize:11,whiteSpace:"nowrap"}},fmt(d.data)),
                     d.data_fechamento?React.createElement("span",{style:{fontSize:11,color:C.green,whiteSpace:"nowrap"}},fmt(d.data_fechamento)):React.createElement("span",{style:{color:C.dim}},"—"),
                     React.createElement("div",{style:{fontSize:11,minWidth:120,maxWidth:160,wordBreak:"break-word",lineHeight:1.4,whiteSpace:"normal"}},d.cond),
@@ -9232,7 +9273,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.11 · jul/2026 · sla gráfico + filtro")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.12 · jul/2026 · priorização inteligente")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
