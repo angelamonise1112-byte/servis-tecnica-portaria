@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.10 HOTFIXOS JUL2026 -->
+<!-- SERVIS v4.11 SLAAJUSTE JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -4744,7 +4744,7 @@ function SLA(){
   const [filtTec,setFiltTec]=useState("");
   const [filtPri,setFiltPri]=useState("");
   const [filtAno,setFiltAno]=useState(String(new Date().getFullYear()));
-  const [filtMes,setFiltMes]=useState(String(new Date().getMonth()+1).padStart(2,"0"));
+  const [filtMes,setFiltMes]=useState("");
   const [detalhe,setDetalhe]=useState(null);
   const [pagina,setPagina]=useState(1);
   const POR_PAG=20;
@@ -5021,15 +5021,15 @@ function SLA(){
       ),
       // ── TAXA DE SLA MÊS A MÊS ──
       (stats.slaPorMes||[]).length>0&&React.createElement("div",{style:{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:16,marginBottom:16}},
-        React.createElement("div",{style:{fontWeight:700,fontSize:13,marginBottom:12,color:C.blue}},"📈 Taxa de Cumprimento de SLA (mês a mês)"),
-        React.createElement("div",{style:{display:"flex",alignItems:"flex-end",gap:12,height:120,paddingTop:10}},
+        React.createElement("div",{style:{fontWeight:700,fontSize:13,marginBottom:16,color:C.blue}},"📈 Taxa de Cumprimento de SLA (mês a mês)"),
+        React.createElement("div",{style:{display:"flex",alignItems:"flex-end",gap:12}},
           (stats.slaPorMes||[]).map(function(m){
             var cor=m.pct>=90?C.green:m.pct>=70?C.yellow:C.red;
             var mesLabel=m.mes.slice(5,7)+"/"+m.mes.slice(2,4);
-            return React.createElement("div",{key:m.mes,style:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}},
-              React.createElement("div",{style:{fontSize:12,fontWeight:700,color:cor}},m.pct+"%"),
-              React.createElement("div",{style:{width:"100%",maxWidth:48,height:Math.max(4,m.pct)+"px",background:cor,borderRadius:"4px 4px 0 0",transition:"height .3s"}}),
-              React.createElement("div",{style:{fontSize:10,color:C.muted}},mesLabel),
+            return React.createElement("div",{key:m.mes,style:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end"}},
+              React.createElement("div",{style:{fontSize:12,fontWeight:700,color:cor,marginBottom:4}},m.pct+"%"),
+              React.createElement("div",{style:{width:"100%",maxWidth:48,height:Math.max(4,Math.round(m.pct))+"px",background:cor,borderRadius:"4px 4px 0 0",transition:"height .3s"}}),
+              React.createElement("div",{style:{fontSize:10,color:C.muted,marginTop:6}},mesLabel),
               React.createElement("div",{style:{fontSize:9,color:C.dim}},m.total+" OS")
             );
           })
@@ -9232,7 +9232,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.10 · jul/2026 · hotfix colunas os")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.11 · jul/2026 · sla gráfico + filtro")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
