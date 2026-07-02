@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.7 PROGRESSOFIX JUN2026 -->
+<!-- SERVIS v4.10 HOTFIXOS JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -950,7 +950,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
       (async function(){
       let all=[];let from=0;const step=1000;
       while(true){
-        const{data:chunk}=await sb.from("os").select("*")
+        const{data:chunk}=await sb.from("os").select("id,num,data,data_fechamento,status,cond,tec,prob,pri,descricao,relato")
           .or("status.eq.Aberto,data.gte.2026-01-01")
           .order("data",{ascending:false}).range(from,from+step-1);
         if(!chunk||chunk.length===0)break;
@@ -4579,7 +4579,7 @@ function Reincidencias(){
     setLoading(true);
     let rows=[];let _from=0;
     while(true){
-      const{data:chunk}=await sb.from("os").select("*").order("data",{ascending:true}).range(_from,_from+999);
+      const{data:chunk}=await sb.from("os").select("id,num,data,data_fechamento,status,cond,tec,prob,pri,descricao,relato").order("data",{ascending:true}).range(_from,_from+999);
       if(!chunk||chunk.length===0)break;
       rows=rows.concat(chunk);if(chunk.length<1000)break;_from+=1000;
     }
@@ -4758,7 +4758,7 @@ function SLA(){
       (async function(){
       let all=[];let from=0;const step=1000;
       while(true){
-        const{data:chunk}=await sb.from("os").select("*")
+        const{data:chunk}=await sb.from("os").select("id,num,data,data_fechamento,status,cond,tec,prob,pri,descricao,relato")
           .gte("data","2026-01-01").order("data",{ascending:false}).range(from,from+step-1);
         if(!chunk||chunk.length===0)break;
         all=all.concat(chunk);
@@ -4855,6 +4855,16 @@ function SLA(){
   },[osComSLA,filtro,busca,filtTec,filtAno,filtMes]);
 
   // Estatísticas
+  const aVencer=useMemo(function(){
+    var abertas=(osComSLA||[]).filter(function(o){return o&&o.status==="Aberto";});
+    // urgência: vencidas primeiro (horasRestantes 0), depois menor tempo restante
+    return [].concat(abertas).sort(function(a,b){
+      var av=a.vencido?-1:0, bv=b.vencido?-1:0;
+      if(av!==bv)return av-bv;
+      return (a.horasRestantes==null?9999:a.horasRestantes)-(b.horasRestantes==null?9999:b.horasRestantes);
+    }).slice(0,30);
+  },[osComSLA]);
+
   const stats=useMemo(()=>{
     const fechadas=osComSLA.filter(o=>o.status==="Fechado"&&o.horasUteis>0);
     const dentroSLA=fechadas.filter(o=>o.horasUteis<=48).length;
@@ -4976,6 +4986,38 @@ function SLA(){
           React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"Tempo médio"),
           React.createElement("div",{style:{fontSize:9,color:C.dim,marginTop:2}},`${stats.fechadas} OS fechadas`)
         )
+      ),
+      // ── PAINEL: PRESTES A VENCER / VENCIDAS ──
+      React.createElement("div",{style:{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:16,marginBottom:16}},
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:4}},
+          React.createElement("span",{style:{fontSize:15,fontWeight:800}},"⏱ Monitoramento de SLA em tempo real"),
+          React.createElement("span",{style:{fontSize:11,color:C.muted}},"— OS abertas por urgência")
+        ),
+        React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:12}},"Prazo de 48h úteis. As mais urgentes aparecem primeiro."),
+        aVencer.length===0
+          ?React.createElement("div",{style:{textAlign:"center",color:C.green,padding:"18px",fontSize:13,fontWeight:600}},"✅ Nenhuma OS aberta no momento — nada a vencer.")
+          :React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:7}},
+            aVencer.map(function(o){
+              var vencida=o.vencido;
+              var h=o.horasRestantes;
+              var urgente=!vencida&&h!=null&&h<=8;
+              var atencao=!vencida&&!urgente&&h!=null&&h<=24;
+              var cor=vencida?C.red:urgente?C.orange:atencao?C.yellow:C.blue;
+              var etiqueta=vencida?"VENCIDA":(h!=null?(h<1?"< 1h":Math.round(h)+"h restantes"):"—");
+              var venceEm=o.prazo?new Date(o.prazo).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"";
+              return React.createElement("div",{key:o.num||Math.random(),style:{display:"flex",alignItems:"center",gap:12,background:cor+"12",border:"1px solid "+cor+"33",borderLeft:"4px solid "+cor,borderRadius:8,padding:"9px 12px"}},
+                React.createElement("div",{style:{minWidth:78,textAlign:"center"}},
+                  React.createElement("div",{style:{fontSize:13,fontWeight:800,color:cor}},etiqueta),
+                  vencida?null:React.createElement("div",{style:{fontSize:9,color:C.dim,marginTop:1}},"vence "+venceEm)
+                ),
+                React.createElement("div",{style:{flex:1,minWidth:0}},
+                  React.createElement("div",{style:{fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},(o.cond||"—")),
+                  React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:1}},"OS "+(o.num||"—")+(o.tec?"  ·  "+o.tec:"")+(o.prob?"  ·  "+o.prob:""))
+                ),
+                o.pri&&React.createElement("span",{style:{fontSize:10,fontWeight:700,color:o.pri==="Alta"?C.red:o.pri==="Média"||o.pri==="Media"?C.yellow:C.green,background:(o.pri==="Alta"?C.red:o.pri==="Média"||o.pri==="Media"?C.yellow:C.green)+"22",padding:"2px 8px",borderRadius:10,whiteSpace:"nowrap"}},o.pri)
+              );
+            })
+          )
       ),
       // ── TAXA DE SLA MÊS A MÊS ──
       (stats.slaPorMes||[]).length>0&&React.createElement("div",{style:{background:C.card,border:"1px solid "+C.border,borderRadius:12,padding:16,marginBottom:16}},
@@ -9190,7 +9232,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.7 · jun/2026 · progresso obra corrigido")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.10 · jul/2026 · hotfix colunas os")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
