@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.19 ORGANOGRAMA PDF TIMBRADO JUL2026 -->
+<!-- SERVIS v4.20 ORG PDF POR SUPERVISOR + FIX EDIÇÃO JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -7146,6 +7146,13 @@ function Organograma(){
     }
     function nivel(inner){return "<div style='width:2px;height:22px;background:#cbd5e1;margin:0 auto'></div><div style='text-align:center'>"+inner+"</div>";}
     function banda(label,cor){return "<div style='margin:22px auto 4px;text-align:center'><span style='background:"+cor+";color:#fff;font-size:11px;font-weight:800;padding:5px 20px;border-radius:20px;letter-spacing:2px'>"+esc(label)+"</span></div>";}
+    function bloco(supHtml,tecs){
+      return "<div style='display:inline-block;vertical-align:top;margin:8px 10px;padding:14px 12px;border:1.5px dashed #cbd5e1;border-radius:16px;background:#fbfcfe'>"
+        +supHtml
+        +"<div style='width:2px;height:16px;background:#cbd5e1;margin:6px auto 8px'></div>"
+        +"<div>"+tecs.join("<div style='height:6px'></div>")+"</div>"
+        +"</div>";
+    }
 
     var AZ="#1a5fa8",VD="#0e7c5a",CI="#0284c7",RX="#7c3aed",LR="#ea580c",AM="#b45309";
     var filLabel="",filBadge=AZ,corpo="";
@@ -7154,27 +7161,29 @@ function Organograma(){
     if(filial==="ceara"){
       filLabel="Ceará — CE";filBadge=AZ;
       corpo=coord
-        +nivel(card("sup1_ce",nmSup1,"Supervisor 1 · Manutenção",VD,"SUPERVISÃO")+card("sup2_ce",nmSup2,"Supervisor 2 · Manutenção",VD,"SUPERVISÃO")+card("sup_inst_ce",nmSupInst,"Instalação",VD,"SUPERVISÃO"))
-        +banda("EQUIPE TÉCNICA",CI)
-        +"<div style='text-align:center'>"+card("tec_a_ce",nmTecA,"Área P16",CI,"TÉCNICO")+card("tec_b_ce",nmTecB,"Área P17",CI,"TÉCNICO")+card("tec_c_ce",nmTecC,"Área P18",CI,"TÉCNICO")+card("tec_d_ce",nmTecD,"Área P19",CI,"TÉCNICO")+card("tec_p1_ce",nmPrev1,"Preventiva",RX,"PREVENTIVA")+card("tec_p2_ce",nmPrev2,"Preventiva",RX,"PREVENTIVA")+"</div>"
+        +"<div style='width:2px;height:22px;background:#cbd5e1;margin:0 auto'></div>"
+        +banda("SUPERVISÃO E EQUIPES",VD)
+        +"<div style='text-align:center'>"
+          +bloco(card("sup1_ce",nmSup1,"Supervisor 1 · Manutenção",VD,"SUPERVISÃO"),[card("tec_a_ce",nmTecA,"Área P16",CI,"TÉCNICO",40),card("tec_b_ce",nmTecB,"Área P17",CI,"TÉCNICO",40),card("tec_p1_ce",nmPrev1,"Preventiva",RX,"PREVENTIVA",40)])
+          +bloco(card("sup2_ce",nmSup2,"Supervisor 2 · Manutenção",VD,"SUPERVISÃO"),[card("tec_c_ce",nmTecC,"Área P18",CI,"TÉCNICO",40),card("tec_d_ce",nmTecD,"Área P19",CI,"TÉCNICO",40),card("tec_p2_ce",nmPrev2,"Preventiva",RX,"PREVENTIVA",40)])
+          +bloco(card("sup_inst_ce",nmSupInst,"Instalação",VD,"SUPERVISÃO"),[card("tec_inst_ce","Equipe Terceirizada","Instalação","#475569","EQUIPE",40)])
+        +"</div>"
         +banda("APOIO OPERACIONAL · PLANTONISTAS 12x36",LR)
         +"<div style='text-align:center'>"+card("pl_d1_ce",nmPlD1CE,"Diurno · Moto",LR)+card("pl_d2_ce",nmPlD2CE,"Diurno · Carro",LR)+card("pl_d3_ce",nmPlD3CE,"Diurno · Moto",LR)+card("pl_d4_ce",nmPlD4CE,"Diurno · Carro",LR)+card("pl_n1_ce",nmPlN1CE,"Noturno",RX)+card("pl_n2_ce",nmPlN2CE,"Noturno",RX)+card("ferista_ce",nmFerCE,"Ferista · Cobertura",RX)+"</div>";
     }else if(filial==="piaui"){
       filLabel="Piauí — PI";filBadge=AM;
       corpo=coord
         +nivel(card("coord_pi",nmCoordPI,"Coordenação da Filial",AM,"COORD. FILIAL"))
-        +nivel(card("sup_pi",nmSupPI,"Manutenção e Instalação",VD,"SUPERVISÃO"))
-        +banda("EQUIPE TÉCNICA",CI)
-        +"<div style='text-align:center'>"+card("tec_a_pi",nmTecAPI,"Área P16",CI,"TÉCNICO")+card("tec_b_pi",nmTecBPI,"Área P17",CI,"TÉCNICO")+card("tec_p_pi",nmTecPPI,"Preventiva",RX,"PREVENTIVA")+"</div>"
+        +banda("SUPERVISÃO E EQUIPE",VD)
+        +"<div style='text-align:center'>"+bloco(card("sup_pi",nmSupPI,"Manutenção e Instalação",VD,"SUPERVISÃO"),[card("tec_a_pi",nmTecAPI,"Área P16",CI,"TÉCNICO",40),card("tec_b_pi",nmTecBPI,"Área P17",CI,"TÉCNICO",40),card("tec_p_pi",nmTecPPI,"Preventiva",RX,"PREVENTIVA",40)])+"</div>"
         +banda("APOIO OPERACIONAL · PLANTONISTAS 24h",LR)
         +"<div style='text-align:center'>"+card("pl1_pi",nmPl1PI,"24h",LR)+card("pl2_pi",nmPl2PI,"24h",LR)+card("pl3_pi",nmPl3PI,"24h",LR)+card("pl4_pi",nmPl4PI,"24h",LR)+card("ferista_pi",nmFerPI,"Ferista · Cobertura",RX)+"</div>";
     }else{
       filLabel="Maranhão — MA";filBadge=VD;
       corpo=coord
         +nivel(card("coord_ma",nmCoordMA,"Coordenação da Filial",AM,"COORD. FILIAL"))
-        +nivel(card("sup_ma",nmSupMA,"Manutenção e Instalação",VD,"SUPERVISÃO"))
-        +banda("EQUIPE TÉCNICA",CI)
-        +"<div style='text-align:center'>"+card("tec_a_ma",nmTecAMA,"Área",CI,"TÉCNICO")+card("tec_p_ma",nmTecPMA,"Preventiva",RX,"PREVENTIVA")+"</div>"
+        +banda("SUPERVISÃO E EQUIPE",VD)
+        +"<div style='text-align:center'>"+bloco(card("sup_ma",nmSupMA,"Manutenção e Instalação",VD,"SUPERVISÃO"),[card("tec_a_ma",nmTecAMA,"Área",CI,"TÉCNICO",40),card("tec_p_ma",nmTecPMA,"Preventiva",RX,"PREVENTIVA",40)])+"</div>"
         +banda("APOIO OPERACIONAL · PLANTONISTAS 24h",LR)
         +"<div style='text-align:center'>"+card("pl1_ma",nmPl1MA,"24h",LR)+card("pl2_ma",nmPl2MA,"24h",LR)+card("pl3_ma",nmPl3MA,"24h",LR)+card("pl4_ma",nmPl4MA,"24h",LR)+card("ferista_ma",nmFerMA,"Ferista · Cobertura",RX)+"</div>";
     }
@@ -7217,7 +7226,7 @@ function Organograma(){
       )
     ),
     React.createElement("div",{style:{maxWidth:1100,margin:"0 auto"}},
-      filial==="ceara"?React.createElement(OrgCeara,null):filial==="piaui"?React.createElement(OrgPiaui,null):React.createElement(OrgMaranhao,null),
+      filial==="ceara"?OrgCeara():filial==="piaui"?OrgPiaui():OrgMaranhao(),
       React.createElement("div",{style:{display:"flex",gap:16,justifyContent:"center",flexWrap:"wrap",marginTop:28,paddingTop:16,borderTop:"1px solid #1e293b"}},
         [[azul.border,"Coordenação"],[verde.border,"Supervisão"],[ciano.border,"Área (clicável)"],[roxo.border,"Preventiva"],[cinza.border,"Terceirizado"],[laranja.border,"Plantonistas"],[amarelo.border,"Coord. Filial"]].map(function(item,i){
           return React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#64748b"}},
@@ -9512,7 +9521,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.19 · jul/2026 · organograma PDF com timbrado Servis")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.20 · jul/2026 · PDF por supervisor + edição de nomes corrigida")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
