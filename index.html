@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.12 PRIORIDADEIA JUL2026 -->
+<!-- SERVIS v4.14 EXPORT-OS + ANTIDUP JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -768,8 +768,12 @@ function NovaOS({setTab,onSave}){
     if(!tec){setErro("Selecione o técnico responsável");return;}
     if(!prob){setErro("Selecione o tipo de problema");return;}
     setSaving(true);
-    var ex=await sb.from("os").select("id").eq("num",num.trim()).limit(1);
-    if(ex.data&&ex.data.length>0){setErro("Já existe uma OS com este número");setSaving(false);return;}
+    var ex=await sb.from("os").select("id,cond,status,data").eq("num",num.trim()).limit(1);
+    if(ex.data&&ex.data.length>0){
+      var _e=ex.data[0];
+      var _dt=_e.data?(function(){try{return new Date(String(_e.data).slice(0,10)+"T12:00").toLocaleDateString("pt-BR");}catch(x){return _e.data;}})():"";
+      if(!window.confirm("⚠️ Já existe uma OS com o número "+num.trim()+".\n\nCondomínio: "+(_e.cond||"—")+"\nStatus: "+(_e.status||"—")+(_dt?"\nAbertura: "+_dt:"")+"\n\nDeseja criar assim mesmo?")){setSaving(false);return;}
+    }
     var res=await sb.from("os").insert({id:uid(),num:num.trim(),data:data||todayStr(),cond:cond,tec:tec,pri:pri,prob:prob,descricao:desc,status:"Aberto"});
     if(res.error){setErro("Erro: "+res.error.message);setSaving(false);return;}
     setSaving(false);setToast(true);
@@ -941,6 +945,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
   const [pendResp,setPendResp]=useState("");
   const [pendDesc,setPendDesc]=useState("");
   const [pendSalvando,setPendSalvando]=useState(false);
+  const [exportando,setExportando]=useState(false);
   var MOTIVOS_PEND=["Aguardando aprovação de orçamento","Aguardando chegada de material","Dependência da empresa do elevador","Dependência do condomínio","Aguardando autorização do cliente","Retorno programado","Outro"];
   const POR_PAG=20;
   const MESES_N=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -1068,6 +1073,12 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
     if(data.find(function(x){return x.id===it.id;})){
       res=await sb.from("os").update(it).eq("id",it.id);
     }else{
+      // Anti-duplicidade: avisar se já existe OS com o mesmo número
+      var dup=await sb.from("os").select("id,cond,status").eq("num",it.num).limit(1);
+      if(dup&&dup.data&&dup.data.length>0){
+        var _d0=dup.data[0];
+        if(!window.confirm("⚠️ Já existe uma OS com o número "+it.num+".\n\nCondomínio: "+(_d0.cond||"—")+"\nStatus: "+(_d0.status||"—")+"\n\nDeseja criar assim mesmo?")){return;}
+      }
       res=await sb.from("os").insert(it);
     }
     if(res&&res.error){alert("Erro: "+res.error.message);return;}
@@ -1102,6 +1113,40 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
     setPendSalvando(false);
     setModalPend(null);setPendMotivo("");setPendResp("");setPendDesc("");
     load();if(onSave)onSave();
+  };
+
+  // ── Exportar planilha com TODAS as OS (base completa) ──
+  const exportarPlanilhaOS=async function(){
+    if(exportando)return;
+    setExportando(true);
+    try{
+      var todas=[];var _from=0;var step=1000;
+      while(true){
+        var q=await sb.from("os").select("num,data,data_fechamento,status,cond,tec,prob,pri,descricao,relato").order("data",{ascending:false}).range(_from,_from+step-1);
+        if(q.error){alert("Erro ao buscar OS: "+q.error.message);setExportando(false);return;}
+        var chunk=q.data||[];
+        if(chunk.length===0)break;
+        todas=todas.concat(chunk);
+        if(chunk.length<step)break;
+        _from+=step;
+      }
+      function fmtD(v){if(!v)return"";try{return new Date(String(v).slice(0,10)+"T12:00").toLocaleDateString("pt-BR");}catch(e){return v;}}
+      var cab=["Nº OS","Abertura","Fechamento","Condomínio","Técnico","Problema","Descrição","Prioridade","Status"];
+      var linhas=[cab];
+      todas.forEach(function(o){
+        linhas.push([o.num||"",fmtD(o.data),fmtD(o.data_fechamento),o.cond||"",o.tec||"",o.prob||"",(o.descricao||o.relato||""),o.pri||"",o.status||""]);
+      });
+      var csv=linhas.map(function(row){
+        return row.map(function(cel){return '"'+String(cel==null?"":cel).replace(/"/g,'""')+'"';}).join(";");
+      }).join("\r\n");
+      var blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8;"});
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement("a");a.href=url;
+      a.download="OS_Servis_"+new Date().toISOString().slice(0,10)+".csv";
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+      setTimeout(function(){URL.revokeObjectURL(url);},1000);
+    }catch(e){alert("Erro ao exportar: "+e.message);}
+    setExportando(false);
   };
 
   function priCor(p){return p==="Alta"?C.red:(p==="Média"||p==="Media")?C.yellow:C.green;}
@@ -1181,6 +1226,12 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
               }catch(e){alert("Erro: "+e.message);}
             }
           },"📄 PDF"),
+          React.createElement("button",{
+            style:{...btnStyle(C.green,true),fontSize:11,padding:"7px 14px",opacity:exportando?0.6:1,cursor:exportando?"default":"pointer"},
+            disabled:exportando,
+            title:"Exportar planilha (.csv) com todas as OS da base",
+            onClick:exportarPlanilhaOS
+          },exportando?"⏳ Gerando...":"📊 Planilha"),
           React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:12},onClick:load},"↺ Atualizar")
         )
       ),
@@ -9273,7 +9324,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.12 · jul/2026 · priorização inteligente")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.14 · jul/2026 · exportar planilha + anti-duplicidade OS")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
