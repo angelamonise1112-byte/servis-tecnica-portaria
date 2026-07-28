@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.17 ORGANOGRAMA EDITÁVEL JUL2026 -->
+<!-- SERVIS v4.18 ORGANOGRAMA PDF + EDIT JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -58,6 +58,8 @@ button{cursor:pointer;font-family:inherit;border:none;border-radius:8px;font-siz
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script>
 const {useState,useMemo,useEffect,useCallback}=React;
 
@@ -7123,6 +7125,30 @@ function Organograma(){
     );
   }
 
+  function baixarPDF(){
+    var el=document.getElementById("org-chart-capture");
+    if(!el){alert("Organograma não encontrado na tela.");return;}
+    if(typeof html2canvas==="undefined"||!window.jspdf){alert("As bibliotecas de PDF ainda não carregaram. Recarregue a página (F5) e tente de novo.");return;}
+    var wasEdit=editMode;
+    if(wasEdit)setEditMode(false);
+    setTimeout(function(){
+      html2canvas(el,{backgroundColor:"#0a0f1e",scale:2,useCORS:true,logging:false}).then(function(canvas){
+        var img=canvas.toDataURL("image/png");
+        var jsPDF=window.jspdf.jsPDF;
+        var orient=canvas.width>=canvas.height?"landscape":"portrait";
+        var pdf=new jsPDF({orientation:orient,unit:"pt",format:"a4"});
+        var pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight();
+        var margin=18,iw=pw-margin*2,ih=iw*canvas.height/canvas.width;
+        if(ih>ph-margin*2){ih=ph-margin*2;iw=ih*canvas.width/canvas.height;}
+        var x=(pw-iw)/2,y=(ph-ih)/2;
+        pdf.addImage(img,"PNG",x,y,iw,ih);
+        var nomeFil=filial==="ceara"?"Ceara":filial==="piaui"?"Piaui":"Maranhao";
+        pdf.save("Organograma_"+nomeFil+"_"+new Date().toISOString().slice(0,10)+".pdf");
+        if(wasEdit)setEditMode(true);
+      }).catch(function(e){alert("Erro ao gerar PDF: "+e.message);if(wasEdit)setEditMode(true);});
+    },wasEdit?300:50);
+  }
+
   return React.createElement("div",{style:{background:"#0a0f1e",minHeight:"100vh",padding:"28px 16px",fontFamily:"system-ui,sans-serif"}},
     React.createElement("div",{style:{textAlign:"center",marginBottom:28}},
       React.createElement("div",{style:{fontSize:22,fontWeight:900,color:"#f1f5f9",letterSpacing:2,textTransform:"uppercase"}},"Organograma Corporativo"),
@@ -7133,6 +7159,7 @@ function Organograma(){
         React.createElement("button",{style:{...btnStyle(amarelo.border,filial!=="piaui"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("piaui");}},"🌵 Piauí"),
         React.createElement("button",{style:{...btnStyle("#10b981",filial!=="maranhao"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("maranhao");}},"🌊 Maranhão"),
         React.createElement("button",{style:{...btnStyle(C.orange,true),fontSize:13,padding:"8px 24px"},onClick:gerarRelatorio},"📄 Relatório de Áreas"),
+        React.createElement("button",{style:{...btnStyle("#ef4444",true),fontSize:13,padding:"8px 24px"},onClick:baixarPDF},"⬇️ Baixar PDF"),
         React.createElement("button",{style:{...btnStyle(editMode?"#10b981":"#8b5cf6",!editMode),fontSize:13,padding:"8px 24px"},onClick:function(){setEditMode(function(v){return !v;});}},editMode?"✅ Concluir edição":"✏️ Editar nomes")
       ),
       editMode&&React.createElement("div",{style:{marginTop:10,fontSize:11,color:"#a855f7",fontWeight:600}},
@@ -7142,7 +7169,7 @@ function Organograma(){
         condominios.length+" condomínios carregados · Clique nos cards de área para ver detalhes"
       )
     ),
-    React.createElement("div",{style:{maxWidth:1100,margin:"0 auto"}},
+    React.createElement("div",{id:"org-chart-capture",style:{maxWidth:1100,margin:"0 auto",background:"#0a0f1e",padding:"8px 8px 20px"}},
       filial==="ceara"?React.createElement(OrgCeara,null):filial==="piaui"?React.createElement(OrgPiaui,null):React.createElement(OrgMaranhao,null),
       React.createElement("div",{style:{display:"flex",gap:16,justifyContent:"center",flexWrap:"wrap",marginTop:28,paddingTop:16,borderTop:"1px solid #1e293b"}},
         [[azul.border,"Coordenação"],[verde.border,"Supervisão"],[ciano.border,"Área (clicável)"],[roxo.border,"Preventiva"],[cinza.border,"Terceirizado"],[laranja.border,"Plantonistas"],[amarelo.border,"Coord. Filial"]].map(function(item,i){
@@ -9438,7 +9465,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.17 · jul/2026 · organograma com nomes editáveis")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.18 · jul/2026 · organograma editável + PDF")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
