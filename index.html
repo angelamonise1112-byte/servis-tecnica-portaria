@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.15 EXPORT + IMPORT + ANTIDUP OS JUL2026 -->
+<!-- SERVIS v4.16 IMPORT c/ FECHAMENTO JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -1165,7 +1165,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
       if(!linhas||linhas.length<2){alert('A aba "'+nomeAba+'" não tem dados.');setImportando(false);return;}
       var head=(linhas[0]||[]).map(function(h){return String(h||"").toUpperCase();});
       function col(){var t=[].slice.call(arguments);for(var i=0;i<head.length;i++){for(var j=0;j<t.length;j++){if(head[i].indexOf(t[j])>=0)return i;}}return -1;}
-      var cNum=col("O.S","Nº OS","OS"),cData=col("DATA"),cTec=col("TÉCNICO","TECNICO","ÁREA","AREA"),cCond=col("CONDOM"),cDesc=col("DESCRI"),cStatus=col("STATUS"),cRelato=col("RELATO");
+      var cNum=col("O.S","Nº OS","OS"),cData=col("DATA"),cTec=col("TÉCNICO","TECNICO","ÁREA","AREA"),cCond=col("CONDOM"),cDesc=col("DESCRI"),cStatus=col("STATUS"),cRelato=col("RELATO"),cFech=col("FECHAMENTO");
       if(cNum<0){alert("Não encontrei a coluna do número da OS (📄 O.S) na planilha.");setImportando(false);return;}
       function fmtISO(v){
         if(v instanceof Date&&!isNaN(v))return v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0");
@@ -1184,7 +1184,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
         var desc=cDesc>=0?String(row[cDesc]||"").trim():"";
         var status=cStatus>=0?String(row[cStatus]||"").trim():"";
         if(!status)status="Aberto";
-        novas.push({num:num,data:cData>=0?fmtISO(row[cData]):"",cond:cCond>=0?String(row[cCond]||"").trim():"",tec:cTec>=0?String(row[cTec]||"").trim():"",desc:desc,status:status,relato:cRelato>=0?String(row[cRelato]||"").trim():""});
+        novas.push({num:num,data:cData>=0?fmtISO(row[cData]):"",cond:cCond>=0?String(row[cCond]||"").trim():"",tec:cTec>=0?String(row[cTec]||"").trim():"",desc:desc,status:status,relato:cRelato>=0?String(row[cRelato]||"").trim():"",fech:cFech>=0?fmtISO(row[cFech]):""});
       }
       if(novas.length===0){alert("Nenhuma linha de OS válida encontrada na planilha.");setImportando(false);return;}
       // Buscar números já existentes na base
@@ -1203,7 +1203,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
       });
       if(paraInserir.length===0){alert("Nenhuma OS nova para importar.\n\nLinhas na planilha: "+novas.length+"\nJá existiam (puladas): "+pulados);setImportando(false);return;}
       if(!window.confirm('Importar da aba "'+nomeAba+'":\n\n✅ Novas a importar: '+paraInserir.length+"\n⏭️ Já existiam (puladas): "+pulados+"\n\nConfirmar importação?")){setImportando(false);return;}
-      var payload=paraInserir.map(function(o){return {id:uid(),num:o.num,data:o.data||todayStr(),cond:o.cond,tec:o.tec,prob:o.desc,descricao:o.desc,pri:"Media",status:o.status,relato:o.relato,data_fechamento:o.status==="Fechado"?(o.data||todayStr()):null};});
+      var payload=paraInserir.map(function(o){return {id:uid(),num:o.num,data:o.data||todayStr(),cond:o.cond,tec:o.tec,prob:o.desc,descricao:o.desc,pri:"Media",status:o.status,relato:o.relato,data_fechamento:o.fech?o.fech:(o.status==="Fechado"?(o.data||todayStr()):null)};});
       var ok=0,erros=0;
       for(var i=0;i<payload.length;i+=200){
         var lote=payload.slice(i,i+200);
@@ -9407,7 +9407,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.15 · jul/2026 · exportar + importar planilha OS")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.16 · jul/2026 · importar OS com data de fechamento")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
