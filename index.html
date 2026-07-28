@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.14 EXPORT-OS + ANTIDUP JUL2026 -->
+<!-- SERVIS v4.15 EXPORT + IMPORT + ANTIDUP OS JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -57,6 +57,7 @@ button{cursor:pointer;font-family:inherit;border:none;border-radius:8px;font-siz
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 const {useState,useMemo,useEffect,useCallback}=React;
 
@@ -946,6 +947,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
   const [pendDesc,setPendDesc]=useState("");
   const [pendSalvando,setPendSalvando]=useState(false);
   const [exportando,setExportando]=useState(false);
+  const [importando,setImportando]=useState(false);
   var MOTIVOS_PEND=["Aguardando aprovação de orçamento","Aguardando chegada de material","Dependência da empresa do elevador","Dependência do condomínio","Aguardando autorização do cliente","Retorno programado","Outro"];
   const POR_PAG=20;
   const MESES_N=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -1149,6 +1151,76 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
     setExportando(false);
   };
 
+  // ── Importar planilha (.xlsx) de OS → tabela os (pula números já existentes) ──
+  const importarPlanilhaOS=async function(file){
+    if(importando)return;
+    if(typeof XLSX==="undefined"){alert("O leitor de Excel ainda não carregou. Recarregue a página (F5) e tente de novo.");return;}
+    setImportando(true);
+    try{
+      var buf=await file.arrayBuffer();
+      var wb=XLSX.read(buf,{type:"array",cellDates:true});
+      var nomeAba=wb.SheetNames.find(function(n){return /ordens?\s*de\s*servi/i.test(n);})||wb.SheetNames[0];
+      var ws=wb.Sheets[nomeAba];
+      var linhas=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
+      if(!linhas||linhas.length<2){alert('A aba "'+nomeAba+'" não tem dados.');setImportando(false);return;}
+      var head=(linhas[0]||[]).map(function(h){return String(h||"").toUpperCase();});
+      function col(){var t=[].slice.call(arguments);for(var i=0;i<head.length;i++){for(var j=0;j<t.length;j++){if(head[i].indexOf(t[j])>=0)return i;}}return -1;}
+      var cNum=col("O.S","Nº OS","OS"),cData=col("DATA"),cTec=col("TÉCNICO","TECNICO","ÁREA","AREA"),cCond=col("CONDOM"),cDesc=col("DESCRI"),cStatus=col("STATUS"),cRelato=col("RELATO");
+      if(cNum<0){alert("Não encontrei a coluna do número da OS (📄 O.S) na planilha.");setImportando(false);return;}
+      function fmtISO(v){
+        if(v instanceof Date&&!isNaN(v))return v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0");
+        var s=String(v||"").trim();
+        var m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+        if(m){var yy=m[3].length===2?"20"+m[3]:m[3];return yy+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0");}
+        if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);
+        return "";
+      }
+      var novas=[];
+      for(var r=1;r<linhas.length;r++){
+        var row=linhas[r]||[];
+        var num=String(row[cNum]==null?"":row[cNum]).trim();
+        if(num.indexOf(".")>=0&&/^\d+\.0+$/.test(num))num=num.split(".")[0];
+        if(!num)continue;
+        var desc=cDesc>=0?String(row[cDesc]||"").trim():"";
+        var status=cStatus>=0?String(row[cStatus]||"").trim():"";
+        if(!status)status="Aberto";
+        novas.push({num:num,data:cData>=0?fmtISO(row[cData]):"",cond:cCond>=0?String(row[cCond]||"").trim():"",tec:cTec>=0?String(row[cTec]||"").trim():"",desc:desc,status:status,relato:cRelato>=0?String(row[cRelato]||"").trim():""});
+      }
+      if(novas.length===0){alert("Nenhuma linha de OS válida encontrada na planilha.");setImportando(false);return;}
+      // Buscar números já existentes na base
+      var existentes={};var _f=0;
+      while(true){
+        var q=await sb.from("os").select("num").range(_f,_f+999);
+        if(q.error){alert("Erro ao consultar OS existentes: "+q.error.message);setImportando(false);return;}
+        var ch=q.data||[];if(ch.length===0)break;
+        ch.forEach(function(o){if(o.num!=null)existentes[String(o.num).trim()]=true;});
+        if(ch.length<1000)break;_f+=1000;
+      }
+      var seen={};var paraInserir=[];var pulados=0;
+      novas.forEach(function(o){
+        if(existentes[o.num]||seen[o.num]){pulados++;return;}
+        seen[o.num]=true;paraInserir.push(o);
+      });
+      if(paraInserir.length===0){alert("Nenhuma OS nova para importar.\n\nLinhas na planilha: "+novas.length+"\nJá existiam (puladas): "+pulados);setImportando(false);return;}
+      if(!window.confirm('Importar da aba "'+nomeAba+'":\n\n✅ Novas a importar: '+paraInserir.length+"\n⏭️ Já existiam (puladas): "+pulados+"\n\nConfirmar importação?")){setImportando(false);return;}
+      var payload=paraInserir.map(function(o){return {id:uid(),num:o.num,data:o.data||todayStr(),cond:o.cond,tec:o.tec,prob:o.desc,descricao:o.desc,pri:"Media",status:o.status,relato:o.relato,data_fechamento:o.status==="Fechado"?(o.data||todayStr()):null};});
+      var ok=0,erros=0;
+      for(var i=0;i<payload.length;i+=200){
+        var lote=payload.slice(i,i+200);
+        var ins=await sb.from("os").insert(lote);
+        if(ins&&ins.error){
+          // fallback linha a linha
+          for(var k=0;k<lote.length;k++){var one=await sb.from("os").insert(lote[k]);if(one&&one.error){erros++;}else{ok++;}}
+        }else{ok+=lote.length;}
+      }
+      try{servisAudit("importação","os","lote",{nome:window._servisUser},ok+" OS importadas de "+(file.name||"planilha"));}catch(e){}
+      try{var bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"os_import"});bc.close();}catch(e){}
+      alert("Importação concluída!\n\n✅ Importadas: "+ok+(erros?"\n❌ Falhas: "+erros:"")+"\n⏭️ Puladas (já existiam): "+pulados);
+      load();if(onSave)onSave();
+    }catch(e){alert("Erro ao importar: "+e.message);}
+    setImportando(false);
+  };
+
   function priCor(p){return p==="Alta"?C.red:(p==="Média"||p==="Media")?C.yellow:C.green;}
   function corSit(s){return s==="Aberto"?C.red:s==="Fechado"?C.green:C.blue;}
 
@@ -1232,6 +1304,17 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
             title:"Exportar planilha (.csv) com todas as OS da base",
             onClick:exportarPlanilhaOS
           },exportando?"⏳ Gerando...":"📊 Planilha"),
+          !somenteLeitura&&React.createElement("button",{
+            style:{...btnStyle(C.blue,true),fontSize:11,padding:"7px 14px",opacity:importando?0.6:1,cursor:importando?"default":"pointer"},
+            disabled:importando,
+            title:"Importar planilha (.xlsx) de OS — pula números já existentes",
+            onClick:function(){
+              var inp=document.createElement("input");
+              inp.type="file";inp.accept=".xlsx,.xls";
+              inp.onchange=function(e){var f=e.target.files&&e.target.files[0];if(f)importarPlanilhaOS(f);};
+              inp.click();
+            }
+          },importando?"⏳ Importando...":"📥 Importar"),
           React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:12},onClick:load},"↺ Atualizar")
         )
       ),
@@ -9324,7 +9407,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.14 · jul/2026 · exportar planilha + anti-duplicidade OS")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.15 · jul/2026 · exportar + importar planilha OS")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
