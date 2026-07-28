@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.16 IMPORT c/ FECHAMENTO JUL2026 -->
+<!-- SERVIS v4.17 ORGANOGRAMA EDITÁVEL JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -6705,6 +6705,7 @@ function Organograma(){
   var [filial,setFilial]=useState("ceara");
   var [condominios,setCondominios]=useState([]);
   var [relatorio,setRelatorio]=useState(null);
+  var [editMode,setEditMode]=useState(false);
 
   // Nomes editáveis — salvos no localStorage
   function useName(key,defaultVal){
@@ -6740,7 +6741,17 @@ function Organograma(){
   var [nmFerMA,setNmFerMA]=useName("ferista_ma","Ferista");
   var [nmAngela,setNmAngela]=useName("angela","Ângela Monise");
   var [nmWesley,setNmWesley]=useName("wesley","Wesley");
-  var [nmSupInst,setNmSupInst]=useName("sup_inst","Supervisor Instalação");
+  // Piauí
+  var [nmCoordPI,setNmCoordPI]=useName("coord_pi","Coordenador Filial PI");
+  var [nmSupPI,setNmSupPI]=useName("sup_pi","Supervisor Manut. e Instalação");
+  var [nmTecAPI,setNmTecAPI]=useName("tec_a_pi","Técnico P16");
+  var [nmTecBPI,setNmTecBPI]=useName("tec_b_pi","Técnico P17");
+  var [nmTecPPI,setNmTecPPI]=useName("tec_p_pi","Técnico Preventiva 1");
+  // Maranhão
+  var [nmCoordMA,setNmCoordMA]=useName("coord_ma","Coordenador Filial MA");
+  var [nmSupMA,setNmSupMA]=useName("sup_ma","Supervisor Manut. e Instalação");
+  var [nmTecAMA,setNmTecAMA]=useName("tec_a_ma","Técnico de P16");
+  var [nmTecPMA,setNmTecPMA]=useName("tec_p_ma","Técnico de Preventiva 1");
 
   useEffect(function(){
     sb.from("condominios").select("nome,endereco,area_tecnico,tecnico").order("nome",{ascending:true})
@@ -6885,11 +6896,22 @@ function Organograma(){
   function H(w){return React.createElement("div",{style:{height:2,width:w||200,background:ln,margin:"0 auto"}});}
   function FC(k,n,c,s){return React.createElement(OrgFotoCard,{fotoKey:k,nome:n,cor:c,size:s});}
   function Bdg(cor,label){return React.createElement("div",{style:{display:"inline-block",background:cor.badge,color:cor.text,fontSize:9,fontWeight:700,padding:"2px 10px",borderRadius:20,letterSpacing:1,marginBottom:6}},label);}
+  // Campo de nome editável (aparece quando o modo edição está ligado)
+  function EditInput(val,setVal,c,fs,mt){
+    return React.createElement("input",{
+      style:{background:"rgba(255,255,255,0.08)",border:"none",borderBottom:"1.5px solid "+c.border,color:c.text,fontSize:fs||12,fontWeight:800,textAlign:"center",width:"100%",outline:"none",padding:"3px 2px",marginTop:mt!=null?mt:6,borderRadius:4},
+      value:val==null?"":val,
+      onChange:function(e){if(setVal)setVal(e.target.value);},
+      onClick:function(e){e.stopPropagation();}
+    });
+  }
 
-  function CoordBox(fk,name,role1,role2){
+  function CoordBox(fk,name,role1,role2,setName){
     return React.createElement("div",{style:{background:azul.bg,border:"2px solid "+azul.border,borderRadius:12,padding:"14px 18px",textAlign:"center",minWidth:200,boxShadow:"0 0 20px "+azul.border+"22"}},
       Bdg(azul,"COORDENAÇÃO"),FC(fk,name,azul,52),
-      React.createElement("div",{style:{fontSize:14,fontWeight:800,color:"#e0f2fe",marginTop:8,marginBottom:3}},""+name),
+      (editMode&&setName)
+        ?EditInput(name,setName,azul,14,8)
+        :React.createElement("div",{style:{fontSize:14,fontWeight:800,color:"#e0f2fe",marginTop:8,marginBottom:3}},""+name),
       React.createElement("div",{style:{fontSize:10,color:azul.text,opacity:0.8}},""+role1),
       role2?React.createElement("div",{style:{fontSize:10,color:azul.text,opacity:0.7}},""+role2):null
     );
@@ -6897,11 +6919,12 @@ function Organograma(){
 
   function SupBox(fk,title,badge,cor,editName,setEditName){
     var c=cor||verde;
+    var nome=editName!==undefined?editName:title;
     return React.createElement("div",{style:{background:c.bg,border:"2px solid "+c.border,borderRadius:12,padding:"12px 16px",textAlign:"center",minWidth:170,boxShadow:"0 0 20px "+c.border+"22"}},
-      Bdg(c,badge||"SUPERVISÃO"),FC(fk,editName||title,c,44),
-      editName!==undefined
-        ?React.createElement("input",{style:{background:"transparent",border:"none",borderBottom:"1px solid "+c.border,color:c.text,fontSize:12,fontWeight:800,textAlign:"center",width:"100%",outline:"none",padding:"2px",marginTop:6},value:editName,onChange:function(e){setEditName(e.target.value);}})
-        :React.createElement("div",{style:{fontSize:12,fontWeight:800,color:c.text,marginTop:6}},title)
+      Bdg(c,badge||"SUPERVISÃO"),FC(fk,nome,c,44),
+      (editMode&&setEditName)
+        ?EditInput(nome,setEditName,c,12)
+        :React.createElement("div",{style:{fontSize:12,fontWeight:800,color:c.text,marginTop:6}},""+nome)
     );
   }
 
@@ -6910,31 +6933,35 @@ function Organograma(){
     var c=cor||ciano;
     var condsArea=area?getCondArea(area):[];
     var nomeTec=editName!==undefined?editName:(condsArea[0]?condsArea[0].tecnico||title:title);
-    return React.createElement("div",{style:{background:c.bg,border:"1.5px solid "+c.border,borderRadius:10,padding:"10px 8px",textAlign:"center",flex:1,minWidth:85,cursor:area?"pointer":"default"},
-      onClick:area&&!editName?function(){setRelatorio(area);}:null,
+    return React.createElement("div",{style:{background:c.bg,border:"1.5px solid "+c.border,borderRadius:10,padding:"10px 8px",textAlign:"center",flex:1,minWidth:85,cursor:area&&!editMode?"pointer":"default"},
+      onClick:(area&&!editMode)?function(){setRelatorio(area);}:null,
       title:area?"Clique para ver condomínios de "+area:""
     },
       FC(fk,nomeTec,c,36),
-      editName!==undefined
-        ?React.createElement("input",{style:{background:"transparent",border:"none",borderBottom:"1px solid "+c.border,color:c.text,fontSize:10,fontWeight:700,textAlign:"center",width:"100%",outline:"none",padding:"1px",marginTop:4},value:editName,onChange:function(e){if(setEditName)setEditName(e.target.value);}})
+      (editMode&&setEditName)
+        ?EditInput(nomeTec,setEditName,c,10,4)
         :React.createElement("div",{style:{fontSize:10,fontWeight:700,color:c.text,lineHeight:1.2,marginTop:6}},""+nomeTec),
       React.createElement("div",{style:{fontSize:9,color:c.text,opacity:0.7,marginTop:2}},""+sub),
       area&&React.createElement("div",{style:{fontSize:9,color:c.border,marginTop:3,fontWeight:600}},condsArea.length+" cond.")
     );
   }
 
-  function PlantonBox(fk,nome,subtipo,cor){
+  function PlantonBox(fk,nome,subtipo,cor,setNome){
     return React.createElement("div",{style:{background:cor.bg,border:"1.5px solid "+cor.border,borderRadius:10,padding:"10px 8px",textAlign:"center",minWidth:80,flex:1}},
       FC(fk,nome,cor,36),
-      React.createElement("div",{style:{fontSize:10,fontWeight:700,color:cor.text,marginTop:6}},""+nome),
+      (editMode&&setNome)
+        ?EditInput(nome,setNome,cor,10,6)
+        :React.createElement("div",{style:{fontSize:10,fontWeight:700,color:cor.text,marginTop:6}},""+nome),
       React.createElement("div",{style:{fontSize:9,color:cor.text,opacity:0.7,marginTop:2}},""+subtipo)
     );
   }
 
-  function FilialBox(fk,placeholder,cor){
+  function FilialBox(fk,name,cor,setName){
     return React.createElement("div",{style:{background:cor.bg,border:"2px solid "+cor.border,borderRadius:12,padding:"14px 20px",textAlign:"center",minWidth:260,boxShadow:"0 0 20px "+cor.border+"22"}},
-      Bdg(cor,"COORDENAÇÃO FILIAL"),FC(fk,"Coord",cor,48),
-      React.createElement("div",{style:{marginTop:8}},React.createElement("input",{style:{background:"transparent",border:"none",borderBottom:"1px solid "+cor.border,color:cor.text,fontSize:13,fontWeight:800,textAlign:"center",width:180,outline:"none",padding:"2px"},placeholder:placeholder,defaultValue:placeholder})),
+      Bdg(cor,"COORDENAÇÃO FILIAL"),FC(fk,name,cor,48),
+      (editMode&&setName)
+        ?EditInput(name,setName,cor,13,8)
+        :React.createElement("div",{style:{fontSize:13,fontWeight:800,color:cor.text,marginTop:8}},""+name),
       React.createElement("div",{style:{fontSize:10,color:cor.text,opacity:0.8,marginTop:4}},"Gestão operacional da filial")
     );
   }
@@ -7009,7 +7036,7 @@ function Organograma(){
       );
     }
     return React.createElement("div",null,
-      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:28}},CoordBox("angela",nmAngela,"Coordenadora Administrativa","do Setor Técnico"),CoordBox("wesley",nmWesley,"Coordenador Técnico",null)),
+      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:28}},CoordBox("angela",nmAngela,"Coordenadora Administrativa","do Setor Técnico",setNmAngela),CoordBox("wesley",nmWesley,"Coordenador Técnico",null,setNmWesley)),
       V(24),H(420),
       React.createElement("div",{style:{display:"flex",width:420,justifyContent:"space-between",margin:"0 auto"}},V(22),V(22),V(22)),
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start"}},
@@ -7021,16 +7048,16 @@ function Organograma(){
         React.createElement("div",{style:{background:laranja.bg,border:"2px solid "+laranja.border,borderRadius:12,padding:"16px",maxWidth:700,margin:"0 auto"}},
           Bdg(laranja,"PLANTONISTAS 12x36"),
           React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:8}},
-            PlantonBox("pl_d1_ce",nmPlD1CE,"Diurno — Moto",laranja),PlantonBox("pl_d2_ce",nmPlD2CE,"Diurno — Carro",laranja),PlantonBox("pl_d3_ce",nmPlD3CE,"Diurno — Moto",laranja),PlantonBox("pl_d4_ce",nmPlD4CE,"Diurno — Carro",laranja)
+            PlantonBox("pl_d1_ce",nmPlD1CE,"Diurno — Moto",laranja,setNmPlD1CE),PlantonBox("pl_d2_ce",nmPlD2CE,"Diurno — Carro",laranja,setNmPlD2CE),PlantonBox("pl_d3_ce",nmPlD3CE,"Diurno — Moto",laranja,setNmPlD3CE),PlantonBox("pl_d4_ce",nmPlD4CE,"Diurno — Carro",laranja,setNmPlD4CE)
           ),
           Bdg({border:"#7c3aed",bg:"#7c3aed22",text:"#7c3aed"},"🌙 PLANTONISTAS NOTURNOS"),
           React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:12}},
-            PlantonBox("pl_n1_ce",nmPlN1CE,"Noturno",{border:"#7c3aed",bg:"#7c3aed22",text:"#7c3aed"}),
-            PlantonBox("pl_n2_ce",nmPlN2CE,"Noturno",{border:"#7c3aed",bg:"#7c3aed22",text:"#7c3aed"})
+            PlantonBox("pl_n1_ce",nmPlN1CE,"Noturno",{border:"#7c3aed",bg:"#7c3aed22",text:"#7c3aed"},setNmPlN1CE),
+            PlantonBox("pl_n2_ce",nmPlN2CE,"Noturno",{border:"#7c3aed",bg:"#7c3aed22",text:"#7c3aed"},setNmPlN2CE)
           ),
           ApoioRow(["⚡ Emergências","📞 Chamados fora do horário","🤝 Apoio às equipes","🔍 Apoio em preventivas"],laranja),
           React.createElement("div",{style:{marginTop:10}}),Bdg(roxo,"TÉCNICO FERISTA"),
-          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6}},PlantonBox("ferista_ce",nmFerCE,"Cobertura",roxo),ApoioRow(["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","📋 Apoio em demandas"],roxo))
+          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6}},PlantonBox("ferista_ce",nmFerCE,"Cobertura",roxo,setNmFerCE),ApoioRow(["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","📋 Apoio em demandas"],roxo))
         )
       )
     );
@@ -7038,22 +7065,22 @@ function Organograma(){
 
   function OrgPiaui(){
     return React.createElement("div",null,
-      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:28}},CoordBox("angela",nmAngela,"Coordenadora Administrativa","do Setor Técnico"),CoordBox("wesley",nmWesley,"Coordenador Técnico",null)),
+      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:28}},CoordBox("angela",nmAngela,"Coordenadora Administrativa","do Setor Técnico",setNmAngela),CoordBox("wesley",nmWesley,"Coordenador Técnico",null,setNmWesley)),
       V(24),H(200),V(22),
-      React.createElement("div",{style:{display:"flex",justifyContent:"center"}},FilialBox("coord_pi","Coordenador Filial PI",amarelo)),
+      React.createElement("div",{style:{display:"flex",justifyContent:"center"}},FilialBox("coord_pi",nmCoordPI,amarelo,setNmCoordPI)),
       V(22),H(160),V(18),
-      React.createElement("div",{style:{display:"flex",justifyContent:"center"}},SupBox("sup_pi","Supervisor Manut. e Instalação","SUPERVISÃO")),
+      React.createElement("div",{style:{display:"flex",justifyContent:"center"}},SupBox("sup_pi","Supervisor Manut. e Instalação","SUPERVISÃO",null,nmSupPI,setNmSupPI)),
       V(18),H(260),
       React.createElement("div",{style:{display:"flex",width:260,justifyContent:"space-between",margin:"0 auto"}},V(18),V(18),V(18)),
-      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"center",maxWidth:340,margin:"0 auto"}},TecBox("tec_a_pi","Técnico","P16",ciano),TecBox("tec_b_pi","Técnico","P17",ciano),TecBox("tec_p_pi","Técnico","Preventiva 1",roxo)),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"center",maxWidth:340,margin:"0 auto"}},TecBox("tec_a_pi","Técnico","P16",ciano,null,nmTecAPI,setNmTecAPI),TecBox("tec_b_pi","Técnico","P17",ciano,null,nmTecBPI,setNmTecBPI),TecBox("tec_p_pi","Técnico","Preventiva 1",roxo,null,nmTecPPI,setNmTecPPI)),
       React.createElement("div",{style:{marginTop:36,paddingTop:24,borderTop:"2px dashed #1e293b"}},
         React.createElement("div",{style:{textAlign:"center",marginBottom:16}},React.createElement("span",{style:{background:"#f97316",color:"#fff",fontSize:11,fontWeight:800,padding:"5px 22px",borderRadius:20,letterSpacing:2}},"APOIO OPERACIONAL")),
         React.createElement("div",{style:{background:laranja.bg,border:"2px solid "+laranja.border,borderRadius:12,padding:"16px",maxWidth:500,margin:"0 auto"}},
           Bdg(laranja,"4 TÉCNICOS PLANTONISTAS 24h"),
-          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}},PlantonBox("pl1_pi",nmPl1PI,"24h",laranja),PlantonBox("pl2_pi",nmPl2PI,"24h",laranja),PlantonBox("pl3_pi",nmPl3PI,"24h",laranja),PlantonBox("pl4_pi",nmPl4PI,"24h",laranja)),
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}},PlantonBox("pl1_pi",nmPl1PI,"24h",laranja,setNmPl1PI),PlantonBox("pl2_pi",nmPl2PI,"24h",laranja,setNmPl2PI),PlantonBox("pl3_pi",nmPl3PI,"24h",laranja,setNmPl3PI),PlantonBox("pl4_pi",nmPl4PI,"24h",laranja,setNmPl4PI)),
           ApoioRow(["⚡ Emergências","📞 Chamados fora do horário","🤝 Apoio às equipes","🔍 Apoio em preventivas","🏖️ Férias","🏥 Afastamentos","📋 Demandas"],laranja),
           React.createElement("div",{style:{marginTop:10}}),Bdg(roxo,"TÉCNICO FERISTA"),
-          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6}},PlantonBox("ferista_pi",nmFerPI,"Cobertura PI",roxo),ApoioRow(["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","🔍 Apoio em preventivas","📋 Apoio em demandas"],roxo))
+          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6}},PlantonBox("ferista_pi",nmFerPI,"Cobertura PI",roxo,setNmFerPI),ApoioRow(["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","🔍 Apoio em preventivas","📋 Apoio em demandas"],roxo))
         )
       )
     );
@@ -7061,36 +7088,36 @@ function Organograma(){
 
   function OrgMaranhao(){
     return React.createElement("div",null,
-      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:28}},CoordBox("angela",nmAngela,"Coordenadora Administrativa","do Setor Técnico"),CoordBox("wesley",nmWesley,"Coordenador Técnico",null)),
+      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:28}},CoordBox("angela",nmAngela,"Coordenadora Administrativa","do Setor Técnico",setNmAngela),CoordBox("wesley",nmWesley,"Coordenador Técnico",null,setNmWesley)),
       V(24),H(180),V(22),
-      React.createElement("div",{style:{display:"flex",justifyContent:"center"}},FilialBox("coord_ma","Coordenador Filial MA",amarelo)),
+      React.createElement("div",{style:{display:"flex",justifyContent:"center"}},FilialBox("coord_ma",nmCoordMA,amarelo,setNmCoordMA)),
       V(22),H(160),V(18),
       React.createElement("div",{style:{display:"flex",justifyContent:"center"}},
         React.createElement("div",{style:{background:verde2.bg,border:"2px solid "+verde2.border,borderRadius:12,padding:"12px 20px",textAlign:"center",minWidth:220}},
-          Bdg(verde2,"SUPERVISÃO OPERACIONAL"),FC("sup_ma","Supervisor MA",verde2,44),
-          React.createElement("div",{style:{fontSize:12,fontWeight:800,color:verde2.text,marginTop:6}},"Supervisor Manut. e Instalação")
+          Bdg(verde2,"SUPERVISÃO OPERACIONAL"),FC("sup_ma",nmSupMA,verde2,44),
+          (editMode?EditInput(nmSupMA,setNmSupMA,verde2,12):React.createElement("div",{style:{fontSize:12,fontWeight:800,color:verde2.text,marginTop:6}},""+nmSupMA))
         )
       ),
       V(18),H(180),
       React.createElement("div",{style:{display:"flex",width:180,justifyContent:"space-between",margin:"0 auto"}},V(18),V(18)),
       React.createElement("div",{style:{display:"flex",gap:10,justifyContent:"center",maxWidth:340,margin:"0 auto"}},
         React.createElement("div",{style:{background:ciano.bg,border:"1.5px solid "+ciano.border,borderRadius:10,padding:"12px 10px",flex:1}},
-          Bdg(ciano,"ÁREA"),FC("tec_a_ma","Técnico A",ciano,36),
-          React.createElement("div",{style:{fontSize:10,fontWeight:700,color:ciano.text,textAlign:"center",marginTop:6}},"Técnico de P16")
+          Bdg(ciano,"ÁREA"),FC("tec_a_ma",nmTecAMA,ciano,36),
+          (editMode?EditInput(nmTecAMA,setNmTecAMA,ciano,10):React.createElement("div",{style:{fontSize:10,fontWeight:700,color:ciano.text,textAlign:"center",marginTop:6}},""+nmTecAMA))
         ),
         React.createElement("div",{style:{background:roxo.bg,border:"1.5px solid "+roxo.border,borderRadius:10,padding:"12px 10px",flex:1}},
-          Bdg(roxo,"PREVENTIVA"),FC("tec_p_ma","Técnico P",roxo,36),
-          React.createElement("div",{style:{fontSize:10,fontWeight:700,color:roxo.text,textAlign:"center",marginTop:6}},"Técnico de Preventiva 1")
+          Bdg(roxo,"PREVENTIVA"),FC("tec_p_ma",nmTecPMA,roxo,36),
+          (editMode?EditInput(nmTecPMA,setNmTecPMA,roxo,10):React.createElement("div",{style:{fontSize:10,fontWeight:700,color:roxo.text,textAlign:"center",marginTop:6}},""+nmTecPMA))
         )
       ),
       React.createElement("div",{style:{marginTop:36,paddingTop:24,borderTop:"2px dashed #1e293b"}},
         React.createElement("div",{style:{textAlign:"center",marginBottom:16}},React.createElement("span",{style:{background:"#f97316",color:"#fff",fontSize:11,fontWeight:800,padding:"5px 22px",borderRadius:20,letterSpacing:2}},"APOIO OPERACIONAL")),
         React.createElement("div",{style:{background:laranja.bg,border:"2px solid "+laranja.border,borderRadius:12,padding:"16px",maxWidth:580,margin:"0 auto"}},
           Bdg(laranja,"4 TÉCNICOS PLANTONISTAS 24h"),
-          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}},PlantonBox("pl1_ma",nmPl1MA,"24h",laranja),PlantonBox("pl2_ma",nmPl2MA,"24h",laranja),PlantonBox("pl3_ma",nmPl3MA,"24h",laranja),PlantonBox("pl4_ma",nmPl4MA,"24h",laranja)),
+          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:12}},PlantonBox("pl1_ma",nmPl1MA,"24h",laranja,setNmPl1MA),PlantonBox("pl2_ma",nmPl2MA,"24h",laranja,setNmPl2MA),PlantonBox("pl3_ma",nmPl3MA,"24h",laranja,setNmPl3MA),PlantonBox("pl4_ma",nmPl4MA,"24h",laranja,setNmPl4MA)),
           ApoioRow(["⚡ Emergências","📞 Chamados fora do horário","🤝 Apoio às equipes","🔍 Apoio em preventivas","🏖️ Férias","🏥 Afastamentos","📋 Demandas represadas"],laranja),
           React.createElement("div",{style:{marginTop:10}}),Bdg(roxo,"TÉCNICO FERISTA"),
-          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6}},PlantonBox("ferista_ma",nmFerMA,"Cobertura MA",roxo),ApoioRow(["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","🔍 Apoio em preventivas","📋 Apoio em demandas"],roxo))
+          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",marginTop:6}},PlantonBox("ferista_ma",nmFerMA,"Cobertura MA",roxo,setNmFerMA),ApoioRow(["🏖️ Cobertura de férias","🏥 Cobertura de afastamentos","🔍 Apoio em preventivas","📋 Apoio em demandas"],roxo))
         )
       )
     );
@@ -7105,7 +7132,11 @@ function Organograma(){
         React.createElement("button",{style:{...btnStyle(C.blue,filial!=="ceara"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("ceara");}},"🏖️ Ceará"),
         React.createElement("button",{style:{...btnStyle(amarelo.border,filial!=="piaui"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("piaui");}},"🌵 Piauí"),
         React.createElement("button",{style:{...btnStyle("#10b981",filial!=="maranhao"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("maranhao");}},"🌊 Maranhão"),
-        React.createElement("button",{style:{...btnStyle(C.orange,true),fontSize:13,padding:"8px 24px"},onClick:gerarRelatorio},"📄 Relatório de Áreas")
+        React.createElement("button",{style:{...btnStyle(C.orange,true),fontSize:13,padding:"8px 24px"},onClick:gerarRelatorio},"📄 Relatório de Áreas"),
+        React.createElement("button",{style:{...btnStyle(editMode?"#10b981":"#8b5cf6",!editMode),fontSize:13,padding:"8px 24px"},onClick:function(){setEditMode(function(v){return !v;});}},editMode?"✅ Concluir edição":"✏️ Editar nomes")
+      ),
+      editMode&&React.createElement("div",{style:{marginTop:10,fontSize:11,color:"#a855f7",fontWeight:600}},
+        "Modo edição ligado — clique nos nomes para alterar. As mudanças ficam salvas neste navegador."
       ),
       condominios.length>0&&React.createElement("div",{style:{marginTop:10,fontSize:11,color:"#64748b"}},
         condominios.length+" condomínios carregados · Clique nos cards de área para ver detalhes"
@@ -9407,7 +9438,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.16 · jul/2026 · importar OS com data de fechamento")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.17 · jul/2026 · organograma com nomes editáveis")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
