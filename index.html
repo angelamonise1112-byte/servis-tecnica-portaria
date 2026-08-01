@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.29 RANKING POR TÉCNICO CAMPO TEC JUL2026 -->
+<!-- SERVIS v4.30 RANKING FIX ORDEM DECLARAÇÃO JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -6355,6 +6355,17 @@ function RankingSupervisores(){
   }
 
   // DEBUG — mostra mesmo se tecnicos estiver vazio
+  var supervisores=(tecnicos.length>0?tecnicos:[
+    {id:"sup1",nome:"Wilton",mat:"T01",tipo:"manutencao"},
+    {id:"sup2",nome:"John",mat:"T03",tipo:"manutencao"},
+    {id:"sup3",nome:"Felipe",mat:"T04",tipo:"manutencao"},
+    {id:"sup4",nome:"Pedro Ricardo Lima Castro",mat:"T05",tipo:"manutencao"},
+  ]).map(function(t){
+    var tipo=t.tipo||"manutencao";
+    var icon=tipo==="instalacao"?"🏗️":tipo==="preventiva"?"🔍":"🔧";
+    return {id:t.id||t.mat,nome:t.nome,tipo:tipo,icon:icon};
+  });
+
   var _debugInfo=useMemo(()=>{
     if(!os.length)return null;
     var mesNum=parseInt(mesSel);var anoNum=parseInt(anoSel);
@@ -6367,17 +6378,6 @@ function RankingSupervisores(){
     }).join(" · ");
     return {totalOsMes:osMes.length,semTec,tecCadCount:tecnicos.length,condCount:condominios.length,resumoCruz};
   },[os,tecnicos,condominios,supervisores,mesSel,anoSel]);
-
-  var supervisores=(tecnicos.length>0?tecnicos:[
-    {id:"sup1",nome:"Wilton",mat:"T01",tipo:"manutencao"},
-    {id:"sup2",nome:"John",mat:"T03",tipo:"manutencao"},
-    {id:"sup3",nome:"Felipe",mat:"T04",tipo:"manutencao"},
-    {id:"sup4",nome:"Pedro Ricardo Lima Castro",mat:"T05",tipo:"manutencao"},
-  ]).map(function(t){
-    var tipo=t.tipo||"manutencao";
-    var icon=tipo==="instalacao"?"🏗️":tipo==="preventiva"?"🔍":"🔧";
-    return {id:t.id||t.mat,nome:t.nome,tipo:tipo,icon:icon};
-  });
 
   const pontuacoes=useMemo(()=>{
     var mesNum=parseInt(mesSel);var anoNum=parseInt(anoSel);
@@ -9594,7 +9594,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.29 · jul/2026 · ranking por técnico campo tec corrigido")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.30 · jul/2026 · ranking fix ordem declaração")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
