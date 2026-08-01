@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.24 RANKING FIX PONTUAÇÃO + PDF JUL2026 -->
+<!-- SERVIS v4.26 RANKING DEBUG CORRIGIDO JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -6351,6 +6351,17 @@ function RankingSupervisores(){
     return horas;
   }
 
+  // DEBUG — mostra mesmo se tecnicos estiver vazio
+  var _debugInfo=useMemo(()=>{
+    if(!os.length)return null;
+    var mesNum=parseInt(mesSel);var anoNum=parseInt(anoSel);
+    var osMes=os.filter(function(d){if(!d.data)return false;var p=d.data.slice(0,10).split("-");return parseInt(p[1])===mesNum&&parseInt(p[0])===anoNum;});
+    var tecNamesOS=[...new Set(osMes.map(function(o){return(o.tec||"").trim();}).filter(Boolean))].sort().slice(0,30);
+    var tecNamesCad=tecnicos.map(function(t){return t.nome;});
+    var semTec=osMes.filter(function(o){return !o.tec||!o.tec.trim();}).length;
+    return {tecNamesOS,tecNamesCad,totalOsMes:osMes.length,semTec,tecCadCount:tecnicos.length};
+  },[os,tecnicos,mesSel,anoSel]);
+
   var supervisores=(tecnicos.length>0?tecnicos:[
     {id:"sup1",nome:"Wilton",mat:"T01",tipo:"manutencao"},
     {id:"sup2",nome:"Felipe",mat:"T02",tipo:"manutencao"},
@@ -6507,6 +6518,12 @@ function RankingSupervisores(){
       )
     ),
     React.createElement("div",{style:{padding:"20px 24px"}},
+      _debugInfo&&React.createElement("div",{style:{background:"#1e293b",border:"2px solid #f59e0b",borderRadius:8,padding:"14px 16px",marginBottom:16,fontSize:11,color:"#fcd34d"}},
+        React.createElement("div",{style:{fontWeight:800,marginBottom:8,fontSize:13}},"🔍 Diagnóstico do Ranking"),
+        React.createElement("div",null,"OS no mês selecionado: ",React.createElement("b",null,_debugInfo.totalOsMes)," | Sem técnico preenchido: ",React.createElement("b",{style:{color:_debugInfo.semTec>0?"#f87171":"#86efac"}},_debugInfo.semTec)," | Técnicos cadastrados na tabela: ",React.createElement("b",null,_debugInfo.tecCadCount)),
+        React.createElement("div",{style:{marginTop:8,color:"#86efac"}},"Nomes encontrados no campo tec das OS → ",React.createElement("span",{style:{color:"#fff"}},(_debugInfo.tecNamesOS||[]).length>0?(_debugInfo.tecNamesOS||[]).join(" · "):"(campo tec vazio em todas as OS)")),
+        React.createElement("div",{style:{marginTop:4,color:"#93c5fd"}},"Nomes cadastrados em técnicos → ",React.createElement("span",{style:{color:"#fff"}},(_debugInfo.tecNamesCad||[]).length>0?(_debugInfo.tecNamesCad||[]).join(" · "):"(tabela tecnicos vazia — usando nomes padrão)"))
+      ),
       loading?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.muted}},"Carregando..."):
       React.createElement("div",null,
         React.createElement(Grid,{cols:4,mb:16},
@@ -9562,7 +9579,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.24 · jul/2026 · ranking pontuação individual + PDF corrigido")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.26 · jul/2026 · ranking diagnóstico corrigido")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
