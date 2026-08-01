@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.31 FIX REACT18 CREATEROOT JUL2026 -->
+<!-- SERVIS v4.32 RANKING REINCIDÊNCIA NORMALIZADA JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -6427,9 +6427,20 @@ function RankingSupervisores(){
         });
         var atendidas=osTec.filter(function(o){return o.status==="Fechado";});
         pts.sla=Math.max(0,Math.min(100,Math.round(((totalOS-vencidas.length)/totalOS)*100)));
+        // Normaliza texto do problema: lowercase, remove pontuação, pega primeiras 4 palavras
+        function normProb(s){
+          return (s||"").toLowerCase()
+            .replace(/[^a-záàâãéêíóôõúüçñ0-9\s]/gi," ")
+            .replace(/\s+/g," ").trim()
+            .split(" ").filter(function(w){return w.length>2;})
+            .slice(0,4).join(" ");
+        }
         var mapReinc={};
         osTec.forEach(function(o){
-          var k=(o.cond||"").trim().toLowerCase()+"||"+(o.prob||o.descricao||"").trim().toLowerCase().slice(0,40);
+          var cond=(o.cond||"").trim().toLowerCase();
+          var prob=normProb(o.prob||o.descricao||"");
+          if(!cond||!prob)return;
+          var k=cond+"||"+prob;
           if(!mapReinc[k])mapReinc[k]=0;mapReinc[k]++;
         });
         var qtdReinc=Object.values(mapReinc).filter(function(v){return v>=2;}).length;
@@ -6580,7 +6591,7 @@ function RankingSupervisores(){
               React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:4}},
                 React.createElement("span",{style:{background:cls.c+"22",color:cls.c,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:10}},cls.icon+(cls.icon?" ":"")+cls.label),
                 p.sup.tipo==="manutencao"&&p.totalOS
-                  ?React.createElement("span",{style:{fontSize:10,color:C.dim}},p.totalOS+" OS · "+(p.condsTec||0)+" cond. · pior: "+p.pior)
+                  ?React.createElement("span",{style:{fontSize:10,color:C.dim}},p.totalOS+" OS · pior: "+p.pior)
                   :p.sup.tipo==="preventiva"&&p.qtdPrev!==undefined
                     ?React.createElement("span",{style:{fontSize:10,color:C.cyan}},p.qtdPrev+"/17 prev.")
                     :React.createElement("span",{style:{fontSize:10,color:C.dim}},"Pior: "+p.pior)
@@ -9594,7 +9605,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.31 · jul/2026 · fix React 18 createRoot")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.32 · jul/2026 · ranking reincidência com normalização de texto")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
