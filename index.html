@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.30 RANKING FIX ORDEM DECLARAÇÃO JUL2026 -->
+<!-- SERVIS v4.31 FIX REACT18 CREATEROOT JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -9594,7 +9594,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.30 · jul/2026 · ranking fix ordem declaração")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.31 · jul/2026 · fix React 18 createRoot")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
@@ -9606,7 +9606,12 @@ function App(){
   );
 }
 
-ReactDOM.render(React.createElement(App,null),document.getElementById("root"));
+const _rootEl=document.getElementById("root");
+if(ReactDOM.createRoot){
+  ReactDOM.createRoot(_rootEl).render(React.createElement(App,null));
+}else{
+  ReactDOM.render(React.createElement(App,null),_rootEl);
+}
 </script>
 </body>
 </html>
