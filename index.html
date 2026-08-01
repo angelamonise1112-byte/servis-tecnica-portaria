@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.27 RANKING FÓRMULA + MEDALHAS + NOMES JUL2026 -->
+<!-- SERVIS v4.29 RANKING POR TÉCNICO CAMPO TEC JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -6317,6 +6317,7 @@ function RankingSupervisores(){
   const [preventivas,setPreventivas]=useState([]);
   const [instalacoes,setInstalacoes]=useState([]);
   const [tecnicos,setTecnicos]=useState([]);
+  const [condominios,setCondominios]=useState([]);
   const [loading,setLoading]=useState(true);
   const [mesSel,setMesSel]=useState(String(new Date().getMonth()+1).padStart(2,"0"));
   const [anoSel,setAnoSel]=useState(String(new Date().getFullYear()));
@@ -6326,13 +6327,15 @@ function RankingSupervisores(){
 
   const load=useCallback(async()=>{
     setLoading(true);
-    const[{data:osData},{data:prevData},{data:instData},{data:tecData}]=await Promise.all([
+    const[{data:osData},{data:prevData},{data:instData},{data:tecData},{data:condData}]=await Promise.all([
       sb.from("os").select("*"),
       sb.from("preventivas").select("*"),
       sb.from("instalacoes").select("*"),
-      sb.from("tecnicos").select("id,nome,mat,tipo,status").eq("status","Ativo")
+      sb.from("tecnicos").select("id,nome,mat,tipo,status").eq("status","Ativo"),
+      sb.from("condominios").select("nome,tecnico,area_tecnico")
     ]);
     setTecnicos(tecData||[]);
+    setCondominios(condData||[]);
     setOs(osData||[]);setPreventivas(prevData||[]);setInstalacoes(instData||[]);
     setLoading(false);
   },[]);
@@ -6356,17 +6359,20 @@ function RankingSupervisores(){
     if(!os.length)return null;
     var mesNum=parseInt(mesSel);var anoNum=parseInt(anoSel);
     var osMes=os.filter(function(d){if(!d.data)return false;var p=d.data.slice(0,10).split("-");return parseInt(p[1])===mesNum&&parseInt(p[0])===anoNum;});
-    var tecNamesOS=[...new Set(osMes.map(function(o){return(o.tec||"").trim();}).filter(Boolean))].sort().slice(0,30);
-    var tecNamesCad=tecnicos.map(function(t){return t.nome;});
     var semTec=osMes.filter(function(o){return !o.tec||!o.tec.trim();}).length;
-    return {tecNamesOS,tecNamesCad,totalOsMes:osMes.length,semTec,tecCadCount:tecnicos.length};
-  },[os,tecnicos,mesSel,anoSel]);
+    var resumoCruz=supervisores.map(function(sup){
+      var ns=sup.nome.trim().toLowerCase();var nsFirst=ns.split(/\s+/)[0];
+      var n=osMes.filter(function(o){if(!o.tec)return false;var nt=o.tec.trim().toLowerCase();var ntFirst=nt.split(/\s+/)[0];return nt===ns||ntFirst===nsFirst;}).length;
+      return sup.nome.split(" ")[0]+":"+n;
+    }).join(" · ");
+    return {totalOsMes:osMes.length,semTec,tecCadCount:tecnicos.length,condCount:condominios.length,resumoCruz};
+  },[os,tecnicos,condominios,supervisores,mesSel,anoSel]);
 
   var supervisores=(tecnicos.length>0?tecnicos:[
     {id:"sup1",nome:"Wilton",mat:"T01",tipo:"manutencao"},
-    {id:"sup2",nome:"Felipe",mat:"T02",tipo:"manutencao"},
-    {id:"sup3",nome:"John",mat:"T03",tipo:"manutencao"},
-    {id:"sup4",nome:"Pedro",mat:"T04",tipo:"manutencao"},
+    {id:"sup2",nome:"John",mat:"T03",tipo:"manutencao"},
+    {id:"sup3",nome:"Felipe",mat:"T04",tipo:"manutencao"},
+    {id:"sup4",nome:"Pedro Ricardo Lima Castro",mat:"T05",tipo:"manutencao"},
   ]).map(function(t){
     var tipo=t.tipo||"manutencao";
     var icon=tipo==="instalacao"?"🏗️":tipo==="preventiva"?"🔍":"🔧";
@@ -6401,29 +6407,26 @@ function RankingSupervisores(){
       }
 
       if(sup.tipo==="manutencao"){
-        // Casamento de nomes: compara primeiro nome ou inclusão bidirecional
+        // Filtrar OS pelo campo tec (nome do técnico) — casamento por primeiro nome
+        var ns=sup.nome.trim().toLowerCase();
+        var nsFirst=ns.split(/\s+/)[0];
         var osTec=osMes.filter(function(o){
           if(!o.tec)return false;
           var nt=o.tec.trim().toLowerCase();
-          var ns=sup.nome.trim().toLowerCase();
           var ntFirst=nt.split(/\s+/)[0];
-          var nsFirst=ns.split(/\s+/)[0];
-          return nt===ns||ntFirst===nsFirst||nt.includes(ns)||ns.includes(nt);
+          return nt===ns||ntFirst===nsFirst;
         });
         var totalOS=osTec.length;
         if(totalOS===0){
           pts.sla=null;pts.recorrencia=null;pts.prazo=null;pts.qualidade=null;pts.metaPrev=null;pts.qualPrev=null;
           return {sup,pts,nota:null,pior:"Sem OS no período",totalOS:0};
         }
-        // SLA: 48h úteis seg-sex 8h-18h
         var vencidas=osTec.filter(function(o){
           if(o.status!=="Aberto"&&o.status!=="Em andamento")return false;
           return o.data&&horasUteis(o.data)>48;
         });
         var atendidas=osTec.filter(function(o){return o.status==="Fechado";});
-        pts.sla=Math.round(((atendidas.length+(osTec.length-atendidas.length-vencidas.length))/totalOS)*100);
-        pts.sla=Math.max(0,Math.min(100,pts.sla));
-        // Recorrência: 2+ OS mesmo condomínio+motivo no mês = recorrência
+        pts.sla=Math.max(0,Math.min(100,Math.round(((totalOS-vencidas.length)/totalOS)*100)));
         var mapReinc={};
         osTec.forEach(function(o){
           var k=(o.cond||"").trim().toLowerCase()+"||"+(o.prob||o.descricao||"").trim().toLowerCase().slice(0,40);
@@ -6433,7 +6436,6 @@ function RankingSupervisores(){
         var totalPares=Object.keys(mapReinc).length||1;
         pts.recorrencia=Math.round(Math.max(0,((totalPares-qtdReinc)/totalPares)*100));
         pts.prazo=null;pts.qualidade=null;pts.metaPrev=null;pts.qualPrev=null;
-        // Recorrência peso maior: 60%, SLA: 40%
         var nota=Math.round(pts.recorrencia*0.60+pts.sla*0.40);
         if(pts.sla<piorVal){piorVal=pts.sla;pior="SLA de Atendimento";}
         if(pts.recorrencia<piorVal){piorVal=pts.recorrencia;pior="Recorrência";}
@@ -6463,7 +6465,7 @@ function RankingSupervisores(){
       }
       return {sup,pts:{},nota:0,pior:"—"};
     }).sort(function(a,b){return b.nota-a.nota;});
-  },[os,preventivas,instalacoes,tecnicos,mesSel,anoSel]);
+  },[os,preventivas,instalacoes,tecnicos,condominios,mesSel,anoSel]);
 
   function classificacao(nota,pos){
     if(pos===0)return {icon:"🥇",label:"Ouro",c:C.yellow};
@@ -6531,9 +6533,8 @@ function RankingSupervisores(){
     React.createElement("div",{style:{padding:"20px 24px"}},
       _debugInfo&&React.createElement("div",{style:{background:"#1e293b",border:"2px solid #f59e0b",borderRadius:8,padding:"14px 16px",marginBottom:16,fontSize:11,color:"#fcd34d"}},
         React.createElement("div",{style:{fontWeight:800,marginBottom:8,fontSize:13}},"🔍 Diagnóstico do Ranking"),
-        React.createElement("div",null,"OS no mês selecionado: ",React.createElement("b",null,_debugInfo.totalOsMes)," | Sem técnico preenchido: ",React.createElement("b",{style:{color:_debugInfo.semTec>0?"#f87171":"#86efac"}},_debugInfo.semTec)," | Técnicos cadastrados na tabela: ",React.createElement("b",null,_debugInfo.tecCadCount)),
-        React.createElement("div",{style:{marginTop:8,color:"#86efac"}},"Nomes encontrados no campo tec das OS → ",React.createElement("span",{style:{color:"#fff"}},(_debugInfo.tecNamesOS||[]).length>0?(_debugInfo.tecNamesOS||[]).join(" · "):"(campo tec vazio em todas as OS)")),
-        React.createElement("div",{style:{marginTop:4,color:"#93c5fd"}},"Nomes cadastrados em técnicos → ",React.createElement("span",{style:{color:"#fff"}},(_debugInfo.tecNamesCad||[]).length>0?(_debugInfo.tecNamesCad||[]).join(" · "):"(tabela tecnicos vazia — usando nomes padrão)"))
+        React.createElement("div",null,"OS no mês: ",React.createElement("b",null,_debugInfo.totalOsMes)," | Sem técnico: ",React.createElement("b",{style:{color:_debugInfo.semTec>0?"#f87171":"#86efac"}},_debugInfo.semTec)," | Técnicos cadastrados: ",React.createElement("b",null,_debugInfo.tecCadCount)," | Condomínios carregados: ",React.createElement("b",null,_debugInfo.condCount)),
+        React.createElement("div",{style:{marginTop:6,color:"#93c5fd"}},"OS por técnico → ",React.createElement("span",{style:{color:"#fff"}},_debugInfo.resumoCruz||"(0 em todos)"))
       ),
       loading?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.muted}},"Carregando..."):
       React.createElement("div",null,
@@ -6579,7 +6580,7 @@ function RankingSupervisores(){
               React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:4}},
                 React.createElement("span",{style:{background:cls.c+"22",color:cls.c,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:10}},cls.icon+(cls.icon?" ":"")+cls.label),
                 p.sup.tipo==="manutencao"&&p.totalOS
-                  ?React.createElement("span",{style:{fontSize:10,color:C.dim}},p.totalOS+" OS · pior: "+p.pior)
+                  ?React.createElement("span",{style:{fontSize:10,color:C.dim}},p.totalOS+" OS · "+(p.condsTec||0)+" cond. · pior: "+p.pior)
                   :p.sup.tipo==="preventiva"&&p.qtdPrev!==undefined
                     ?React.createElement("span",{style:{fontSize:10,color:C.cyan}},p.qtdPrev+"/17 prev.")
                     :React.createElement("span",{style:{fontSize:10,color:C.dim}},"Pior: "+p.pior)
@@ -9593,7 +9594,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.27 · jul/2026 · ranking fórmula, medalhas e casamento de nomes")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.29 · jul/2026 · ranking por técnico campo tec corrigido")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
