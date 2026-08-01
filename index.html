@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v4.32 RANKING REINCIDÊNCIA NORMALIZADA JUL2026 -->
+<!-- SERVIS v5.0 FASE 01 PERFORMANCE JUL2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -65,6 +65,46 @@ const LOGO_SERVIS="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAACvCAIAAAA
 const SUPA_URL="https://qemqcpqkwlxkbckwwevv.supabase.co";
 const SUPA_KEY="sb_publishable_TDgkeeJ4SICauVqBUDQ9ZQ_6lwT14lc";
 const sbRaw=supabase.createClient(SUPA_URL,SUPA_KEY);
+// ── FASE 01: Cache global com TTL de 5 minutos ───────────────
+var _CACHE={};
+var _CACHE_TTL=5*60*1000;
+function cacheGet(key){var e=_CACHE[key];if(!e)return null;if(Date.now()-e.t>_CACHE_TTL){delete _CACHE[key];return null;}return e.v;}
+function cacheSet(key,val){_CACHE[key]={v:val,t:Date.now()};}
+function cacheInvalidate(prefix){Object.keys(_CACHE).forEach(function(k){if(!prefix||k.indexOf(prefix)===0)delete _CACHE[k];});}
+
+// ── FASE 01: Query enxuta com cache ──────────────────────────
+async function sbQuery(key,queryFn){
+  var cached=cacheGet(key);
+  if(cached!==null)return cached;
+  try{
+    var res=await queryFn();
+    if(res&&res.error){console.warn("[sbQuery] erro em "+key+":",res.error.message);return [];}
+    var data=res&&res.data?res.data:[];
+    cacheSet(key,data);
+    return data;
+  }catch(e){console.warn("[sbQuery] exceção em "+key+":",e.message);return [];}
+}
+
+// ── FASE 01: Deduplicação por campo ──────────────────────────
+function deduplicar(arr,campo){
+  var visto={};
+  return arr.filter(function(item){
+    var k=item[campo];
+    if(k==null||visto[k])return false;
+    visto[k]=true;return true;
+  });
+}
+
+// ── FASE 01: Filtro de ano corrente para queries de OS ────────
+function anoAtualISO(){return new Date().getFullYear()+"-01-01";}
+function mesAtualRange(){
+  var d=new Date();
+  var ini=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-01";
+  var fim=new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);
+  return{ini,fim};
+}
+
+
 // Guarda de somente-leitura: bloqueia escrita/exclusão para técnico e visualizador
 window._servisNivel=window._servisNivel||"";
 function _servisSoLeitura(){return window._servisNivel==="tecnico"||window._servisNivel==="visualizador";}
@@ -1214,6 +1254,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
         }else{ok+=lote.length;}
       }
       try{servisAudit("importação","os","lote",{nome:window._servisUser},ok+" OS importadas de "+(file.name||"planilha"));}catch(e){}
+      cacheInvalidate("os");
       try{var bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"os_import"});bc.close();}catch(e){}
       alert("Importação concluída!\n\n✅ Importadas: "+ok+(erros?"\n❌ Falhas: "+erros:"")+"\n⏭️ Puladas (já existiam): "+pulados);
       load();if(onSave)onSave();
@@ -6328,9 +6369,9 @@ function RankingSupervisores(){
   const load=useCallback(async()=>{
     setLoading(true);
     const[{data:osData},{data:prevData},{data:instData},{data:tecData},{data:condData}]=await Promise.all([
-      sb.from("os").select("*"),
-      sb.from("preventivas").select("*"),
-      sb.from("instalacoes").select("*"),
+      sb.from("os").select("num,data,data_fechamento,status,cond,tec,prob,descricao,pri").gte("data",anoAtualISO()),
+      sb.from("preventivas").select("status,retorno,devolucao,cond").gte("retorno",anoAtualISO()),
+      sb.from("instalacoes").select("data_inicio,data_entrega_portaria,cond").order("data_inicio",{ascending:false}).limit(200),
       sb.from("tecnicos").select("id,nome,mat,tipo,status").eq("status","Ativo"),
       sb.from("condominios").select("nome,tecnico,area_tecnico")
     ]);
@@ -6648,8 +6689,8 @@ function Problemas(){
 
   const load=useCallback(async()=>{
     setLoading(true);
-    const{data:rows}=await sb.from("os").select("num,data,cond,tec,prob,status,pri");
-    setOs(rows||[]);setLoading(false);
+    const{data:rows}=await sb.from("os").select("num,data,cond,tec,prob,status,pri").gte("data",anoAtualISO());
+    setOs(deduplicar(rows||[],"num"));setLoading(false);
   },[]);
   useEffect(()=>{load();},[load,tick]);
 
@@ -9400,6 +9441,28 @@ function PaginacaoBar({pagina,totalPag,total,setPagina}){
   );
 }
 
+// ── FASE 01: ErrorBoundary — tela de erro amigável ──────────
+class ErrorBoundary extends React.Component{
+  constructor(props){super(props);this.state={erro:null};}
+  static getDerivedStateFromError(e){return{erro:e};}
+  componentDidCatch(e,info){console.error("[Servis] Erro capturado:",e,info);}
+  render(){
+    if(this.state.erro){
+      return React.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#0a0f1e",flexDirection:"column",gap:16,padding:32}},
+        React.createElement("div",{style:{fontSize:48}},"⚠️"),
+        React.createElement("div",{style:{fontSize:18,fontWeight:700,color:"#f1f5f9"}},"Algo deu errado"),
+        React.createElement("div",{style:{fontSize:13,color:"#94a3b8",maxWidth:400,textAlign:"center"}},this.state.erro.message||"Erro inesperado. Recarregue a página."),
+        React.createElement("button",{
+          style:{marginTop:8,background:"#1a5fa8",color:"#fff",border:"none",borderRadius:8,padding:"10px 24px",fontSize:14,cursor:"pointer",fontWeight:600},
+          onClick:function(){window.location.reload();}
+        },"↺ Recarregar")
+      );
+    }
+    return this.props.children;
+  }
+}
+
+
 function App(){
   const [usuario,setUsuario]=useState(null);
   const ultimaAtividade=React.useRef(Date.now());
@@ -9502,27 +9565,28 @@ function App(){
         React.createElement("div",{style:{fontSize:13,color:C.dim,marginTop:8}},"Seu perfil tem acesso apenas às OS e Preventivas.")
       );
     }
+    // ── FASE 01: Lazy loading — passa tab ativo para componentes pesados ──
     switch(tab){
       case"dashboard":return React.createElement(Dashboard,{setTab});
       case"nova-os":return soLeitura?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.dim}},React.createElement("div",{style:{fontSize:40}},"🔒"),React.createElement("div",{style:{color:C.muted,marginTop:12}},"Acesso restrito")):React.createElement(NovaOS,{setTab,onSave:refresh});
       case"os":return React.createElement(OSModule,{tecsBanco,onSave:refresh,somenteLeitura:soLeitura||isCentral});
       case"atestados":return React.createElement(Atestados,{tecsBanco});
       case"horas-extras":return React.createElement(HorasExtras,{tecsBanco});
-      case"problemas":return React.createElement(Problemas,null);
-      case"sla":return React.createElement(SLA,null);
-      case"reincidencias":return React.createElement(Reincidencias,null);
+      case"problemas":return React.createElement(Problemas,{activeTab:tab});
+      case"sla":return React.createElement(SLA,{activeTab:tab});
+      case"reincidencias":return React.createElement(Reincidencias,{activeTab:tab});
       case"tecnicos":return React.createElement(Tecnicos,{usuarioAtual:usuario,onSave:refresh});
       case"particularidades":return React.createElement(Particularidades,null);
       case"os-pendencia":return React.createElement(OSPendencia,{tecsBanco,onSave:refresh});
       case"pedidos":return React.createElement(Pedidos,{usuarioAtual:usuario,onSave:refresh});
       case"condominios":return React.createElement(Condominios,{usuarioAtual:usuario,onSave:refresh});
-      case"preventivas":return React.createElement(Preventivas,null);
+      case"preventivas":return React.createElement(Preventivas,{activeTab:tab});
       case"reginaldo":return React.createElement(ServicoReginaldo,{onSave:refresh});
       case"demandas":return React.createElement(Demandas,{onSave:refresh});
       case"usuarios":return React.createElement(Usuarios,{usuarioAtual:usuario});
-      case"mapa-calor":return React.createElement(MapaCalor,{tecsBanco});
+      case"mapa-calor":return React.createElement(MapaCalor,{tecsBanco,activeTab:tab});
       case"instalacoes":return React.createElement(Instalacoes,{onSave:refresh});
-      case"ranking":return React.createElement(RankingSupervisores,null);
+      case"ranking":return React.createElement(RankingSupervisores,{activeTab:tab});
       case"rastreamento":return React.createElement(Rastreamento,null);
       case"parametros":return React.createElement(Parametros,null);
       case"organograma":return React.createElement(Organograma,null);
@@ -9605,7 +9669,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v4.32 · jul/2026 · ranking reincidência com normalização de texto")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.0 · ago/2026 · Fase 01 — performance, cache, lazy loading")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
@@ -9619,7 +9683,7 @@ function App(){
 
 const _rootEl=document.getElementById("root");
 if(ReactDOM.createRoot){
-  ReactDOM.createRoot(_rootEl).render(React.createElement(App,null));
+  ReactDOM.createRoot(_rootEl).render(React.createElement(ErrorBoundary,null,React.createElement(App,null)));
 }else{
   ReactDOM.render(React.createElement(App,null),_rootEl);
 }
