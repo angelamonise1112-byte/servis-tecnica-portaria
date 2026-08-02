@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.12 MAPA FIX TELA PRETA AGO2026 -->
+<!-- SERVIS v5.13 INTEGRIDADE CONDOMÍNIOS AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -3594,10 +3594,39 @@ function Condominios({onSave}){
   const save=async item=>{
     if(item.id&&data.find(x=>x.id===item.id)){await sb.from("condominios").update(item).eq("id",item.id);}
     else{await sb.from("condominios").insert(item);}
+    cacheInvalidate("cond");
     try{var bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"condominios"});bc.close();}catch(e){}
     setModal(null);load();if(onSave)onSave();
   };
-  const del=async id=>{var reg=data.find(function(x){return x.id===id;});await sb.from("condominios").delete().eq("id",id);servisAudit("exclusão","condominios",id,{nome:window._servisUser},(reg&&reg.nome)||"");try{var bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"condominios"});bc.close();}catch(e){}setConfirmDel(null);load();if(onSave)onSave();};
+  const del=async function(id){
+    var reg=data.find(function(x){return x.id===id;});
+    var nome=(reg&&reg.nome)||"?";
+    // ── Verificar vínculos antes de excluir ──────────────────
+    var[rosAt,rosPrev,rosInst]=await Promise.all([
+      sb.from("os").select("id",{count:"exact",head:true}).eq("cond",nome),
+      sb.from("preventivas").select("id",{count:"exact",head:true}).eq("cond",nome),
+      sb.from("instalacoes").select("id",{count:"exact",head:true}).eq("cond",nome),
+    ]);
+    var qtOS=(rosAt&&rosAt.count)||0;
+    var qtPrev=(rosPrev&&rosPrev.count)||0;
+    var qtInst=(rosInst&&rosInst.count)||0;
+    var temVinculos=qtOS>0||qtPrev>0||qtInst>0;
+    var msg="Excluir o condomínio "+nome+"?";
+    if(temVinculos){
+      msg+="\n\n⚠️ Atenção: este condomínio possui vínculos:\n"
+        +(qtOS>0?"• "+qtOS+" Ordem(s) de Serviço\n":"")
+        +(qtPrev>0?"• "+qtPrev+" Preventiva(s)\n":"")
+        +(qtInst>0?"• "+qtInst+" Instalação(ões)\n":"")
+        +"\nAs OS existentes serão preservadas no histórico.\nApenas o condomínio e seus vínculos ativos serão removidos do cadastro.";
+    }
+    if(!window.confirm(msg))return;
+    var res=await sb.from("condominios").delete().eq("id",id);
+    if(res&&res.error){alert("Erro ao excluir: "+res.error.message);return;}
+    servisAudit("exclusão","condominios",id,{nome:window._servisUser},nome);
+    cacheInvalidate("cond");
+    try{var bc=new BroadcastChannel("servis_refresh");bc.postMessage({type:"condominios"});bc.close();}catch(e){}
+    cacheInvalidate("cond");setConfirmDel(null);load();if(onSave)onSave();
+  };
   const comEndereco=data.filter(d=>d.endereco).length;
   const comTec=data.filter(d=>d.tecnico).length;
   const EditModal=({item,onClose})=>{
@@ -8968,6 +8997,7 @@ const TABS=[
   {id:"calendario",icon:"📅",label:"Calendário",cat:"Gestão"},
   {id:"produtividade",icon:"⚡",label:"Produtividade",cat:"Gestão"},
   {id:"parametros",icon:"⚙️",label:"Parâmetros",cat:"Configuração"},
+  {id:"auditoria",icon:"🔍",label:"Auditoria",cat:"Configuração"},
   {id:"gestao-areas",icon:"🗺️",label:"Gestão de Áreas",cat:"Configuração"},
   {id:"usuarios",icon:"👤",label:"Usuários",cat:"Configuração"},
 ];
@@ -10153,6 +10183,167 @@ function RankingAtestados({tecsBanco=TECNICOS,data:dataProp}){
   );
 }
 
+// ── AUDITORIA DE INTEGRIDADE DE DADOS ────────────────────────
+function AuditoriaIntegridade(){
+  const [loading,setLoading]=useState(false);
+  const [resultado,setResultado]=useState(null);
+  const [corrigindo,setCorrigindo]=useState(false);
+
+  async function rodarAuditoria(){
+    setLoading(true);setResultado(null);
+    try{
+      var[rcond,ros,rprev,rinst]=await Promise.all([
+        sb.from("condominios").select("id,nome,lat,lng,area_tecnico,tecnico"),
+        sb.from("os").select("num,data,cond,status,tec").order("data",{ascending:false}).limit(2000),
+        sb.from("preventivas").select("id,cond,status").limit(1000),
+        sb.from("instalacoes").select("id,cond").limit(500),
+      ]);
+      var conds=rcond.data||[];var os=ros.data||[];var prev=rprev.data||[];var inst=rinst.data||[];
+      var nomesValidos=new Set(conds.map(function(c){return(c.nome||"").trim().toLowerCase();}));
+
+      // OS com condomínio não cadastrado
+      var osOrfas=os.filter(function(o){return o.cond&&!nomesValidos.has((o.cond||"").trim().toLowerCase());});
+      // Preventivas órfãs
+      var prevOrfas=prev.filter(function(p){return p.cond&&!nomesValidos.has((p.cond||"").trim().toLowerCase());});
+      // Instalações órfãs
+      var instOrfas=inst.filter(function(i){return i.cond&&!nomesValidos.has((i.cond||"").trim().toLowerCase());});
+      // Condomínios sem área técnica
+      var semArea=conds.filter(function(c){return !c.area_tecnico;});
+      // Condomínios sem coordenadas
+      var semGeo=conds.filter(function(c){return !c.lat||!c.lng;});
+      // Condomínios sem técnico
+      var semTec=conds.filter(function(c){return !c.tecnico;});
+      // Nomes duplicados (case-insensitive)
+      var contNomes={};conds.forEach(function(c){var k=(c.nome||"").trim().toLowerCase();contNomes[k]=(contNomes[k]||0)+1;});
+      var dupNomes=conds.filter(function(c){return contNomes[(c.nome||"").trim().toLowerCase()]>1;});
+
+      setResultado({conds,os,prev,inst,osOrfas,prevOrfas,instOrfas,semArea,semGeo,semTec,dupNomes,
+        score:Math.max(0,100-osOrfas.length*2-prevOrfas.length*2-instOrfas.length*2-semArea.length-semGeo.length*0.5-dupNomes.length*3)
+      });
+    }catch(e){alert("Erro na auditoria: "+e.message);}
+    setLoading(false);
+  }
+
+  function ScoreBar({score}){
+    var cor=score>=90?C.green:score>=70?C.yellow:C.red;
+    return React.createElement("div",{style:{marginBottom:20}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:6}},
+        React.createElement("div",{style:{fontSize:14,fontWeight:700}},"Score de Integridade"),
+        React.createElement("div",{style:{fontSize:28,fontWeight:900,color:cor}},Math.round(score)+"/100")
+      ),
+      React.createElement("div",{style:{height:12,background:C.border,borderRadius:6,overflow:"hidden"}},
+        React.createElement("div",{style:{width:Math.round(score)+"%",height:"100%",background:cor,borderRadius:6,transition:"width .5s"}})
+      ),
+      React.createElement("div",{style:{fontSize:11,color:C.muted,marginTop:4}},
+        score>=90?"✅ Excelente — dados com alta integridade":
+        score>=70?"⚠️ Atenção — existem inconsistências que devem ser corrigidas":
+        "🚨 Crítico — muitos registros órfãos ou inconsistentes"
+      )
+    );
+  }
+
+  function Secao({titulo,cor,itens,cols,detalhe}){
+    var [aberta,setAberta]=useState(false);
+    return React.createElement("div",{style:{background:C.card,borderRadius:12,padding:16,marginBottom:12,border:"1px solid "+C.border,borderLeft:"4px solid "+cor}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"},onClick:function(){setAberta(function(v){return !v;});}},
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+          React.createElement("div",{style:{background:cor+"22",color:cor,fontSize:11,fontWeight:800,padding:"2px 10px",borderRadius:20}},itens.length),
+          React.createElement("div",{style:{fontWeight:700,fontSize:13}},titulo)
+        ),
+        React.createElement("div",{style:{fontSize:16,color:C.dim}},aberta?"▲":"▼")
+      ),
+      aberta&&itens.length>0&&React.createElement("div",{style:{marginTop:12,overflowX:"auto"}},
+        React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:11}},
+          React.createElement("thead",null,React.createElement("tr",null,
+            cols.map(function(c){return React.createElement("th",{key:c,style:{textAlign:"left",padding:"6px 8px",color:C.dim,fontSize:10,fontWeight:700,borderBottom:"1px solid "+C.border,textTransform:"uppercase"}},c);})
+          )),
+          React.createElement("tbody",null,
+            itens.slice(0,20).map(function(item,i){
+              return React.createElement("tr",{key:i,style:{background:i%2===0?"transparent":C.bg+"44"}},
+                detalhe(item).map(function(val,j){
+                  return React.createElement("td",{key:j,style:{padding:"6px 8px",color:C.muted,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},val);
+                })
+              );
+            }),
+            itens.length>20&&React.createElement("tr",null,
+              React.createElement("td",{colspan:cols.length,style:{padding:"8px",textAlign:"center",color:C.dim,fontSize:11}},
+                "... e mais "+(itens.length-20)+" registros"
+              )
+            )
+          )
+        )
+      ),
+      aberta&&itens.length===0&&React.createElement("div",{style:{textAlign:"center",padding:16,color:C.green,fontSize:12}},"✅ Nenhum problema encontrado")
+    );
+  }
+
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🔍 Auditoria de Integridade"),
+        React.createElement("div",{style:{fontSize:12,color:C.muted}},"Verifique inconsistências entre condomínios e demais módulos")
+      ),
+      React.createElement("button",{
+        style:{...btnStyle(C.blue),fontSize:13,padding:"10px 24px",opacity:loading?0.6:1},
+        disabled:loading,onClick:rodarAuditoria
+      },loading?"⏳ Analisando...":"▶ Rodar Auditoria")
+    ),
+    React.createElement("div",{style:{padding:"20px 24px"}},
+      !resultado&&!loading&&React.createElement("div",{style:{textAlign:"center",padding:60,color:C.muted}},
+        React.createElement("div",{style:{fontSize:48,marginBottom:16}},"🔍"),
+        React.createElement("div",{style:{fontSize:16,fontWeight:700,marginBottom:8}},"Auditoria de Integridade de Dados"),
+        React.createElement("div",{style:{fontSize:12,marginBottom:24,maxWidth:500,margin:"0 auto 24px"}},
+          "Clique em Rodar Auditoria para verificar se todos os condomínios estão consistentes entre os módulos do sistema."),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12,maxWidth:700,margin:"0 auto",textAlign:"left"}},
+          ["OS sem condomínio válido","Preventivas sem condomínio válido","Instalações sem condomínio válido","Condomínios sem área técnica","Condomínios sem coordenadas","Nomes duplicados"].map(function(t){
+            return React.createElement("div",{key:t,style:{background:C.card,borderRadius:8,padding:"10px 14px",fontSize:11,color:C.muted,border:"1px solid "+C.border}},
+              "• "+t);
+          })
+        )
+      ),
+      resultado&&React.createElement("div",null,
+        React.createElement(ScoreBar,{score:resultado.score}),
+        React.createElement(Grid,{cols:4,mb:16},
+          React.createElement(KPI,{label:"Condomínios",value:resultado.conds.length,color:C.blue}),
+          React.createElement(KPI,{label:"OS analisadas",value:resultado.os.length,color:C.muted}),
+          React.createElement(KPI,{label:"Registros órfãos",value:resultado.osOrfas.length+resultado.prevOrfas.length+resultado.instOrfas.length,color:resultado.osOrfas.length>0?C.red:C.green}),
+          React.createElement(KPI,{label:"Sem área técnica",value:resultado.semArea.length,color:resultado.semArea.length>0?C.yellow:C.green})
+        ),
+        Secao({
+          titulo:"OS com condomínio não cadastrado",cor:C.red,itens:resultado.osOrfas,
+          cols:["Nº OS","Data","Condomínio (OS)","Status","Técnico"],
+          detalhe:function(o){return[o.num||"—",(o.data||"").slice(0,10),o.cond||"—",o.status||"—",o.tec||"—"];}
+        }),
+        Secao({
+          titulo:"Preventivas com condomínio não cadastrado",cor:C.orange,itens:resultado.prevOrfas,
+          cols:["ID","Condomínio (Prev.)","Status"],
+          detalhe:function(p){return[p.id||"—",p.cond||"—",p.status||"—"];}
+        }),
+        Secao({
+          titulo:"Instalações com condomínio não cadastrado",cor:C.orange,itens:resultado.instOrfas,
+          cols:["ID","Condomínio (Inst.)"],
+          detalhe:function(i){return[i.id||"—",i.cond||"—"];}
+        }),
+        Secao({
+          titulo:"Condomínios sem área técnica (sem técnico responsável)",cor:C.yellow,itens:resultado.semArea,
+          cols:["Nome","Endereço","Técnico"],
+          detalhe:function(c){return[c.nome||"—",(c.endereco||"—").slice(0,40),c.tecnico||"—"];}
+        }),
+        Secao({
+          titulo:"Condomínios sem coordenadas (invisíveis no mapa)",cor:C.yellow,itens:resultado.semGeo,
+          cols:["Nome","Área Técnica","Técnico"],
+          detalhe:function(c){return[c.nome||"—",c.area_tecnico||"—",c.tecnico||"—"];}
+        }),
+        Secao({
+          titulo:"Nomes duplicados (mesmo nome cadastrado mais de uma vez)",cor:C.red,itens:resultado.dupNomes,
+          cols:["ID","Nome","Área Técnica"],
+          detalhe:function(c){return[c.id||"—",c.nome||"—",c.area_tecnico||"—"];}
+        })
+      )
+    )
+  );
+}
+
 function App(){
   const [usuario,setUsuario]=useState(null);
   const ultimaAtividade=React.useRef(Date.now());
@@ -10196,7 +10387,14 @@ function App(){
     try{
       bc=new BroadcastChannel('servis_refresh');
       bc.onmessage=function(e){
-        if(e.data&&e.data.type==='import_done'){refresh();}
+        if(e.data&&(e.data.type==='import_done'||e.data.type==='condominios'||e.data.type==='cond_update')){
+          refresh();
+          // Invalidar cache de condomínios para forçar rebusca em todas as abas
+          cacheInvalidate("cond");
+        }
+        if(e.data&&(e.data.type==='os_saved'||e.data.type==='nova_os'||e.data.type==='os_import')){
+          cacheInvalidate("os");
+        }
       };
     }catch(err){}
     // Verificar localStorage para importações recentes
@@ -10279,6 +10477,7 @@ function App(){
       case"ranking":return React.createElement(RankingSupervisores,{activeTab:tab});
       case"rastreamento":return React.createElement(Rastreamento,null);
       case"parametros":return React.createElement(Parametros,null);
+      case"auditoria":return React.createElement(AuditoriaIntegridade,null);
       case"organograma":return React.createElement(Organograma,null);
       case"calendario":return React.createElement(Calendario,{usuario});
       case"materiais-lancar":return React.createElement(MateriaisLancar,{usuario,onSave:refresh});
@@ -10359,7 +10558,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.12 · ago/2026 · mapa fix tela preta após edição")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.13 · ago/2026 · integridade e auditoria de condomínios")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative",display:"flex",flexDirection:"column"}},
