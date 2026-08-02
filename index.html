@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.11 MAPA EDIÇÃO LOCALIZAÇÃO AGO2026 -->
+<!-- SERVIS v5.12 MAPA FIX TELA PRETA AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -8400,6 +8400,16 @@ function MapaCalor({tecsBanco=TECNICOS}){
   const AREA_COR={"P16":"#3b82f6","P17":"#10b981","P18":"#ef4444","P19":"#f97316"};
   const AREAS=["P16","P17","P18","P19"];
 
+  // ── Cleanup ao desmontar o componente ────────────────────────
+  useEffect(function(){
+    return function(){
+      if(editMarkerRef.current){try{editMarkerRef.current.remove();}catch(e){}editMarkerRef.current=null;}
+      markersRef.current.forEach(function(mk){try{mk.remove();}catch(e){}});
+      markersRef.current=[];
+      if(mapInst.current){try{mapInst.current.remove();}catch(e){}mapInst.current=null;}
+    };
+  },[]);
+
   // ── Carregar Leaflet ─────────────────────────────────────────
   useEffect(function(){
     if(window.L){setLeafReady(true);return;}
@@ -8565,38 +8575,76 @@ function MapaCalor({tecsBanco=TECNICOS}){
 
   // ── Marcadores normais no mapa ────────────────────────────────
   useEffect(function(){
-    if(!leafReady||loading||activeTab!=="mapa")return;
+    if(!leafReady||loading)return;
     var L=window.L;
     var el=document.getElementById("mapa-calor-div");if(!el)return;
-    if(!mapInst.current){
-      mapInst.current=L.map(el,{center:[-3.79,-38.55],zoom:12});
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(mapInst.current);
+
+    // Se a instância existente não está mais no container correto (DOM foi remontado),
+    // destruir e recriar
+    if(mapInst.current){
+      try{
+        var c2=mapInst.current.getContainer();
+        if(!el.contains(c2)&&c2!==el){
+          mapInst.current.remove();mapInst.current=null;
+          markersRef.current=[];
+        }
+      }catch(e){mapInst.current=null;markersRef.current=[];}
     }
+
+    if(!mapInst.current){
+      try{
+        mapInst.current=L.map(el,{center:[-3.79,-38.55],zoom:12});
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(mapInst.current);
+      }catch(e){console.warn("[Mapa] Erro ao inicializar:",e);return;}
+    }
+
+    // Forçar recálculo do tamanho ao exibir (resolve tela preta após troca de aba)
+    if(activeTab==="mapa"){
+      setTimeout(function(){
+        try{mapInst.current&&mapInst.current.invalidateSize();}catch(e){}
+      },80);
+    }
+
     var m=mapInst.current;
-    markersRef.current.forEach(function(mk){mk.remove();});markersRef.current=[];
+    // Remover apenas marcadores normais (preservar marcador de edição)
+    markersRef.current.forEach(function(mk){try{mk.remove();}catch(e){}});
+    markersRef.current=[];
+
+    if(condComGeo===0)return; // sem coordenadas, não renderizar
+
     condsFiltradas.forEach(function(c){
       if(!c.lat||!c.lng)return;
       var cor=AREA_COR[c.area_tecnico]||"#6b7280";
       var emSel=selMulti.findIndex(function(x){return x.id===c.id;})>=0;
       var sz=emSel?18:11;
-      var alertaGeo=!c.lat||!c.lng||c.geo_status==="erro";
+      var alertaGeo=c.geo_status==="erro";
       var icon=L.divIcon({
         html:"<div style='width:"+sz+"px;height:"+sz+"px;border-radius:50%;background:"+(alertaGeo?"#ef4444":cor)
           +";border:"+(emSel?"3px solid #fff":"2px solid rgba(255,255,255,0.7)")
-          +";box-shadow:0 2px 6px rgba(0,0,0,0.5);cursor:pointer"
-          +(alertaGeo?";animation:pulse 1.5s infinite":"")+"'></div>",
+          +";box-shadow:0 2px 6px rgba(0,0,0,0.5);cursor:pointer'></div>",
         className:"",iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]
       });
       var osAb=(osData||[]).filter(function(o){return o.cond===c.nome&&o.status==="Aberto";}).length;
-      var mk=L.marker([c.lat,c.lng],{icon:icon});
-      mk.bindTooltip(c.nome,{direction:"top",offset:[0,-6],opacity:.9});
-      mk.on("click",function(){
-        if(modoSel){window._toggleMapa&&window._toggleMapa(c);}
-        else{window._selCondMapa&&window._selCondMapa(c,osAb);}
-      });
-      mk.addTo(m);markersRef.current.push(mk);
+      try{
+        var mk=L.marker([c.lat,c.lng],{icon:icon});
+        mk.bindTooltip(c.nome,{direction:"top",offset:[0,-6],opacity:.9});
+        mk.on("click",function(){
+          if(modoSel){window._toggleMapa&&window._toggleMapa(c);}
+          else{window._selCondMapa&&window._selCondMapa(c,osAb);}
+        });
+        mk.addTo(m);markersRef.current.push(mk);
+      }catch(e){console.warn("[Mapa] Erro ao adicionar marcador "+c.nome+":",e);}
     });
-  },[leafReady,loading,condsFiltradas,osData,selMulti,activeTab]);
+  },[leafReady,loading,condsFiltradas,osData,selMulti,activeTab,condComGeo]);
+
+  // ── invalidateSize ao trocar para a aba mapa ─────────────────
+  useEffect(function(){
+    if(activeTab!=="mapa"||!leafReady)return;
+    // Pequeno delay para o display:block do div ter efeito no layout
+    var t1=setTimeout(function(){try{mapInst.current&&mapInst.current.invalidateSize();}catch(e){}},100);
+    var t2=setTimeout(function(){try{mapInst.current&&mapInst.current.invalidateSize();}catch(e){}},400);
+    return function(){clearTimeout(t1);clearTimeout(t2);};
+  },[activeTab,leafReady]);
 
   useEffect(function(){
     window._selCondMapa=function(c,osAb){setSelCond({...c,_osAb:osAb||0});setEditando(false);setGeoStatus("");};
@@ -8682,14 +8730,21 @@ function MapaCalor({tecsBanco=TECNICOS}){
     ):
     React.createElement("div",{style:{display:"flex",flex:1,overflow:"hidden"}},
       React.createElement("div",{style:{flex:1,overflow:"hidden",position:"relative"}},
-        activeTab==="mapa"&&(
-          !leafReady?React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",color:C.muted}},"Carregando mapa..."):
-          condComGeo===0?React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",flexDirection:"column",gap:12,color:C.muted}},
-            React.createElement("div",{style:{fontSize:40}},"📍"),
-            React.createElement("div",{style:{fontSize:14,fontWeight:600}},"Nenhum condomínio com coordenadas"),
-            React.createElement("div",{style:{fontSize:12,color:C.dim}},"Clique em um condomínio na aba Lista e use '📍 Editar Localização'")
-          ):
-          React.createElement("div",{id:"mapa-calor-div",style:{width:"100%",height:"100%"}})
+        // Mapa: div SEMPRE no DOM para não destruir a instância Leaflet.
+        // Usa display:none em vez de desmontar — resolve tela preta após re-render.
+        React.createElement("div",{
+          id:"mapa-calor-div",
+          style:{
+            width:"100%",height:"100%",
+            display:activeTab==="mapa"&&leafReady&&condComGeo>0?"block":"none"
+          }
+        }),
+        // Mensagem quando não há mapa ainda
+        activeTab==="mapa"&&!leafReady&&React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",color:C.muted}},"Carregando mapa..."),
+        activeTab==="mapa"&&leafReady&&condComGeo===0&&React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",flexDirection:"column",gap:12,color:C.muted}},
+          React.createElement("div",{style:{fontSize:40}},"📍"),
+          React.createElement("div",{style:{fontSize:14,fontWeight:600}},"Nenhum condomínio com coordenadas"),
+          React.createElement("div",{style:{fontSize:12,color:C.dim}},"Clique em um condomínio na aba Lista e use '📍 Editar Localização'")
         ),
         activeTab==="painel"&&React.createElement("div",{style:{padding:20,overflowY:"auto",height:"100%"}},
           React.createElement("div",{style:{fontSize:15,fontWeight:700,marginBottom:16}},"📊 Painel de Controle por Técnico"),
@@ -10304,7 +10359,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.11 · ago/2026 · mapa com edição de localização")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.12 · ago/2026 · mapa fix tela preta após edição")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative",display:"flex",flexDirection:"column"}},
