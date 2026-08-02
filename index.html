@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.7 CONDOMINIOS PAGINAÇÃO AGO2026 -->
+<!-- SERVIS v5.8 RANKING ATESTADOS AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -8559,6 +8559,7 @@ const TABS=[
   {id:"reginaldo",icon:"🔩",label:"Serviço Reginaldo",cat:"Operacional"},
   {id:"tecnicos",icon:"👷",label:"Técnicos",cat:"Equipe"},
   {id:"atestados",icon:"🏥",label:"Atestados",badge:"at",cat:"Equipe"},
+  {id:"ranking-atestados",icon:"📊",label:"Ranking Atestados",cat:"Equipe"},
   {id:"horas-extras",icon:"⏰",label:"Horas Extras",badge:"he",cat:"Equipe"},
   {id:"ranking",icon:"🏆",label:"Ranking",cat:"Equipe"},
   {id:"rastreamento",icon:"📍",label:"Rastreamento",cat:"Equipe"},
@@ -9536,6 +9537,223 @@ class ErrorBoundary extends React.Component{
 }
 
 
+// ── RANKING DE ATESTADOS ──────────────────────────────────────
+function RankingAtestados({tecsBanco=TECNICOS}){
+  const [data,setData]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [anoSel,setAnoSel]=useState("2026");
+  const [mesSel,setMesSel]=useState("");
+  const [tecSel,setTecSel]=useState("");
+  const MESES_NM=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const MESES_ABR=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+  const load=useCallback(async()=>{
+    setLoading(true);
+    var q=sb.from("atestados").select("id,tec,mat,data,dias,retorno,motivo,status").order("data",{ascending:true});
+    if(anoSel)q=q.gte("data",anoSel+"-01-01").lte("data",anoSel+"-12-31");
+    const{data:rows}=await q;
+    setData(rows||[]);setLoading(false);
+  },[anoSel]);
+  useEffect(()=>{load();},[load]);
+
+  // ── Filtrar por mês/tec ──
+  const filtrados=useMemo(()=>data.filter(function(d){
+    var okMes=!mesSel||(d.data||"").slice(5,7)===mesSel;
+    var okTec=!tecSel||d.tec===tecSel;
+    return okMes&&okTec;
+  }),[data,mesSel,tecSel]);
+
+  // ── KPIs topo ──
+  const totalAt=filtrados.length;
+  const totalDias=filtrados.reduce(function(s,d){return s+(parseInt(d.dias)||0);},0);
+  const colab=new Set(filtrados.map(function(d){return d.tec;})).size;
+  const mediaDias=totalAt>0?Math.round((totalDias/totalAt)*10)/10:0;
+
+  // ── Ranking mensal (filtro de mês aplicado) ──
+  const rankMes=useMemo(()=>{
+    var mp={};
+    filtrados.forEach(function(d){
+      if(!mp[d.tec])mp[d.tec]={nome:d.tec,qt:0,dias:0};
+      mp[d.tec].qt++;mp[d.tec].dias+=(parseInt(d.dias)||0);
+    });
+    return Object.values(mp).sort(function(a,b){return b.qt-a.qt||b.dias-a.dias;});
+  },[filtrados]);
+
+  // ── Ranking anual (ignora filtro de mês) ──
+  const rankAno=useMemo(()=>{
+    var filtAno=data.filter(function(d){return !tecSel||d.tec===tecSel;});
+    var mp={};
+    filtAno.forEach(function(d){
+      if(!mp[d.tec])mp[d.tec]={nome:d.tec,qt:0,dias:0};
+      mp[d.tec].qt++;mp[d.tec].dias+=(parseInt(d.dias)||0);
+    });
+    return Object.values(mp).sort(function(a,b){return b.qt-a.qt||b.dias-a.dias;})
+      .map(function(r){return{...r,media:r.qt>0?Math.round((r.dias/r.qt)*10)/10:0};});
+  },[data,tecSel]);
+
+  // ── Dados dos gráficos ──
+  const top10=rankAno.slice(0,10);
+  const evolMensal=useMemo(()=>{
+    var mp={};var mpDias={};
+    for(var m=1;m<=12;m++){mp[String(m).padStart(2,"0")]=0;mpDias[String(m).padStart(2,"0")]=0;}
+    data.filter(function(d){return !tecSel||d.tec===tecSel;}).forEach(function(d){
+      var m=(d.data||"").slice(5,7);if(m&&mp[m]!==undefined){mp[m]++;mpDias[m]+=(parseInt(d.dias)||0);}
+    });
+    return Object.keys(mp).map(function(m,i){return{mes:MESES_ABR[i],at:mp[m],dias:mpDias[m]};});
+  },[data,tecSel]);
+
+  const maxAt=Math.max(...evolMensal.map(function(m){return m.at;}),1);
+  const maxDias=Math.max(...evolMensal.map(function(m){return m.dias;}),1);
+  const maxTop=Math.max(...top10.map(function(t){return t.qt;}),1);
+
+  // ── Medalhas ──
+  function medalha(pos){return pos===0?"🥇":pos===1?"🥈":pos===2?"🥉":String(pos+1);}
+  function medalhaC(pos){return pos===0?C.yellow:pos===1?"#94a3b8":pos===2?C.orange:C.dim;}
+
+  var nomesMes=["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+  return React.createElement("div",null,
+    // ── HEADER ──
+    React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🏥 Ranking de Atestados"),
+        React.createElement("div",{style:{fontSize:12,color:C.muted}},"Análise de afastamentos por colaborador")
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}},
+        React.createElement("select",{style:{...base.sel,width:90},value:anoSel,onChange:function(e){setAnoSel(e.target.value);}},
+          ["2024","2025","2026","2027"].map(function(a){return React.createElement("option",{key:a,value:a},a);})
+        ),
+        React.createElement("select",{style:{...base.sel,width:130},value:mesSel,onChange:function(e){setMesSel(e.target.value);}},
+          React.createElement("option",{value:""},"Todos os meses"),
+          MESES_NM.map(function(m,i){return React.createElement("option",{key:i+1,value:String(i+1).padStart(2,"0")},m);})
+        ),
+        React.createElement("select",{style:{...base.sel,width:150},value:tecSel,onChange:function(e){setTecSel(e.target.value);}},
+          React.createElement("option",{value:""},"Todos os colaboradores"),
+          tecsBanco.map(function(t){return React.createElement("option",{key:t.mat,value:t.nome},t.nome);})
+        ),
+        (mesSel||tecSel)&&React.createElement("button",{style:{...btnStyle(C.dim,true),fontSize:12},onClick:function(){setMesSel("");setTecSel("");}},
+          "✕ Limpar filtros"
+        )
+      )
+    ),
+    React.createElement("div",{style:{padding:"20px 24px"}},
+      loading?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.muted}},"Carregando..."):
+      React.createElement("div",null,
+        // ── KPIs ──
+        React.createElement(Grid,{cols:4,mb:20},
+          React.createElement(KPI,{label:"Total de Atestados"+(mesSel?" ("+nomesMes[parseInt(mesSel)]+")":""),value:totalAt,color:C.red}),
+          React.createElement(KPI,{label:"Colaboradores com Atestado",value:colab,color:C.orange}),
+          React.createElement(KPI,{label:"Total de Dias Afastados",value:totalDias,color:C.yellow}),
+          React.createElement(KPI,{label:"Média de Dias/Atestado",value:mediaDias,color:C.purple,suffix:"d"})
+        ),
+
+        // ── GRÁFICOS ──
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}},
+          // Gráfico evolução mensal
+          React.createElement(Card,null,
+            React.createElement(CardHeader,{title:"📈 Atestados por Mês — "+anoSel}),
+            React.createElement("div",{style:{display:"flex",alignItems:"flex-end",gap:4,height:120,padding:"8px 0"}},
+              evolMensal.map(function(m,i){
+                var h=maxAt>0?Math.round((m.at/maxAt)*100):0;
+                return React.createElement("div",{key:i,style:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}},
+                  m.at>0&&React.createElement("div",{style:{fontSize:8,color:C.muted}},m.at),
+                  React.createElement("div",{style:{width:"100%",height:h+"%",minHeight:m.at>0?4:0,background:m.mes===(mesSel?MESES_ABR[parseInt(mesSel)-1]:"x")?C.red:C.red+"88",borderRadius:"3px 3px 0 0",transition:"height .3s"}}),
+                  React.createElement("div",{style:{fontSize:8,color:C.dim,marginTop:2}},m.mes)
+                );
+              })
+            )
+          ),
+          // Gráfico dias de afastamento
+          React.createElement(Card,null,
+            React.createElement(CardHeader,{title:"📅 Dias de Afastamento por Mês"}),
+            React.createElement("div",{style:{display:"flex",alignItems:"flex-end",gap:4,height:120,padding:"8px 0"}},
+              evolMensal.map(function(m,i){
+                var h=maxDias>0?Math.round((m.dias/maxDias)*100):0;
+                return React.createElement("div",{key:i,style:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}},
+                  m.dias>0&&React.createElement("div",{style:{fontSize:8,color:C.muted}},m.dias),
+                  React.createElement("div",{style:{width:"100%",height:h+"%",minHeight:m.dias>0?4:0,background:C.orange+"cc",borderRadius:"3px 3px 0 0",transition:"height .3s"}}),
+                  React.createElement("div",{style:{fontSize:8,color:C.dim,marginTop:2}},m.mes)
+                );
+              })
+            )
+          )
+        ),
+
+        // Top 10 colaboradores (barras horizontais)
+        top10.length>0&&React.createElement(Card,{style:{marginBottom:20}},
+          React.createElement(CardHeader,{title:"🏆 Top 10 — Colaboradores com Mais Atestados ("+anoSel+")"}),
+          React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8,marginTop:8}},
+            top10.map(function(t,i){
+              var pct=Math.round((t.qt/maxTop)*100);
+              return React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:10}},
+                React.createElement("div",{style:{width:24,textAlign:"center",fontSize:14}},(i<3?["🥇","🥈","🥉"][i]:i+1)),
+                React.createElement("div",{style:{width:110,fontSize:12,fontWeight:600,color:medalhaC(i),whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},t.nome.split(" ")[0]),
+                React.createElement("div",{style:{flex:1,background:C.bg,borderRadius:4,height:14,overflow:"hidden"}},
+                  React.createElement("div",{style:{width:pct+"%",height:"100%",background:medalhaC(i),borderRadius:4,transition:"width .4s"}})
+                ),
+                React.createElement("div",{style:{width:50,textAlign:"right",fontSize:12,color:C.muted}},t.qt+" at."),
+                React.createElement("div",{style:{width:50,textAlign:"right",fontSize:12,color:C.dim}},t.dias+"d")
+              );
+            })
+          )
+        ),
+
+        // ── RANKINGS lado a lado ──
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}},
+          // Ranking mensal
+          React.createElement(Card,null,
+            React.createElement(CardHeader,{title:"📊 Ranking "+(mesSel?nomesMes[parseInt(mesSel)]+" "+anoSel:"Período Selecionado")}),
+            rankMes.length===0
+              ?React.createElement("div",{style:{textAlign:"center",padding:24,color:C.dim,fontSize:12}},"Nenhum atestado no período")
+              :React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6,marginTop:8}},
+                  rankMes.map(function(r,i){
+                    var pct=totalAt>0?Math.round((r.qt/totalAt)*100):0;
+                    return React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:i<3?medalhaC(i)+"11":C.bg,borderRadius:8,border:"1px solid "+(i<3?medalhaC(i)+"33":C.border)}},
+                      React.createElement("div",{style:{width:28,textAlign:"center",fontSize:16,flexShrink:0}},medalha(i)),
+                      React.createElement("div",{style:{flex:1,minWidth:0}},
+                        React.createElement("div",{style:{fontSize:12,fontWeight:700,color:medalhaC(i),whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},r.nome),
+                        React.createElement("div",{style:{display:"flex",gap:8,marginTop:2}},
+                          React.createElement("span",{style:{fontSize:10,color:C.muted}},r.qt+" atestado"+(r.qt!==1?"s":"")),
+                          React.createElement("span",{style:{fontSize:10,color:C.dim}},r.dias+" dias")
+                        )
+                      ),
+                      React.createElement("div",{style:{background:medalhaC(i)+"22",color:medalhaC(i),fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:10,flexShrink:0}},pct+"%")
+                    );
+                  })
+                )
+          ),
+          // Ranking anual
+          React.createElement(Card,null,
+            React.createElement(CardHeader,{title:"📅 Ranking Anual "+anoSel}),
+            rankAno.length===0
+              ?React.createElement("div",{style:{textAlign:"center",padding:24,color:C.dim,fontSize:12}},"Nenhum atestado no ano")
+              :React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12,marginTop:8}},
+                  React.createElement("thead",null,
+                    React.createElement("tr",null,
+                      ["#","Colaborador","Atestados","Dias","Média"].map(function(h){
+                        return React.createElement("th",{key:h,style:{textAlign:"left",padding:"6px 8px",color:C.dim,fontSize:10,fontWeight:700,borderBottom:"1px solid "+C.border,textTransform:"uppercase",letterSpacing:1}},h);
+                      })
+                    )
+                  ),
+                  React.createElement("tbody",null,
+                    rankAno.map(function(r,i){
+                      return React.createElement("tr",{key:i,style:{background:i%2===0?"transparent":C.bg+"44"}},
+                        React.createElement("td",{style:{padding:"7px 8px",color:medalhaC(i),fontWeight:700,fontSize:13}},medalha(i)),
+                        React.createElement("td",{style:{padding:"7px 8px",fontWeight:600,color:i<3?medalhaC(i):C.text}},r.nome.split(" ")[0]),
+                        React.createElement("td",{style:{padding:"7px 8px",color:C.muted,textAlign:"center"}},r.qt),
+                        React.createElement("td",{style:{padding:"7px 8px",color:C.dim,textAlign:"center"}},r.dias+"d"),
+                        React.createElement("td",{style:{padding:"7px 8px",color:C.cyan,textAlign:"center"}},r.media+"d")
+                      );
+                    })
+                  )
+                )
+          )
+        )
+      )
+    )
+  );
+}
+
 function App(){
   const [usuario,setUsuario]=useState(null);
   const ultimaAtividade=React.useRef(Date.now());
@@ -9644,6 +9862,7 @@ function App(){
       case"nova-os":return soLeitura?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.dim}},React.createElement("div",{style:{fontSize:40}},"🔒"),React.createElement("div",{style:{color:C.muted,marginTop:12}},"Acesso restrito")):React.createElement(NovaOS,{setTab,onSave:refresh});
       case"os":return React.createElement(OSModule,{tecsBanco,onSave:refresh,somenteLeitura:soLeitura||isCentral});
       case"atestados":return React.createElement(Atestados,{tecsBanco});
+      case"ranking-atestados":return React.createElement(RankingAtestados,{tecsBanco});
       case"horas-extras":return React.createElement(HorasExtras,{tecsBanco});
       case"problemas":return React.createElement(Problemas,{activeTab:tab});
       case"sla":return React.createElement(SLA,{activeTab:tab});
@@ -9742,7 +9961,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.7 · ago/2026 · condomínios paginação completa")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.8 · ago/2026 · nova aba Ranking de Atestados")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative",display:"flex",flexDirection:"column"}},
