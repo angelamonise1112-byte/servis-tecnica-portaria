@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.6 CURSOR DESKTOP FIX AGO2026 -->
+<!-- SERVIS v5.7 CONDOMINIOS PAGINAÇÃO AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -3534,6 +3534,7 @@ function Condominios({onSave}){
   const [verArea,setVerArea]=useState(false);
   const [verObs,setVerObs]=useState(null);
   const [pagina,setPagina]=useState(1);
+  const [itensPorPag,setItensPorPag]=useState(25);
   const load=useCallback(async()=>{
     setLoading(true);
     const{data:rows}=await sb.from("condominios").select("*").order("nome",{ascending:true});
@@ -3546,8 +3547,14 @@ function Condominios({onSave}){
     (!filtTec||d.tecnico===filtTec)&&
     (!filtArea||d.area_tecnico===filtArea)
   ),[data,busca,filtTec,filtArea]);
-  const paginados=useMemo(function(){return filtered.slice((pagina-1)*POR_PAG,pagina*POR_PAG);},[filtered,pagina]);
-  const totalPag=Math.ceil(filtered.length/POR_PAG);
+  const totalPag=Math.ceil(filtered.length/itensPorPag);
+  const paginaSegura=Math.min(pagina,totalPag||1);
+  const inicio=(paginaSegura-1)*itensPorPag;
+  const fim=Math.min(inicio+itensPorPag,filtered.length);
+  const paginados=useMemo(function(){return filtered.slice(inicio,fim);},[filtered,inicio,fim]);
+  const irPara=function(p){setPagina(Math.max(1,Math.min(p,totalPag||1)));};
+  // Quando filtro muda, volta pra página 1
+  useEffect(function(){setPagina(1);},[busca,filtTec,filtArea,itensPorPag]);
   const exportarPDF=()=>{
     const w=window.open("","_blank");
     var html="<!DOCTYPE html><html><head><meta charset=\"UTF-8\">";
@@ -3738,11 +3745,30 @@ function Condominios({onSave}){
         )
       ):
       React.createElement(Card,null,
-        React.createElement("div",{style:{fontSize:12,color:C.dim,marginBottom:8}},`${filtered.length} registros`),
+        // ── Barra de controles de paginação (topo) ──
+        React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:12}},
+          React.createElement("div",{style:{fontSize:12,color:C.muted}},
+            filtered.length===0?"Nenhum registro encontrado":
+            `Mostrando ${inicio+1}–${fim} de ${filtered.length} condomínio${filtered.length!==1?"s":""}`+(busca||filtTec||filtArea?" (filtrado)":"")
+          ),
+          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6}},
+            React.createElement("span",{style:{fontSize:11,color:C.dim}},"Exibir:"),
+            React.createElement("select",{
+              style:{...base.sel,width:75,fontSize:12,padding:"4px 8px"},
+              value:itensPorPag,
+              onChange:function(e){setItensPorPag(Number(e.target.value));}
+            },
+              React.createElement("option",{value:25},"25"),
+              React.createElement("option",{value:50},"50"),
+              React.createElement("option",{value:100},"100")
+            ),
+            React.createElement("span",{style:{fontSize:11,color:C.dim}},"por página")
+          )
+        ),
         React.createElement(Table,{
           cols:["#","Nome","🗂 Área","Endereço","Técnico Resp.","Obs/IPs","Ações"],
           rows:paginados.map((d,i)=>[
-            React.createElement("span",{style:{color:C.dim,fontSize:11}},i+1),
+            React.createElement("span",{style:{color:C.dim,fontSize:11}},inicio+i+1),
             React.createElement("span",{style:{fontWeight:600}},d.nome),
             d.area_tecnico
               ?React.createElement("div",{style:{display:"inline-block",background:C.blue+"22",border:"1px solid "+C.blue+"33",borderRadius:8,padding:"3px 10px",fontSize:11,color:C.blue,fontWeight:600}},d.area_tecnico)
@@ -3764,7 +3790,42 @@ function Condominios({onSave}){
               React.createElement("button",{style:iBtn(C.red),onClick:()=>setConfirmDel(d.id)},"🗑")
             )
           ])
-        })
+        }),
+        // ── Controles de navegação entre páginas (rodapé) ──
+        filtered.length>itensPorPag&&React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:16,flexWrap:"wrap"}},
+          React.createElement("button",{
+            style:{...iBtn(paginaSegura===1?C.dim:C.blue),opacity:paginaSegura===1?0.4:1,fontSize:11,padding:"5px 10px"},
+            disabled:paginaSegura===1,onClick:()=>irPara(1),title:"Primeira página"
+          },"⏮ Primeira"),
+          React.createElement("button",{
+            style:{...iBtn(paginaSegura===1?C.dim:C.blue),opacity:paginaSegura===1?0.4:1,fontSize:11,padding:"5px 10px"},
+            disabled:paginaSegura===1,onClick:()=>irPara(paginaSegura-1),title:"Página anterior"
+          },"◀ Anterior"),
+          // Números de página
+          React.createElement("div",{style:{display:"flex",gap:4}},
+            Array.from({length:Math.min(totalPag,7)},function(_,i){
+              var p;
+              if(totalPag<=7){p=i+1;}
+              else if(paginaSegura<=4){p=i+1;}
+              else if(paginaSegura>=totalPag-3){p=totalPag-6+i;}
+              else{p=paginaSegura-3+i;}
+              return React.createElement("button",{
+                key:p,
+                style:{...iBtn(p===paginaSegura?C.blue:C.dim),minWidth:32,padding:"5px 8px",fontSize:11,fontWeight:p===paginaSegura?700:400,background:p===paginaSegura?C.blue:C.card,color:p===paginaSegura?"#fff":C.muted},
+                onClick:()=>irPara(p)
+              },String(p));
+            })
+          ),
+          React.createElement("button",{
+            style:{...iBtn(paginaSegura===totalPag?C.dim:C.blue),opacity:paginaSegura===totalPag?0.4:1,fontSize:11,padding:"5px 10px"},
+            disabled:paginaSegura===totalPag,onClick:()=>irPara(paginaSegura+1),title:"Próxima página"
+          },"Próxima ▶"),
+          React.createElement("button",{
+            style:{...iBtn(paginaSegura===totalPag?C.dim:C.blue),opacity:paginaSegura===totalPag?0.4:1,fontSize:11,padding:"5px 10px"},
+            disabled:paginaSegura===totalPag,onClick:()=>irPara(totalPag),title:"Última página"
+          },"Última ⏭"),
+          React.createElement("span",{style:{fontSize:11,color:C.dim,marginLeft:4}},`Página ${paginaSegura} de ${totalPag}`)
+        )
       )
     ),
     modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
@@ -9681,7 +9742,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.6 · ago/2026 · cursor desktop corrigido")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.7 · ago/2026 · condomínios paginação completa")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative",display:"flex",flexDirection:"column"}},
