@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.9 RANKING AUDITÁVEL AGO2026 -->
+<!-- SERVIS v5.10 RANKING ATESTADOS INLINE AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -640,6 +640,7 @@ function ModalAtestado({item,onSave,onClose,tecsBanco=TECNICOS}){
 }
 
 function Atestados({tecsBanco=TECNICOS,onSave}){
+  const [abaAt,setAbaAt]=useState("lista");
   const [data,setData]=useState([]);
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(null);
@@ -670,10 +671,25 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
     setModal(null);load();if(onSave)onSave();
   };
   const del=async id=>{await sb.from("atestados").delete().eq("id",id);setConfirmDel(null);load();if(onSave)onSave();};
+  // Sub-aba Ranking de Atestados inline
+  if(abaAt==="ranking")return React.createElement("div",null,
+    React.createElement("div",{style:{background:C.surface,padding:"12px 24px",position:"sticky",top:0,zIndex:10,borderBottom:"1px solid "+C.border,display:"flex",alignItems:"center",gap:8}},
+      React.createElement("button",{style:{...btnStyle(C.dim,true),fontSize:12},onClick:function(){setAbaAt("lista");}},"← Lista"),
+      React.createElement("div",{style:{fontSize:16,fontWeight:700,marginLeft:8}},"📊 Ranking de Atestados")
+    ),
+    React.createElement(RankingAtestados,{tecsBanco,data})
+  );
+
   return React.createElement("div",null,
     React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}},
       React.createElement("div",null,
-        React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🏥 Atestados"),
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
+          React.createElement("div",{style:{fontSize:18,fontWeight:700}},"🏥 Atestados"),
+          React.createElement("button",{
+            style:{...btnStyle(C.purple,true),fontSize:11,padding:"4px 12px"},
+            onClick:function(){setAbaAt("ranking");}
+          },"📊 Ver Ranking")
+        ),
         React.createElement("div",{style:{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}},
           React.createElement("input",{style:{...base.inp,width:160,margin:0},placeholder:"Buscar técnico...",value:busca,onChange:function(e){setBusca(e.target.value);setPagina(1);}}),
           React.createElement("select",{style:{...base.sel,width:100},value:filtAno,onChange:function(e){setFiltAno(e.target.value);setPagina(1);}},
@@ -8737,7 +8753,6 @@ const TABS=[
   {id:"reginaldo",icon:"🔩",label:"Serviço Reginaldo",cat:"Operacional"},
   {id:"tecnicos",icon:"👷",label:"Técnicos",cat:"Equipe"},
   {id:"atestados",icon:"🏥",label:"Atestados",badge:"at",cat:"Equipe"},
-  {id:"ranking-atestados",icon:"📊",label:"Ranking Atestados",cat:"Equipe"},
   {id:"horas-extras",icon:"⏰",label:"Horas Extras",badge:"he",cat:"Equipe"},
   {id:"ranking",icon:"🏆",label:"Ranking",cat:"Equipe"},
   {id:"rastreamento",icon:"📍",label:"Rastreamento",cat:"Equipe"},
@@ -9716,7 +9731,7 @@ class ErrorBoundary extends React.Component{
 
 
 // ── RANKING DE ATESTADOS ──────────────────────────────────────
-function RankingAtestados({tecsBanco=TECNICOS}){
+function RankingAtestados({tecsBanco=TECNICOS,data:dataProp}){
   const [data,setData]=useState([]);
   const [loading,setLoading]=useState(true);
   const [anoSel,setAnoSel]=useState("2026");
@@ -9725,13 +9740,15 @@ function RankingAtestados({tecsBanco=TECNICOS}){
   const MESES_NM=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const MESES_ABR=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
+  // Usa dados passados pelo pai (Atestados) quando disponíveis
   const load=useCallback(async()=>{
+    if(dataProp&&dataProp.length>0){setData(dataProp);setLoading(false);return;}
     setLoading(true);
     var q=sb.from("atestados").select("id,tec,mat,data,dias,retorno,motivo,status").order("data",{ascending:true});
     if(anoSel)q=q.gte("data",anoSel+"-01-01").lte("data",anoSel+"-12-31");
     const{data:rows}=await q;
     setData(rows||[]);setLoading(false);
-  },[anoSel]);
+  },[anoSel,dataProp]);
   useEffect(()=>{load();},[load]);
 
   // ── Filtrar por mês/tec ──
@@ -10040,7 +10057,6 @@ function App(){
       case"nova-os":return soLeitura?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.dim}},React.createElement("div",{style:{fontSize:40}},"🔒"),React.createElement("div",{style:{color:C.muted,marginTop:12}},"Acesso restrito")):React.createElement(NovaOS,{setTab,onSave:refresh});
       case"os":return React.createElement(OSModule,{tecsBanco,onSave:refresh,somenteLeitura:soLeitura||isCentral});
       case"atestados":return React.createElement(Atestados,{tecsBanco});
-      case"ranking-atestados":return React.createElement(RankingAtestados,{tecsBanco});
       case"horas-extras":return React.createElement(HorasExtras,{tecsBanco});
       case"problemas":return React.createElement(Problemas,{activeTab:tab});
       case"sla":return React.createElement(SLA,{activeTab:tab});
@@ -10139,7 +10155,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.9 · ago/2026 · ranking auditável e transparente")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.10 · ago/2026 · ranking atestados dentro da aba")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative",display:"flex",flexDirection:"column"}},
