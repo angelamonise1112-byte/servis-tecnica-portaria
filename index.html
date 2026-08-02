@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.10 RANKING ATESTADOS INLINE AGO2026 -->
+<!-- SERVIS v5.11 MAPA EDIÇÃO LOCALIZAÇÃO AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -8380,7 +8380,9 @@ function MapaCalor({tecsBanco=TECNICOS}){
   const [loading,setLoading]=useState(true);
   const [selCond,setSelCond]=useState(null);
   const [editando,setEditando]=useState(false);
-  const [editF,setEditF]=useState({});
+  const [editLat,setEditLat]=useState("");
+  const [editLng,setEditLng]=useState("");
+  const [editSaving,setEditSaving]=useState(false);
   const [filtTec,setFiltTec]=useState("");
   const [filtBusca,setFiltBusca]=useState("");
   const [modoSel,setModoSel]=useState(false);
@@ -8388,13 +8390,17 @@ function MapaCalor({tecsBanco=TECNICOS}){
   const [transferTec,setTransferTec]=useState("");
   const [leafReady,setLeafReady]=useState(!!window.L);
   const [activeTab,setActiveTab]=useState("mapa");
+  const [geoStatus,setGeoStatus]=useState("");   // mensagem de geocodificação
+  const [importModal,setImportModal]=useState(false);
+  const [importTexto,setImportTexto]=useState("");
   const mapInst=React.useRef(null);
   const markersRef=React.useRef([]);
+  const editMarkerRef=React.useRef(null);
 
   const AREA_COR={"P16":"#3b82f6","P17":"#10b981","P18":"#ef4444","P19":"#f97316"};
   const AREAS=["P16","P17","P18","P19"];
 
-  // Carregar Leaflet
+  // ── Carregar Leaflet ─────────────────────────────────────────
   useEffect(function(){
     if(window.L){setLeafReady(true);return;}
     var css=document.createElement("link");css.rel="stylesheet";
@@ -8403,11 +8409,12 @@ function MapaCalor({tecsBanco=TECNICOS}){
     sc.onload=function(){setLeafReady(true);};document.head.appendChild(sc);
   },[]);
 
+  // ── Load principal ───────────────────────────────────────────
   const load=useCallback(async function(){
     setLoading(true);
     var[rc,ros,rp]=await Promise.all([
       sb.from("condominios").select("id,nome,endereco,tecnico,area_tecnico,lat,lng,geo_status").order("nome"),
-      sb.from("os").select("cond,status").or("status.eq.Aberto,data.gte.2026-01-01"),
+      sb.from("os").select("cond,status").eq("status","Aberto"),
       sb.from("preventivas").select("cond,status"),
     ]);
     setConds(rc.data||[]);setOsData(ros.data||[]);setPrevData(rp.data||[]);
@@ -8415,7 +8422,7 @@ function MapaCalor({tecsBanco=TECNICOS}){
   },[]);
   useEffect(function(){load();},[load,tick]);
 
-  // Stats por técnico
+  // ── Stats por técnico ────────────────────────────────────────
   var statsPorTec=useMemo(function(){
     var m={};
     AREAS.forEach(function(a){m[a]={conds:0,os:0,prevs:0,tec:a};});
@@ -8440,45 +8447,149 @@ function MapaCalor({tecsBanco=TECNICOS}){
     });
   },[conds,filtTec,filtBusca]);
 
-  // Mapa — SEM polígonos, só marcadores
+  // ── Geocodificação via Nominatim ──────────────────────────────
+  async function geocodificar(cond,forcar){
+    if(cond.lat&&cond.lng&&!forcar){
+      setEditLat(String(cond.lat));setEditLng(String(cond.lng));
+      setGeoStatus("✅ Coordenadas salvas no banco.");return;
+    }
+    if(!cond.endereco){setGeoStatus("⚠️ Sem endereço cadastrado.");return;}
+    setGeoStatus("🔍 Buscando localização...");
+    var q=encodeURIComponent((cond.endereco||"")+" Fortaleza Ceará Brasil");
+    try{
+      var r=await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=3&q="+q,{headers:{"Accept-Language":"pt-BR"}});
+      var data=await r.json();
+      if(!data||data.length===0){setGeoStatus("❌ Endereço não encontrado. Digite as coordenadas manualmente.");return;}
+      // Validar: resultado deve estar no Ceará/Brasil (lat ~-2 a -8, lng ~-34 a -44)
+      var res=data[0];
+      var lat=parseFloat(res.lat),lng=parseFloat(res.lon);
+      if(lat<-8||lat>0||lng<-42||lng>-34){
+        setGeoStatus("⚠️ Localização encontrada pode estar fora de Fortaleza. Verifique antes de salvar. ("+lat.toFixed(4)+", "+lng.toFixed(4)+")");
+      }else{
+        setGeoStatus("📍 Localização encontrada: "+res.display_name.slice(0,60)+"...");
+      }
+      setEditLat(lat.toFixed(6));setEditLng(lng.toFixed(6));
+      if(editMarkerRef.current){editMarkerRef.current.setLatLng([lat,lng]);}
+      if(mapInst.current){mapInst.current.setView([lat,lng],16);}
+    }catch(e){setGeoStatus("❌ Erro na busca: "+e.message);}
+  }
+
+  // ── Iniciar edição de localização ─────────────────────────────
+  function iniciarEdicao(c){
+    setEditLat(c.lat?String(c.lat):"");
+    setEditLng(c.lng?String(c.lng):"");
+    setGeoStatus("");
+    setEditando(true);
+    // Criar marcador arrastável no mapa
+    setTimeout(function(){
+      var L=window.L;if(!L||!mapInst.current)return;
+      if(editMarkerRef.current){editMarkerRef.current.remove();editMarkerRef.current=null;}
+      var lat=parseFloat(c.lat)||(-3.79),lng=parseFloat(c.lng)||(-38.55);
+      var icon=L.divIcon({
+        html:"<div style='width:22px;height:22px;border-radius:50%;background:#f59e0b;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.6);cursor:grab'></div>",
+        className:"",iconSize:[22,22],iconAnchor:[11,11]
+      });
+      var mk=L.marker([lat,lng],{icon:icon,draggable:true,zIndexOffset:1000});
+      mk.on("dragend",function(e){
+        var ll=e.target.getLatLng();
+        setEditLat(ll.lat.toFixed(6));setEditLng(ll.lng.toFixed(6));
+        setGeoStatus("📍 Posição atualizada. Clique em Salvar para confirmar.");
+      });
+      mk.addTo(mapInst.current);editMarkerRef.current=mk;
+      mapInst.current.setView([lat,lng],16);
+    },200);
+    if(!c.lat||!c.lng){geocodificar(c,false);}
+  }
+
+  // ── Atualizar marcador ao editar lat/lng manualmente ─────────
+  function atualizarMarcador(lat,lng){
+    var la=parseFloat(lat),lo=parseFloat(lng);
+    if(isNaN(la)||isNaN(lo))return;
+    if(editMarkerRef.current){editMarkerRef.current.setLatLng([la,lo]);}
+    if(mapInst.current){mapInst.current.setView([la,lo],16);}
+  }
+
+  // ── Validação de coordenadas ──────────────────────────────────
+  function validarCoords(lat,lng){
+    var la=parseFloat(lat),lo=parseFloat(lng);
+    if(isNaN(la)||isNaN(lo))return "Coordenadas inválidas.";
+    if(la<-90||la>90||lo<-180||lo>180)return "Coordenadas fora dos limites globais.";
+    // Alertar se muito longe de Fortaleza (CE) mas não bloquear
+    if(la<-8||la>0||lo<-42||lo>-34)return "AVISO: Localização parece fora do Ceará. Confirme antes de salvar.";
+    return null;
+  }
+
+  // ── Salvar localização no banco ───────────────────────────────
+  async function salvarLocalizacao(){
+    var err=validarCoords(editLat,editLng);
+    if(err&&err.startsWith("Coordenadas")){alert(err);return;}
+    if(err&&err.startsWith("AVISO")){if(!confirm(err+"\n\nDeseja salvar assim mesmo?"))return;}
+    setEditSaving(true);
+    var la=parseFloat(parseFloat(editLat).toFixed(6));
+    var lo=parseFloat(parseFloat(editLng).toFixed(6));
+    var res=await sb.from("condominios").update({lat:la,lng:lo,geo_status:"manual"}).eq("id",selCond.id);
+    if(res&&res.error){alert("Erro ao salvar: "+res.error.message);setEditSaving(false);return;}
+    var updated={...selCond,lat:la,lng:lo,geo_status:"manual"};
+    setConds(function(prev){return prev.map(function(c){return c.id===selCond.id?updated:c;});});
+    setSelCond(updated);setEditando(false);
+    if(editMarkerRef.current){editMarkerRef.current.remove();editMarkerRef.current=null;}
+    setGeoStatus("");setEditSaving(false);
+    alert("✅ Localização salva com sucesso!\n\n"+selCond.nome+"\nLat: "+la+" · Lng: "+lo);
+  }
+
+  function cancelarEdicao(){
+    setEditando(false);
+    if(editMarkerRef.current){editMarkerRef.current.remove();editMarkerRef.current=null;}
+    setGeoStatus("");
+    if(selCond&&selCond.lat&&mapInst.current)mapInst.current.setView([selCond.lat,selCond.lng],16);
+  }
+
+  // ── Importação em massa ───────────────────────────────────────
+  async function processarImport(){
+    var linhas=importTexto.trim().split("\n").filter(function(l){return l.trim();});
+    var ok=0,erros=[];
+    for(var i=0;i<linhas.length;i++){
+      var pts=linhas[i].split(/[;,\t]+/).map(function(p){return p.trim();});
+      if(pts.length<3){erros.push("Linha "+(i+1)+": formato inválido");continue;}
+      var nome=pts[0],lat=parseFloat(pts[1]),lng=parseFloat(pts[2]);
+      if(isNaN(lat)||isNaN(lng)){erros.push("Linha "+(i+1)+": lat/lng inválidos");continue;}
+      var cond=conds.find(function(c){return c.nome.toLowerCase()===nome.toLowerCase();});
+      if(!cond){erros.push("Linha "+(i+1)+": condomínio '"+nome+"' não encontrado");continue;}
+      var res=await sb.from("condominios").update({lat:lat,lng:lng,geo_status:"importado"}).eq("id",cond.id);
+      if(res&&res.error){erros.push("Linha "+(i+1)+": erro ao salvar");continue;}
+      ok++;
+    }
+    alert("Importação concluída!\n✅ Atualizados: "+ok+"\n❌ Erros: "+erros.length+(erros.length>0?"\n\n"+erros.slice(0,5).join("\n"):""));
+    setImportModal(false);setImportTexto("");load();
+  }
+
+  // ── Marcadores normais no mapa ────────────────────────────────
   useEffect(function(){
     if(!leafReady||loading||activeTab!=="mapa")return;
     var L=window.L;
-    var el=document.getElementById("mapa-calor-div");
-    if(!el)return;
+    var el=document.getElementById("mapa-calor-div");if(!el)return;
     if(!mapInst.current){
       mapInst.current=L.map(el,{center:[-3.79,-38.55],zoom:12});
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(mapInst.current);
     }
     var m=mapInst.current;
-    // Limpar marcadores
-    markersRef.current.forEach(function(mk){mk.remove();});
-    markersRef.current=[];
-
-    // Apenas marcadores, sem polígonos
+    markersRef.current.forEach(function(mk){mk.remove();});markersRef.current=[];
     condsFiltradas.forEach(function(c){
       if(!c.lat||!c.lng)return;
       var cor=AREA_COR[c.area_tecnico]||"#6b7280";
       var emSel=selMulti.findIndex(function(x){return x.id===c.id;})>=0;
       var sz=emSel?18:11;
+      var alertaGeo=!c.lat||!c.lng||c.geo_status==="erro";
       var icon=L.divIcon({
-        html:"<div style='width:"+sz+"px;height:"+sz+"px;border-radius:50%;background:"+cor
+        html:"<div style='width:"+sz+"px;height:"+sz+"px;border-radius:50%;background:"+(alertaGeo?"#ef4444":cor)
           +";border:"+(emSel?"3px solid #fff":"2px solid rgba(255,255,255,0.7)")
-          +";box-shadow:0 2px 6px rgba(0,0,0,0.5);cursor:pointer'></div>",
+          +";box-shadow:0 2px 6px rgba(0,0,0,0.5);cursor:pointer"
+          +(alertaGeo?";animation:pulse 1.5s infinite":"")+"'></div>",
         className:"",iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]
       });
       var osAb=(osData||[]).filter(function(o){return o.cond===c.nome&&o.status==="Aberto";}).length;
-      var popup=L.popup({maxWidth:240}).setContent(
-        "<div style='font-family:Arial;font-size:12px'>"
-        +"<div style='font-weight:700;font-size:13px;color:"+cor+";border-bottom:2px solid "+cor+";padding-bottom:4px;margin-bottom:6px'>"+c.nome+"</div>"
-        +"<div style='color:#555;margin-bottom:3px;font-size:11px'>📍 "+(c.endereco||"—")+"</div>"
-        +"<div style='margin-bottom:2px'>👷 <b>"+(c.area_tecnico||"Sem técnico")+"</b></div>"
-        +(osAb>0?"<div style='color:#ef4444;font-weight:700'>🚨 "+osAb+" OS abertas</div>":"")
-        +"<div style='margin-top:6px;font-size:10px;color:#999'>Clique para editar</div>"
-        +"</div>"
-      );
       var mk=L.marker([c.lat,c.lng],{icon:icon});
-      mk.bindPopup(popup);
+      mk.bindTooltip(c.nome,{direction:"top",offset:[0,-6],opacity:.9});
       mk.on("click",function(){
         if(modoSel){window._toggleMapa&&window._toggleMapa(c);}
         else{window._selCondMapa&&window._selCondMapa(c,osAb);}
@@ -8488,7 +8599,7 @@ function MapaCalor({tecsBanco=TECNICOS}){
   },[leafReady,loading,condsFiltradas,osData,selMulti,activeTab]);
 
   useEffect(function(){
-    window._selCondMapa=function(c,osAb){setSelCond({...c,_osAb:osAb||0});setEditando(false);};
+    window._selCondMapa=function(c,osAb){setSelCond({...c,_osAb:osAb||0});setEditando(false);setGeoStatus("");};
     window._toggleMapa=function(c){
       setSelMulti(function(prev){
         var i=prev.findIndex(function(x){return x.id===c.id;});
@@ -8503,17 +8614,10 @@ function MapaCalor({tecsBanco=TECNICOS}){
     setConds(function(prev){return prev.map(function(c){return c.id===condId?{...c,area_tecnico:novoTec}:c;});});
     if(selCond&&selCond.id===condId)setSelCond(function(p){return{...p,area_tecnico:novoTec};});
   }
-
   async function transferirSelecionados(){
     if(!transferTec||selMulti.length===0){alert("Selecione o técnico destino");return;}
-    for(var i=0;i<selMulti.length;i++){
-      await sb.from("condominios").update({area_tecnico:transferTec}).eq("id",selMulti[i].id);
-    }
-    setConds(function(prev){
-      return prev.map(function(c){
-        return selMulti.find(function(x){return x.id===c.id;})?{...c,area_tecnico:transferTec}:c;
-      });
-    });
+    for(var i=0;i<selMulti.length;i++){await sb.from("condominios").update({area_tecnico:transferTec}).eq("id",selMulti[i].id);}
+    setConds(function(prev){return prev.map(function(c){return selMulti.find(function(x){return x.id===c.id;})?{...c,area_tecnico:transferTec}:c;});});
     alert(selMulti.length+" condomínios atribuídos a "+transferTec);
     setSelMulti([]);setTransferTec("");setModoSel(false);
   }
@@ -8528,6 +8632,9 @@ function MapaCalor({tecsBanco=TECNICOS}){
         React.createElement("div",{style:{fontWeight:700,fontSize:15}},"🗺 Mapa de Calor Operacional"),
         React.createElement("span",{style:{fontSize:11,color:C.muted}},condsFiltradas.filter(function(c){return c.lat&&c.lng;}).length+" exibidos · "+condSemGeo+" sem coordenadas"),
         React.createElement("div",{style:{marginLeft:"auto",display:"flex",gap:6}},
+          React.createElement("button",{style:{...btnStyle(C.cyan,true),fontSize:11,padding:"5px 10px"},onClick:function(){setImportModal(true);}},
+            "📥 Importar Coordenadas"
+          ),
           [{id:"mapa",l:"🗺 Mapa"},{id:"painel",l:"📊 Painel"},{id:"lista",l:"📋 Lista"}].map(function(t){
             return React.createElement("button",{key:t.id,style:{...btnStyle(C.blue,activeTab!==t.id),fontSize:11,padding:"5px 10px"},
               onClick:function(){setActiveTab(t.id);}},t.l);
@@ -8535,7 +8642,6 @@ function MapaCalor({tecsBanco=TECNICOS}){
         )
       ),
       React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}},
-        // Filtros
         React.createElement("div",{style:{position:"relative"}},
           React.createElement("input",{style:{...base.inp,width:180,fontSize:11,paddingLeft:28},
             placeholder:"Buscar condomínio...",value:filtBusca,onChange:function(e){setFiltBusca(e.target.value);}}),
@@ -8545,32 +8651,22 @@ function MapaCalor({tecsBanco=TECNICOS}){
           React.createElement("option",{value:""},"Todos técnicos"),
           AREAS.map(function(a){return React.createElement("option",{key:a,value:a},a);})
         ),
-        // Botão seleção múltipla
         React.createElement("button",{
           style:{...btnStyle(modoSel?C.yellow:C.purple,!modoSel),fontSize:11,padding:"6px 12px"},
           onClick:function(){setModoSel(function(v){return !v;});setSelMulti([]);}
         },modoSel?"✕ Cancelar Seleção":"☑ Selecionar Vários"),
-        // Transferência em massa
         modoSel&&selMulti.length>0&&React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center",background:C.yellow+"11",border:"1px solid "+C.yellow+"44",borderRadius:8,padding:"4px 10px"}},
           React.createElement("span",{style:{fontSize:11,color:C.yellow,fontWeight:700}},selMulti.length+" selecionados"),
           React.createElement("select",{style:{...base.sel,width:120,fontSize:11},value:transferTec,onChange:function(e){setTransferTec(e.target.value);}},
             React.createElement("option",{value:""},"Atribuir a..."),
-            AREAS.map(function(a){
-              return React.createElement("option",{key:a,value:a,style:{color:AREA_COR[a]}},a);
-            })
+            AREAS.map(function(a){return React.createElement("option",{key:a,value:a,style:{color:AREA_COR[a]}},a);})
           ),
           React.createElement("button",{style:{...btnStyle(C.green),fontSize:11,padding:"6px 12px"},onClick:transferirSelecionados},"✓ Confirmar")
         ),
-        // Legenda de cores
         React.createElement("div",{style:{display:"flex",gap:6,marginLeft:"auto"}},
           AREAS.map(function(a){
-            var cor=AREA_COR[a];
-            var st=statsPorTec[a]||{conds:0};
-            return React.createElement("div",{key:a,
-              style:{display:"flex",alignItems:"center",gap:4,background:cor+"22",border:"1px solid "+cor+"44",
-                borderRadius:20,padding:"3px 10px",cursor:"pointer",
-                outline:filtTec===a?"2px solid "+cor:"none"},
-              onClick:function(){setFiltTec(filtTec===a?"":a);}},
+            var cor=AREA_COR[a];var st=statsPorTec[a]||{conds:0};
+            return React.createElement("div",{key:a,style:{display:"flex",alignItems:"center",gap:4,background:cor+"22",border:"1px solid "+cor+"44",borderRadius:20,padding:"3px 10px",cursor:"pointer",outline:filtTec===a?"2px solid "+cor:"none"},onClick:function(){setFiltTec(filtTec===a?"":a);}},
               React.createElement("div",{style:{width:8,height:8,borderRadius:"50%",background:cor}}),
               React.createElement("span",{style:{fontSize:11,fontWeight:700,color:cor}},a),
               React.createElement("span",{style:{fontSize:10,color:C.muted}},st.conds)
@@ -8585,19 +8681,16 @@ function MapaCalor({tecsBanco=TECNICOS}){
       React.createElement("div",null,"Carregando...")
     ):
     React.createElement("div",{style:{display:"flex",flex:1,overflow:"hidden"}},
-      // ÁREA PRINCIPAL
       React.createElement("div",{style:{flex:1,overflow:"hidden",position:"relative"}},
-        // MAPA
         activeTab==="mapa"&&(
           !leafReady?React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",color:C.muted}},"Carregando mapa..."):
           condComGeo===0?React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",flexDirection:"column",gap:12,color:C.muted}},
             React.createElement("div",{style:{fontSize:40}},"📍"),
             React.createElement("div",{style:{fontSize:14,fontWeight:600}},"Nenhum condomínio com coordenadas"),
-            React.createElement("div",{style:{fontSize:12,color:C.dim}},"Use a ferramenta geo_auditoria.html para geocodificar os endereços")
+            React.createElement("div",{style:{fontSize:12,color:C.dim}},"Clique em um condomínio na aba Lista e use '📍 Editar Localização'")
           ):
           React.createElement("div",{id:"mapa-calor-div",style:{width:"100%",height:"100%"}})
         ),
-        // PAINEL
         activeTab==="painel"&&React.createElement("div",{style:{padding:20,overflowY:"auto",height:"100%"}},
           React.createElement("div",{style:{fontSize:15,fontWeight:700,marginBottom:16}},"📊 Painel de Controle por Técnico"),
           React.createElement(Grid,{cols:4,mb:16},
@@ -8608,11 +8701,9 @@ function MapaCalor({tecsBanco=TECNICOS}){
           ),
           React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}},
             AREAS.map(function(a){
-              var cor=AREA_COR[a];
-              var st=statsPorTec[a]||{conds:0,os:0,prevs:0};
+              var cor=AREA_COR[a];var st=statsPorTec[a]||{conds:0,os:0,prevs:0};
               var lista=conds.filter(function(c){return c.area_tecnico===a;});
-              return React.createElement("div",{key:a,
-                style:{background:C.card,borderRadius:12,padding:16,border:"1px solid "+C.border,borderTop:"4px solid "+cor}},
+              return React.createElement("div",{key:a,style:{background:C.card,borderRadius:12,padding:16,border:"1px solid "+C.border,borderTop:"4px solid "+cor}},
                 React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:12}},
                   React.createElement("div",{style:{width:14,height:14,borderRadius:"50%",background:cor}}),
                   React.createElement("div",{style:{fontSize:15,fontWeight:700,color:cor}},a),
@@ -8625,7 +8716,7 @@ function MapaCalor({tecsBanco=TECNICOS}){
                 ),
                 lista.length>0&&React.createElement("div",{style:{maxHeight:120,overflowY:"auto"}},
                   lista.slice(0,8).map(function(c){
-                    return React.createElement("div",{key:c.id,style:{fontSize:10,color:C.muted,padding:"2px 0",borderBottom:"1px solid "+C.border}},"• "+c.nome);
+                    return React.createElement("div",{key:c.id,style:{fontSize:10,color:C.muted,padding:"2px 0",borderBottom:"1px solid "+C.border}},"• "+c.nome+(c.lat?"":" ⚠️"));
                   }),
                   lista.length>8&&React.createElement("div",{style:{fontSize:10,color:C.dim,padding:"4px 0"}},"+"+( lista.length-8)+" mais...")
                 )
@@ -8633,79 +8724,107 @@ function MapaCalor({tecsBanco=TECNICOS}){
             })
           )
         ),
-        // LISTA
         activeTab==="lista"&&React.createElement("div",{style:{overflowY:"auto",height:"100%"}},
           React.createElement(Table,{
-            cols:["Condomínio","Endereço","Técnico Atual","Alterar Técnico","Geo"],
+            cols:["Condomínio","Endereço","Técnico","Coordenadas","Status Geo","Editar"],
             rows:condsFiltradas.map(function(c){
               var cor=AREA_COR[c.area_tecnico]||C.dim;
               return [
                 React.createElement("div",{style:{fontSize:12,fontWeight:600}},c.nome),
-                React.createElement("div",{style:{fontSize:10,color:C.muted,maxWidth:160,wordBreak:"break-word"}},c.endereco||"—"),
-                c.area_tecnico
-                  ?React.createElement("span",{style:{background:cor+"22",color:cor,borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:700}},c.area_tecnico)
-                  :React.createElement("span",{style:{color:C.dim,fontSize:11}},"Sem técnico"),
-                React.createElement("select",{
-                  style:{...base.sel,fontSize:11,width:100},
-                  value:c.area_tecnico||"",
-                  onChange:function(e){salvarTecnico(c.id,e.target.value);}
-                },
-                  React.createElement("option",{value:""},"—"),
-                  AREAS.map(function(a){return React.createElement("option",{key:a,value:a},a);})
-                ),
+                React.createElement("div",{style:{fontSize:11,color:C.muted,maxWidth:200}},c.endereco||"—"),
+                c.area_tecnico?React.createElement("span",{style:{color:cor,fontWeight:700,fontSize:12}},c.area_tecnico):React.createElement("span",{style:{color:C.dim}},"—"),
                 c.lat&&c.lng
-                  ?React.createElement("span",{style:{color:C.green,fontSize:11}},"✅")
-                  :React.createElement("span",{style:{color:C.yellow,fontSize:11}},"⚠")
+                  ?React.createElement("div",{style:{fontSize:10,color:C.dim,fontFamily:"monospace"}},c.lat.toFixed(4)+", "+c.lng.toFixed(4))
+                  :React.createElement("span",{style:{color:C.yellow,fontSize:11}},"⚠ Sem coord."),
+                React.createElement("span",{style:{
+                  fontSize:10,
+                  color:c.geo_status==="manual"?C.blue:c.geo_status==="importado"?C.cyan:c.lat?C.green:C.yellow
+                }},c.geo_status==="manual"?"✏️ manual":c.geo_status==="importado"?"📥 importado":c.lat?"📍 geocodificado":"⚠ pendente"),
+                React.createElement("button",{style:{...iBtn(C.blue)},onClick:function(){
+                  setSelCond({...c,_osAb:0});setActiveTab("mapa");setTimeout(function(){iniciarEdicao(c);},400);
+                }},"📍 Editar")
               ];
             })
           })
         )
       ),
-      // PAINEL LATERAL (só no mapa)
-      activeTab==="mapa"&&React.createElement("div",{style:{width:280,background:C.surface,borderLeft:"1px solid "+C.border,overflowY:"auto",flexShrink:0}},
-        // Detalhe do condomínio clicado
+      // PAINEL LATERAL
+      activeTab==="mapa"&&React.createElement("div",{style:{width:290,background:C.surface,borderLeft:"1px solid "+C.border,overflowY:"auto",flexShrink:0}},
         selCond&&React.createElement("div",{style:{padding:14,borderBottom:"1px solid "+C.border}},
-          React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:10}},
-            React.createElement("div",{style:{fontSize:13,fontWeight:700,flex:1,paddingRight:8,lineHeight:1.3,
-              color:AREA_COR[selCond.area_tecnico]||C.blue}},selCond.nome),
-            React.createElement("button",{style:iBtn(C.dim),onClick:function(){setSelCond(null);}},"✕")
+          React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:8}},
+            React.createElement("div",{style:{fontSize:13,fontWeight:700,flex:1,paddingRight:8,lineHeight:1.3,color:AREA_COR[selCond.area_tecnico]||C.blue}},selCond.nome),
+            React.createElement("button",{style:iBtn(C.dim),onClick:function(){setSelCond(null);cancelarEdicao();}},"✕")
           ),
-          React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:10,lineHeight:1.5}},selCond.endereco||"—"),
-          // Seletor de técnico direto
-          React.createElement("div",{style:{marginBottom:10}},
+          React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:8,lineHeight:1.5}},"📍 "+(selCond.endereco||"—")),
+          // Info coordenadas atuais
+          !editando&&React.createElement("div",{style:{background:C.bg,borderRadius:6,padding:"6px 10px",marginBottom:8,fontSize:11}},
+            React.createElement("div",{style:{color:C.dim,marginBottom:2}},"Coordenadas salvas:"),
+            selCond.lat&&selCond.lng
+              ?React.createElement("div",{style:{fontFamily:"monospace",color:C.cyan}},selCond.lat.toFixed(6)+", "+selCond.lng.toFixed(6))
+              :React.createElement("div",{style:{color:C.yellow}},"⚠ Sem coordenadas"),
+            selCond.geo_status&&React.createElement("div",{style:{color:C.dim,fontSize:10,marginTop:2}},
+              "Fonte: "+selCond.geo_status)
+          ),
+          // Modo edição
+          !editando?React.createElement("button",{
+            style:{...btnStyle(C.blue),width:"100%",marginBottom:8,fontSize:12},
+            onClick:function(){iniciarEdicao(selCond);}
+          },"✏️ Editar Localização"):
+          React.createElement("div",null,
+            React.createElement("div",{style:{fontSize:11,fontWeight:700,color:C.orange,marginBottom:8,padding:"6px 8px",background:C.orange+"11",borderRadius:6,border:"1px solid "+C.orange+"33"}},
+              "✏️ Modo Edição — arraste o marcador laranja ou edite as coordenadas:"
+            ),
+            // Status da geocodificação
+            geoStatus&&React.createElement("div",{style:{fontSize:11,color:geoStatus.startsWith("❌")?C.red:geoStatus.startsWith("⚠")?C.yellow:C.green,marginBottom:8,padding:"5px 8px",background:C.bg,borderRadius:6}},geoStatus),
+            // Campos lat/lng
+            React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}},
+              React.createElement("div",null,
+                React.createElement("label",{style:{...base.lbl,fontSize:10}},"Latitude"),
+                React.createElement("input",{style:{...base.inp,fontSize:12,fontFamily:"monospace"},value:editLat,
+                  onChange:function(e){setEditLat(e.target.value);atualizarMarcador(e.target.value,editLng);}})
+              ),
+              React.createElement("div",null,
+                React.createElement("label",{style:{...base.lbl,fontSize:10}},"Longitude"),
+                React.createElement("input",{style:{...base.inp,fontSize:12,fontFamily:"monospace"},value:editLng,
+                  onChange:function(e){setEditLng(e.target.value);atualizarMarcador(editLat,e.target.value);}})
+              )
+            ),
+            // Botões de ação
+            React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6}},
+              React.createElement("button",{
+                style:{...btnStyle(C.cyan,true),fontSize:11,width:"100%"},
+                onClick:function(){geocodificar(selCond,true);}
+              },"🌍 Buscar novamente pelo endereço"),
+              React.createElement("button",{
+                style:{...btnStyle(C.green),fontSize:11,width:"100%",opacity:editSaving?0.6:1},
+                disabled:editSaving,
+                onClick:salvarLocalizacao
+              },editSaving?"💾 Salvando...":"💾 Salvar localização"),
+              React.createElement("button",{
+                style:{...btnStyle(C.dim,true),fontSize:11,width:"100%"},
+                onClick:cancelarEdicao
+              },"↩️ Cancelar alterações")
+            )
+          ),
+          // Técnico
+          !editando&&React.createElement("div",{style:{marginTop:8}},
             React.createElement("label",{style:{...base.lbl,marginBottom:6,display:"block"}},"👷 Técnico Responsável"),
             React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},
               AREAS.map(function(a){
-                var cor=AREA_COR[a];
-                var ativo=selCond.area_tecnico===a;
-                return React.createElement("button",{key:a,
-                  style:{flex:1,padding:"8px 4px",fontSize:12,fontWeight:700,border:"2px solid "+cor,
-                    background:ativo?cor:cor+"22",color:ativo?"#fff":cor,
-                    borderRadius:8,cursor:"pointer",transition:"all .15s"},
-                  onClick:function(){salvarTecnico(selCond.id,a);}
-                },a);
+                var cor=AREA_COR[a];var ativo=selCond.area_tecnico===a;
+                return React.createElement("button",{key:a,style:{flex:1,padding:"8px 4px",fontSize:12,fontWeight:700,border:"2px solid "+cor,background:ativo?cor:cor+"22",color:ativo?"#fff":cor,borderRadius:8,cursor:"pointer",transition:"all .15s"},onClick:function(){salvarTecnico(selCond.id,a);}},a);
               })
             ),
-            selCond.area_tecnico&&React.createElement("div",{style:{fontSize:11,color:C.green,marginTop:6}},
-              "✓ Atribuído: "+selCond.area_tecnico
-            ),
-            React.createElement("button",{style:{...btnStyle(C.dim,true),fontSize:10,marginTop:6,width:"100%"},
-              onClick:function(){salvarTecnico(selCond.id,"");}
-            },"✕ Remover atribuição")
-          ),
-          selCond._osAb>0&&React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"33",borderRadius:6,padding:"6px 10px",fontSize:11,color:C.red}},
-            "🚨 "+selCond._osAb+" OS abertas"
+            selCond._osAb>0&&React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"33",borderRadius:6,padding:"6px 10px",fontSize:11,color:C.red,marginTop:8}},
+              "🚨 "+selCond._osAb+" OS abertas"
+            )
           )
         ),
-        // Legenda + resumo
         React.createElement("div",{style:{padding:12}},
           React.createElement("div",{style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}},"Resumo por Técnico"),
           AREAS.map(function(a){
             var cor=AREA_COR[a];var st=statsPorTec[a]||{conds:0,os:0,prevs:0};
-            return React.createElement("div",{key:a,
-              style:{background:cor+"11",border:"1px solid "+(filtTec===a?cor:cor+"33"),
-                borderRadius:8,padding:10,marginBottom:8,cursor:"pointer"},
-              onClick:function(){setFiltTec(filtTec===a?"":a);}},
+            return React.createElement("div",{key:a,style:{background:cor+"11",border:"1px solid "+(filtTec===a?cor:cor+"33"),borderRadius:8,padding:10,marginBottom:8,cursor:"pointer"},onClick:function(){setFiltTec(filtTec===a?"":a);}},
               React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:4}},
                 React.createElement("div",{style:{width:10,height:10,borderRadius:"50%",background:cor}}),
                 React.createElement("span",{style:{fontWeight:700,color:cor,fontSize:12}},a),
@@ -8717,21 +8836,51 @@ function MapaCalor({tecsBanco=TECNICOS}){
               )
             );
           }),
-          // Lista de selecionados
           modoSel&&selMulti.length>0&&React.createElement("div",{style:{background:C.yellow+"11",border:"1px solid "+C.yellow+"44",borderRadius:8,padding:10,marginTop:8}},
             React.createElement("div",{style:{fontSize:11,fontWeight:700,color:C.yellow,marginBottom:6}},"☑ "+selMulti.length+" selecionados"),
             React.createElement("div",{style:{maxHeight:150,overflowY:"auto"}},
               selMulti.map(function(c){
                 return React.createElement("div",{key:c.id,style:{fontSize:10,color:C.muted,padding:"2px 0",display:"flex",justifyContent:"space-between"}},
                   React.createElement("span",null,"• "+c.nome.slice(0,22)+(c.nome.length>22?"...":"")),
-                  React.createElement("span",{style:{color:C.red,cursor:"pointer"},
-                    onClick:function(){setSelMulti(function(prev){return prev.filter(function(x){return x.id!==c.id;});});}
-                  },"✕")
+                  React.createElement("span",{style:{color:C.red,cursor:"pointer"},onClick:function(){setSelMulti(function(prev){return prev.filter(function(x){return x.id!==c.id;});});}},
+                    "✕"
+                  )
                 );
               })
             )
           )
         )
+      )
+    ),
+    // MODAL IMPORTAÇÃO EM MASSA
+    importModal&&React.createElement(Modal,{title:"📥 Importar Coordenadas em Massa",onClose:function(){setImportModal(false);},width:520},
+      React.createElement("div",{style:{marginBottom:12,fontSize:12,color:C.muted}},
+        "Cole os dados no formato: ",React.createElement("code",{style:{background:C.bg,padding:"1px 6px",borderRadius:4,fontSize:11}},"Nome do Condomínio; Latitude; Longitude"),
+        " (uma linha por condomínio)"
+      ),
+      React.createElement("div",{style:{background:C.bg,borderRadius:6,padding:"8px 10px",marginBottom:12,fontSize:11,color:C.dim}},
+        "Exemplo:",React.createElement("br",null),
+        React.createElement("code",null,"MONTREAL; -3.7489; -38.5204"),React.createElement("br",null),
+        React.createElement("code",null,"FLORENÇA; -3.7612; -38.4987")
+      ),
+      React.createElement("textarea",{
+        style:{...base.inp,height:200,fontFamily:"monospace",fontSize:12,resize:"vertical"},
+        placeholder:"Nome; Latitude; Longitude (separados por ; ou , ou Tab)",
+        value:importTexto,
+        onChange:function(e){setImportTexto(e.target.value);}
+      }),
+      React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:12}},
+        "Linhas detectadas: "+importTexto.split("\n").filter(function(l){return l.trim();}).length
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end"}},
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:function(){setImportModal(false);}},
+          "Cancelar"
+        ),
+        React.createElement("button",{
+          style:btnStyle(C.green),
+          disabled:!importTexto.trim(),
+          onClick:processarImport
+        },"✅ Importar")
       )
     )
   );
@@ -10155,7 +10304,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.10 · ago/2026 · ranking atestados dentro da aba")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.11 · ago/2026 · mapa com edição de localização")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative",display:"flex",flexDirection:"column"}},
