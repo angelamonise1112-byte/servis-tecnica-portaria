@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.13 INTEGRIDADE CONDOMÍNIOS AGO2026 -->
+<!-- SERVIS v5.14 AUDITORIA FIX HOOKS AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -10242,10 +10242,9 @@ function AuditoriaIntegridade(){
     );
   }
 
-  function Secao({titulo,cor,itens,cols,detalhe}){
-    var [aberta,setAberta]=useState(false);
+  function Secao({titulo,cor,itens,cols,detalhe,aberta,onToggle}){
     return React.createElement("div",{style:{background:C.card,borderRadius:12,padding:16,marginBottom:12,border:"1px solid "+C.border,borderLeft:"4px solid "+cor}},
-      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"},onClick:function(){setAberta(function(v){return !v;});}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"},onClick:onToggle},
         React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10}},
           React.createElement("div",{style:{background:cor+"22",color:cor,fontSize:11,fontWeight:800,padding:"2px 10px",borderRadius:20}},itens.length),
           React.createElement("div",{style:{fontWeight:700,fontSize:13}},titulo)
@@ -10266,7 +10265,7 @@ function AuditoriaIntegridade(){
               );
             }),
             itens.length>20&&React.createElement("tr",null,
-              React.createElement("td",{colspan:cols.length,style:{padding:"8px",textAlign:"center",color:C.dim,fontSize:11}},
+              React.createElement("td",{colSpan:cols.length,style:{padding:"8px",textAlign:"center",color:C.dim,fontSize:11}},
                 "... e mais "+(itens.length-20)+" registros"
               )
             )
@@ -10276,6 +10275,9 @@ function AuditoriaIntegridade(){
       aberta&&itens.length===0&&React.createElement("div",{style:{textAlign:"center",padding:16,color:C.green,fontSize:12}},"✅ Nenhum problema encontrado")
     );
   }
+
+  // Estado de expansão das seções (controlado pelo pai, sem useState em Secao)
+  var [abertas,setAbertas]=useState({});
 
   return React.createElement("div",null,
     React.createElement("div",{style:{background:C.surface,padding:"16px 24px",position:"sticky",top:0,zIndex:10,borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center"}},
@@ -10309,35 +10311,41 @@ function AuditoriaIntegridade(){
           React.createElement(KPI,{label:"Registros órfãos",value:resultado.osOrfas.length+resultado.prevOrfas.length+resultado.instOrfas.length,color:resultado.osOrfas.length>0?C.red:C.green}),
           React.createElement(KPI,{label:"Sem área técnica",value:resultado.semArea.length,color:resultado.semArea.length>0?C.yellow:C.green})
         ),
-        Secao({
+        React.createElement(Secao,{
           titulo:"OS com condomínio não cadastrado",cor:C.red,itens:resultado.osOrfas,
           cols:["Nº OS","Data","Condomínio (OS)","Status","Técnico"],
-          detalhe:function(o){return[o.num||"—",(o.data||"").slice(0,10),o.cond||"—",o.status||"—",o.tec||"—"];}
+          detalhe:function(o){return[o.num||"—",(o.data||"").slice(0,10),o.cond||"—",o.status||"—",o.tec||"—"];},
+          aberta:!!abertas["os"],onToggle:function(){setAbertas(function(p){return{...p,os:!p.os};});}
         }),
-        Secao({
+        React.createElement(Secao,{
           titulo:"Preventivas com condomínio não cadastrado",cor:C.orange,itens:resultado.prevOrfas,
           cols:["ID","Condomínio (Prev.)","Status"],
-          detalhe:function(p){return[p.id||"—",p.cond||"—",p.status||"—"];}
+          detalhe:function(p){return[p.id||"—",p.cond||"—",p.status||"—"];},
+          aberta:!!abertas["prev"],onToggle:function(){setAbertas(function(p){return{...p,prev:!p.prev};});}
         }),
-        Secao({
+        React.createElement(Secao,{
           titulo:"Instalações com condomínio não cadastrado",cor:C.orange,itens:resultado.instOrfas,
           cols:["ID","Condomínio (Inst.)"],
-          detalhe:function(i){return[i.id||"—",i.cond||"—"];}
+          detalhe:function(i){return[i.id||"—",i.cond||"—"];},
+          aberta:!!abertas["inst"],onToggle:function(){setAbertas(function(p){return{...p,inst:!p.inst};});}
         }),
-        Secao({
+        React.createElement(Secao,{
           titulo:"Condomínios sem área técnica (sem técnico responsável)",cor:C.yellow,itens:resultado.semArea,
           cols:["Nome","Endereço","Técnico"],
-          detalhe:function(c){return[c.nome||"—",(c.endereco||"—").slice(0,40),c.tecnico||"—"];}
+          detalhe:function(c){return[c.nome||"—",(c.endereco||"—").slice(0,40),c.tecnico||"—"];},
+          aberta:!!abertas["area"],onToggle:function(){setAbertas(function(p){return{...p,area:!p.area};});}
         }),
-        Secao({
+        React.createElement(Secao,{
           titulo:"Condomínios sem coordenadas (invisíveis no mapa)",cor:C.yellow,itens:resultado.semGeo,
           cols:["Nome","Área Técnica","Técnico"],
-          detalhe:function(c){return[c.nome||"—",c.area_tecnico||"—",c.tecnico||"—"];}
+          detalhe:function(c){return[c.nome||"—",c.area_tecnico||"—",c.tecnico||"—"];},
+          aberta:!!abertas["geo"],onToggle:function(){setAbertas(function(p){return{...p,geo:!p.geo};});}
         }),
-        Secao({
+        React.createElement(Secao,{
           titulo:"Nomes duplicados (mesmo nome cadastrado mais de uma vez)",cor:C.red,itens:resultado.dupNomes,
           cols:["ID","Nome","Área Técnica"],
-          detalhe:function(c){return[c.id||"—",c.nome||"—",c.area_tecnico||"—"];}
+          detalhe:function(c){return[c.id||"—",c.nome||"—",c.area_tecnico||"—"];},
+          aberta:!!abertas["dup"],onToggle:function(){setAbertas(function(p){return{...p,dup:!p.dup};});}
         })
       )
     )
@@ -10558,7 +10566,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.13 · ago/2026 · integridade e auditoria de condomínios")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.14 · ago/2026 · auditoria fix hooks React #310")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative",display:"flex",flexDirection:"column"}},
