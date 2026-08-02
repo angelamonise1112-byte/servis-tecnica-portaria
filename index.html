@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.0 FASE 01 PERFORMANCE JUL2026 -->
+<!-- SERVIS v5.6 CURSOR DESKTOP FIX AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -18,37 +18,49 @@ button{cursor:pointer;font-family:inherit;border:none;border-radius:8px;font-siz
 .spin{animation:spin 0.8s linear infinite;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ===== NAV ITEMS — desktop e mobile ===== */
+.servis-nav-item{
+  display:flex; align-items:center; gap:8px;
+  padding:6px 12px 6px 10px; cursor:pointer; font-size:12px;
+  border-left:3px solid transparent;
+  transition:background .12s, color .12s, border-color .12s;
+  border-radius:0 6px 6px 0; margin:1px 8px 1px 0;
+  user-select:none; min-height:30px;
+}
+.servis-nav-item *{ cursor:pointer; }
+.servis-nav-item:hover{ background:rgba(59,130,246,.1); }
+.servis-nav-item.ativo{ background:rgba(59,130,246,.15); border-left-color:#3B82F6; }
+
 /* ===== RESPONSIVIDADE MOBILE (Servis) ===== */
 .servis-hamburger{ display:none; }
 .servis-overlay{ display:none; }
 @media (max-width: 820px){
   .servis-sidebar{
     position:fixed !important; top:0; left:0; bottom:0; z-index:1000;
-    width:78% !important; max-width:300px;
-    transform:translateX(-105%); transition:transform .25s ease;
-    box-shadow:2px 0 18px rgba(0,0,0,.5);
+    width:82% !important; max-width:260px;
+    transform:translateX(-105%); transition:transform .22s cubic-bezier(.4,0,.2,1);
+    box-shadow:4px 0 24px rgba(0,0,0,.6);
   }
   .servis-sidebar.aberta{ transform:translateX(0); }
   .servis-overlay{
     display:block; position:fixed; inset:0; z-index:999;
-    background:rgba(0,0,0,.55);
+    background:rgba(0,0,0,.6); backdrop-filter:blur(2px);
   }
   .servis-hamburger{
     display:flex; align-items:center; justify-content:center;
     position:sticky; top:0; z-index:50;
-    width:42px; height:42px; margin:8px; border:none; border-radius:10px;
-    background:#1A5FA8; color:#fff; font-size:20px; cursor:pointer;
-    box-shadow:0 2px 8px rgba(0,0,0,.3);
+    width:40px; height:40px; margin:8px; border:none; border-radius:10px;
+    background:#1A5FA8; color:#fff; font-size:18px; cursor:pointer;
+    box-shadow:0 2px 10px rgba(26,95,168,.5);
+    transition:background .15s;
   }
+  .servis-hamburger:hover{ background:#2563eb; }
   /* tabelas roláveis no celular */
   table{ display:block; overflow-x:auto; white-space:nowrap; -webkit-overflow-scrolling:touch; }
-  /* formulários e grids em coluna única */
-  [style*="grid-template-columns"]{ grid-template-columns:1fr !important; }
-  /* reduzir paddings grandes */
   [style*="padding:40"], [style*="padding:60"]{ padding:20px !important; }
 }
 @media (max-width: 480px){
-  .servis-sidebar{ width:86% !important; }
+  .servis-sidebar{ width:88% !important; }
 }
 </style>
 </head>
@@ -8472,33 +8484,33 @@ function MapaCalor({tecsBanco=TECNICOS}){
 
 
 const TABS=[
-  {id:"dashboard",icon:"▦",label:"Dashboard",cat:"Principal"},
-  {id:"nova-os",icon:"＋",label:"Nova OS",cat:"Operacional"},
-  {id:"os",icon:"◉",label:"Ordens de Serviço",cat:"Operacional"},
-  {id:"preventivas",icon:"◈",label:"Preventivas",cat:"Operacional"},
-  {id:"reincidencias",icon:"↺",label:"Reincidências",cat:"Operacional"},
-  {id:"sla",icon:"◈",label:"SLA & Operação",cat:"Operacional"},
-  {id:"os-pendencia",icon:"⚠",label:"OS em Pendência",cat:"Operacional"},
-  {id:"instalacoes",icon:"🔨",label:"Instalações",cat:"Operacional"},
-  {id:"materiais-lancar",icon:"🔖",label:"Materiais para Lançar",cat:"Operacional"},
-  {id:"tecnicos",icon:"◎",label:"Técnicos",cat:"Equipe"},
-  {id:"condominios",icon:"▣",label:"Condomínios",cat:"Operacional"},
+  {id:"dashboard",icon:"🏠",label:"Dashboard",cat:"Principal"},
+  {id:"nova-os",icon:"➕",label:"Nova OS",cat:"Operacional"},
+  {id:"os",icon:"📋",label:"Ordens de Serviço",cat:"Operacional"},
+  {id:"preventivas",icon:"🛡️",label:"Preventivas",cat:"Operacional"},
+  {id:"reincidencias",icon:"🔄",label:"Reincidências",cat:"Operacional"},
+  {id:"sla",icon:"⏱",label:"SLA & Operação",cat:"Operacional"},
+  {id:"os-pendencia",icon:"⚠️",label:"OS em Pendência",cat:"Operacional"},
+  {id:"instalacoes",icon:"🔧",label:"Instalações",cat:"Operacional"},
+  {id:"materiais-lancar",icon:"📦",label:"Materiais",cat:"Operacional"},
+  {id:"condominios",icon:"🏢",label:"Condomínios",cat:"Operacional"},
+  {id:"particularidades",icon:"🏷️",label:"Particularidades",cat:"Operacional"},
+  {id:"reginaldo",icon:"🔩",label:"Serviço Reginaldo",cat:"Operacional"},
+  {id:"tecnicos",icon:"👷",label:"Técnicos",cat:"Equipe"},
   {id:"atestados",icon:"🏥",label:"Atestados",badge:"at",cat:"Equipe"},
-  {id:"horas-extras",icon:"⏱",label:"Horas Extras",badge:"he",cat:"Equipe"},
-  {id:"problemas",icon:"▲",label:"Problemas",cat:"Gestão"},
+  {id:"horas-extras",icon:"⏰",label:"Horas Extras",badge:"he",cat:"Equipe"},
   {id:"ranking",icon:"🏆",label:"Ranking",cat:"Equipe"},
   {id:"rastreamento",icon:"📍",label:"Rastreamento",cat:"Equipe"},
-  {id:"mapa-calor",icon:"🗺",label:"Mapa de Calor",cat:"Gestão"},
-  {id:"particularidades",icon:"🏷",label:"Particularidades",cat:"Operacional"},
-  {id:"reginaldo",icon:"🔧",label:"Serviço Reginaldo",cat:"Operacional"},
+  {id:"organograma",icon:"🗂️",label:"Organograma",cat:"Equipe"},
+  {id:"problemas",icon:"📊",label:"Problemas",cat:"Gestão"},
+  {id:"mapa-calor",icon:"🗺️",label:"Mapa de Calor",cat:"Gestão"},
   {id:"pedidos",icon:"🛒",label:"Pedidos",cat:"Gestão"},
   {id:"demandas",icon:"📌",label:"Demandas Adm.",badge:"new",cat:"Gestão"},
-  {id:"parametros",icon:"📋",label:"Parâmetros",cat:"Configuração"},
-  {id:"organograma",icon:"🏢",label:"Organograma",cat:"Equipe"},
-  {id:"gestao-areas",icon:"🔧",label:"Gestão de Áreas",cat:"Configuração"},
-  {id:"usuarios",icon:"👤",label:"Usuários",cat:"Configuração"},
   {id:"calendario",icon:"📅",label:"Calendário",cat:"Gestão"},
   {id:"produtividade",icon:"⚡",label:"Produtividade",cat:"Gestão"},
+  {id:"parametros",icon:"⚙️",label:"Parâmetros",cat:"Configuração"},
+  {id:"gestao-areas",icon:"🗺️",label:"Gestão de Áreas",cat:"Configuração"},
+  {id:"usuarios",icon:"👤",label:"Usuários",cat:"Configuração"},
 ];
 const CAT_ORDEM=["Principal","Operacional","Equipe","Gestão","Configuração"];
 
@@ -9643,16 +9655,16 @@ function App(){
           var tabsCat=tabsVisiveis.filter(function(t){return (t.cat||"Outros")===cat;});
           if(tabsCat.length===0)return null;
           return React.createElement("div",{key:cat},
-            cat!=="Principal"&&React.createElement("div",{style:{fontSize:9,fontWeight:700,color:C.dim,textTransform:"uppercase",letterSpacing:1,padding:"10px 14px 4px"}},cat),
+            cat!=="Principal"&&React.createElement("div",{style:{fontSize:9,fontWeight:700,color:C.dim,textTransform:"uppercase",letterSpacing:2,padding:"12px 16px 3px",borderTop:"1px solid "+C.border+"44",marginTop:4}},cat),
             tabsCat.map(t=>{
           const active=tab===t.id;
           const badgeVal=t.badge==="at"?atCount:t.badge==="he"?heCount:null;
-          return React.createElement("div",{key:t.id,onClick:()=>{setTab(t.id);setMenuAberto(false);},style:{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",cursor:"pointer",background:active?C.blue+"18":"transparent",borderLeft:`3px solid ${active?C.blue:"transparent"}`,color:active?C.blue:C.muted,fontSize:13,userSelect:"none"}},
-            React.createElement("span",{style:{fontSize:14}},t.icon),
-            React.createElement("span",{style:{flex:1,fontSize:12}},t.label),
-            t.badge==="new"&&React.createElement("span",{style:{background:C.blue,color:"#fff",fontSize:9,padding:"1px 5px",borderRadius:10}},"NEW"),
-            t.badge==="he"&&React.createElement("span",null,React.createElement("span",{style:{background:C.orange,color:"#fff",fontSize:9,padding:"1px 5px",borderRadius:10,marginRight:3}},"NEW"),badgeVal>0&&React.createElement("span",{style:{background:C.yellow,color:"#000",fontSize:9,padding:"1px 5px",borderRadius:10}},badgeVal)),
-            t.badge==="at"&&badgeVal>0&&React.createElement("span",{style:{background:C.yellow,color:"#000",fontSize:9,padding:"1px 5px",borderRadius:10}},badgeVal)
+          return React.createElement("div",{key:t.id,onClick:()=>{setTab(t.id);setMenuAberto(false);},className:"servis-nav-item"+(active?" ativo":""),style:{color:active?C.blue:C.muted}},
+            React.createElement("span",{style:{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,fontSize:13,flexShrink:0,lineHeight:1}},t.icon),
+            React.createElement("span",{style:{flex:1,fontSize:12,lineHeight:1.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},t.label),
+            t.badge==="new"&&React.createElement("span",{style:{background:C.blue,color:"#fff",fontSize:8,padding:"1px 5px",borderRadius:10,flexShrink:0}},"NEW"),
+            t.badge==="he"&&React.createElement("span",{style:{display:"inline-flex",alignItems:"center",gap:2,flexShrink:0}},React.createElement("span",{style:{background:C.orange,color:"#fff",fontSize:8,padding:"1px 4px",borderRadius:10,lineHeight:1.4}},"NEW"),badgeVal>0&&React.createElement("span",{style:{background:C.yellow,color:"#000",fontSize:8,padding:"1px 4px",borderRadius:10,lineHeight:1.4}},badgeVal)),
+            t.badge==="at"&&badgeVal>0&&React.createElement("span",{style:{background:C.yellow,color:"#000",fontSize:8,padding:"1px 4px",borderRadius:10,flexShrink:0}},badgeVal)
           );
         })
           );
@@ -9669,12 +9681,19 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.0 · ago/2026 · Fase 01 — performance, cache, lazy loading")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.6 · ago/2026 · cursor desktop corrigido")
       )
     ),
-    React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative"}},
-      React.createElement("button",{className:"servis-hamburger",onClick:function(){setMenuAberto(true);},title:"Menu"},"☰"),
-      renderTab()
+    React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative",display:"flex",flexDirection:"column"}},
+      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,padding:"6px 12px 4px",background:C.surface,borderBottom:"1px solid "+C.border+"66",position:"sticky",top:0,zIndex:40}},
+        React.createElement("button",{className:"servis-hamburger",style:{position:"relative",top:"auto",margin:0,flexShrink:0},onClick:function(){setMenuAberto(true);},title:"Menu"},"☰"),
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:4,fontSize:11,color:C.muted,overflow:"hidden"}},
+          React.createElement("span",{style:{color:C.dim}},"Servis"),
+          React.createElement("span",{style:{color:C.dim}},"›"),
+          (function(){var t=TABS.find(function(x){return x.id===tab;});return t?React.createElement("span",{style:{color:C.text,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},t.icon+" "+t.label):null;})()
+        )
+      ),
+      React.createElement("div",{style:{flex:1}},renderTab())
     ),
     menuAberto&&React.createElement("div",{className:"servis-overlay",onClick:function(){setMenuAberto(false);}})
   )
