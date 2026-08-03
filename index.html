@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.15 USUARIOS REFORMULADO AGO2026 -->
+<!-- SERVIS v5.16 NORMALIZACAO COND AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -77,6 +77,36 @@ const LOGO_SERVIS="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAACvCAIAAAA
 const SUPA_URL="https://qemqcpqkwlxkbckwwevv.supabase.co";
 const SUPA_KEY="sb_publishable_TDgkeeJ4SICauVqBUDQ9ZQ_6lwT14lc";
 const sbRaw=supabase.createClient(SUPA_URL,SUPA_KEY);
+
+// ── NORMALIZAÇÃO DE NOMES DE CONDOMÍNIO ──────────────────────
+// Remove acentos, lowercase, colapsa espaços, remove caracteres especiais
+function normCond(s){
+  if(!s)return"";
+  return String(s)
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")  // remove acentos
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g," ")                        // caracteres especiais → espaço
+    .replace(/\s+/g," ").trim();                         // colapsa espaços extras
+}
+// Compara dois nomes de condomínio ignorando acento/case/espaço
+function matchCond(a,b){
+  if(!a||!b)return false;
+  var na=normCond(a),nb=normCond(b);
+  return na===nb;
+}
+// Busca um condomínio numa lista pelo nome normalizado
+function findCond(lista,nome){
+  var n=normCond(nome);
+  return lista.find(function(c){return normCond(c.nome||c)===n;});
+}
+// Verifica se um nome está numa lista (Set de nomes normalizados)
+function inCondSet(setNorm,nome){
+  return setNorm.has(normCond(nome));
+}
+// Cria um Set de nomes normalizados a partir de uma lista de condomínios
+function condNormSet(lista){
+  return new Set(lista.map(function(c){return normCond(c.nome||c);}));
+}
 // ── FASE 01: Cache global com TTL de 5 minutos ───────────────
 var _CACHE={};
 var _CACHE_TTL=5*60*1000;
@@ -810,7 +840,7 @@ function NovaOS({setTab,onSave}){
     setBusca(nome);
     setShowList(false);
     // Vincular técnico automaticamente — prioriza o técnico da ÁREA do condomínio
-    var condObj=condsBanco.find(function(c){return (c.nome||c)===nome;});
+    var condObj=findCond(condsBanco,nome);
     if(!condObj)return;
     var tecnicoFinal="";
     // 1º: buscar técnico pela área do condomínio (fonte de verdade)
@@ -4382,7 +4412,7 @@ function Pedidos({usuarioAtual}){
     (!filtStatus||d.status===filtStatus)&&
     (!filtMes||(d.data||"").slice(5,7)===filtMes)&&
     (!filtAno||(d.data||"").slice(0,4)===filtAno)&&
-    (!filtCond||d.cond===filtCond)&&
+    (!filtCond||matchCond(d.cond,filtCond))&&
     (!busca||(d.cond||"").toLowerCase().includes(busca.toLowerCase())||
       (d.descricao||"").toLowerCase().includes(busca.toLowerCase())||
       (d.os||"").includes(busca)||(d.pedido||"").includes(busca)||(d.cod||"").includes(busca))
@@ -6787,7 +6817,7 @@ function RankingSupervisores(){
           return os.filter(function(o){
             if(!o.data||!o.cond)return false;
             var d=new Date(o.data);
-            return (o.cond||"").toLowerCase().includes((prev.cond||"").toLowerCase().slice(0,8))&&d>=ret&&d<=tresM;
+            return matchCond(o.cond,prev.cond)&&d>=ret&&d<=tresM;
           }).length===0;
         });
         var pctQual=prevConcl.length>0?Math.round((semOSP.length/prevConcl.length)*100):100;
@@ -6829,7 +6859,7 @@ function RankingSupervisores(){
           var entrega=new Date(inst.data_entrega_portaria);var tresM=new Date(entrega);tresM.setMonth(tresM.getMonth()+3);
           return os.filter(function(o){
             if(!o.data||!o.cond)return false;var d=new Date(o.data);
-            return (o.cond||"").toLowerCase().includes((inst.cond||"").toLowerCase().slice(0,10))&&d>=entrega&&d<=tresM;
+            return matchCond(o.cond,inst.cond)&&d>=entrega&&d<=tresM;
           }).length===0;
         });
         var pctQualI=instE.length>0?Math.round((semOS.length/instE.length)*100):100;
@@ -8608,11 +8638,11 @@ function MapaCalor({tecsBanco=TECNICOS}){
     AREAS.forEach(function(a){m[a]={conds:0,os:0,prevs:0,tec:a};});
     conds.forEach(function(c){if(c.area_tecnico&&m[c.area_tecnico])m[c.area_tecnico].conds++;});
     osData.filter(function(o){return o.status==="Aberto";}).forEach(function(o){
-      var c=conds.find(function(x){return x.nome===o.cond;});
+      var c=findCond(conds,o.cond);
       if(c&&c.area_tecnico&&m[c.area_tecnico])m[c.area_tecnico].os++;
     });
     prevData.forEach(function(p){
-      var c=conds.find(function(x){return x.nome===p.cond;});
+      var c=findCond(conds,p.cond);
       if(c&&c.area_tecnico&&m[c.area_tecnico])m[c.area_tecnico].prevs++;
     });
     return m;
@@ -8733,7 +8763,7 @@ function MapaCalor({tecsBanco=TECNICOS}){
       if(pts.length<3){erros.push("Linha "+(i+1)+": formato inválido");continue;}
       var nome=pts[0],lat=parseFloat(pts[1]),lng=parseFloat(pts[2]);
       if(isNaN(lat)||isNaN(lng)){erros.push("Linha "+(i+1)+": lat/lng inválidos");continue;}
-      var cond=conds.find(function(c){return c.nome.toLowerCase()===nome.toLowerCase();});
+      var cond=findCond(conds,nome);
       if(!cond){erros.push("Linha "+(i+1)+": condomínio '"+nome+"' não encontrado");continue;}
       var res=await sb.from("condominios").update({lat:lat,lng:lng,geo_status:"importado"}).eq("id",cond.id);
       if(res&&res.error){erros.push("Linha "+(i+1)+": erro ao salvar");continue;}
@@ -8794,7 +8824,7 @@ function MapaCalor({tecsBanco=TECNICOS}){
           +";box-shadow:0 2px 6px rgba(0,0,0,0.5);cursor:pointer'></div>",
         className:"",iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]
       });
-      var osAb=(osData||[]).filter(function(o){return o.cond===c.nome&&o.status==="Aberto";}).length;
+      var osAb=(osData||[]).filter(function(o){return matchCond(o.cond,c.nome)&&o.status==="Aberto";}).length;
       try{
         var mk=L.marker([c.lat,c.lng],{icon:icon});
         mk.bindTooltip(c.nome,{direction:"top",offset:[0,-6],opacity:.9});
@@ -10340,14 +10370,19 @@ function AuditoriaIntegridade(){
         sb.from("instalacoes").select("id,cond").limit(500),
       ]);
       var conds=rcond.data||[];var os=ros.data||[];var prev=rprev.data||[];var inst=rinst.data||[];
-      var nomesValidos=new Set(conds.map(function(c){return(c.nome||"").trim().toLowerCase();}));
+      var nomesValidos=condNormSet(conds);
 
-      // OS com condomínio não cadastrado
-      var osOrfas=os.filter(function(o){return o.cond&&!nomesValidos.has((o.cond||"").trim().toLowerCase());});
+      // OS com condomínio não cadastrado (exato)
+      var osOrfas=os.filter(function(o){return o.cond&&!inCondSet(nomesValidos,o.cond);});
+      // Entre os órfãos, verificar quais casariam com normalização → possíveis variações de acento
+      var osCasariam=osOrfas.filter(function(o){return conds.some(function(c){
+        var nc=normCond(c.nome),no=normCond(o.cond);
+        return nc!==no&&(nc.includes(no.slice(0,6))||no.includes(nc.slice(0,6)));
+      });});
       // Preventivas órfãs
-      var prevOrfas=prev.filter(function(p){return p.cond&&!nomesValidos.has((p.cond||"").trim().toLowerCase());});
+      var prevOrfas=prev.filter(function(p){return p.cond&&!inCondSet(nomesValidos,p.cond);});
       // Instalações órfãs
-      var instOrfas=inst.filter(function(i){return i.cond&&!nomesValidos.has((i.cond||"").trim().toLowerCase());});
+      var instOrfas=inst.filter(function(i){return i.cond&&!inCondSet(nomesValidos,i.cond);});
       // Condomínios sem área técnica
       var semArea=conds.filter(function(c){return !c.area_tecnico;});
       // Condomínios sem coordenadas
@@ -10358,7 +10393,7 @@ function AuditoriaIntegridade(){
       var contNomes={};conds.forEach(function(c){var k=(c.nome||"").trim().toLowerCase();contNomes[k]=(contNomes[k]||0)+1;});
       var dupNomes=conds.filter(function(c){return contNomes[(c.nome||"").trim().toLowerCase()]>1;});
 
-      setResultado({conds,os,prev,inst,osOrfas,prevOrfas,instOrfas,semArea,semGeo,semTec,dupNomes,
+      setResultado({conds,os,prev,inst,osOrfas,prevOrfas,instOrfas,semArea,semGeo,semTec,dupNomes,osCasariam,
         score:Math.max(0,100-osOrfas.length*2-prevOrfas.length*2-instOrfas.length*2-semArea.length-semGeo.length*0.5-dupNomes.length*3)
       });
     }catch(e){alert("Erro na auditoria: "+e.message);}
@@ -10450,6 +10485,7 @@ function AuditoriaIntegridade(){
           React.createElement(KPI,{label:"Condomínios",value:resultado.conds.length,color:C.blue}),
           React.createElement(KPI,{label:"OS analisadas",value:resultado.os.length,color:C.muted}),
           React.createElement(KPI,{label:"Registros órfãos",value:resultado.osOrfas.length+resultado.prevOrfas.length+resultado.instOrfas.length,color:resultado.osOrfas.length>0?C.red:C.green}),
+          React.createElement(KPI,{label:"Possíveis variações de escrita",value:(resultado.osCasariam||[]).length,color:(resultado.osCasariam||[]).length>0?C.orange:C.green}),
           React.createElement(KPI,{label:"Sem área técnica",value:resultado.semArea.length,color:resultado.semArea.length>0?C.yellow:C.green})
         ),
         React.createElement(Secao,{
@@ -10707,7 +10743,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.15 · ago/2026 · tela Usuários reformulada")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.16 · ago/2026 · normalização de nomes de condomínio")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative",display:"flex",flexDirection:"column"}},
