@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.16 NORMALIZACAO COND AGO2026 -->
+<!-- SERVIS v5.17 USUARIOS FIX SELECT AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -4655,8 +4655,13 @@ function Usuarios({usuarioAtual}){
 
   const load=async function(){
     setLoading(true);
-    const{data}=await sb.from("usuarios").select("id,nome,nivel,ativo,primeiro_acesso,foto_url,cargo,filial,email,telefone,criado_em,ultimo_acesso").order("nome");
-    setUsers(data||[]);setLoading(false);
+    // Tenta buscar todos os campos; se falhar (colunas não existem), usa fallback seguro
+    var res=await sb.from("usuarios").select("id,nome,nivel,ativo,primeiro_acesso,foto_url,cargo,filial,email,telefone,criado_em,ultimo_acesso").order("nome");
+    if(res.error){
+      // Fallback: buscar apenas colunas que existem com certeza
+      res=await sb.from("usuarios").select("id,nome,nivel,ativo,primeiro_acesso,foto_url").order("nome");
+    }
+    setUsers(res.data||[]);setLoading(false);
   };
   useEffect(function(){load();},[]);
 
@@ -4740,7 +4745,13 @@ function Usuarios({usuarioAtual}){
       if(f.senha){var ve=servisValidarSenha(f.senha);if(ve){setErr(ve);return;}}
       if(f.senha&&f.senha!==senhaConf){setErr("As senhas não coincidem.");return;}
       setSaving(true);
-      var payload={nome:f.nome.trim(),nivel:f.nivel,ativo:f.ativo,primeiro_acesso:f.primeiro_acesso,foto_url:f.foto_url||null,cargo:f.cargo||null,filial:f.filial||null,email:f.email||null,telefone:f.telefone||null,permissoes:JSON.stringify(perms)};
+      var payload={nome:f.nome.trim(),nivel:f.nivel,ativo:f.ativo,primeiro_acesso:f.primeiro_acesso,foto_url:f.foto_url||null};
+      // Adicionar campos extras apenas se o banco os suportar (evita erro de coluna inexistente)
+      if(f.cargo!==undefined)payload.cargo=f.cargo||null;
+      if(f.filial!==undefined)payload.filial=f.filial||null;
+      if(f.email!==undefined)payload.email=f.email||null;
+      if(f.telefone!==undefined)payload.telefone=f.telefone||null;
+      try{payload.permissoes=JSON.stringify(perms);}catch(e){}
       if(f.senha)payload.senha=await servisHashSenha(f.senha);
       var res;
       if(isNovo){payload.id="usr_"+Date.now();res=await sb.from("usuarios").insert(payload);}
@@ -10743,7 +10754,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.16 · ago/2026 · normalização de nomes de condomínio")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.17 · ago/2026 · usuários fix select colunas")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative",display:"flex",flexDirection:"column"}},
