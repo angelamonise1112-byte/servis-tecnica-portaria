@@ -2820,8 +2820,8 @@ function Preventivas({onSave}){
   const [detalhe,setDetalhe]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
   const [pagina,setPagina]=useState(1);
-
-  const STATUS_COR={"Pendente":C.yellow,"Em andamento":C.blue,"Concluída":C.green};
+  const [modoVis,setModoVis]=useState("conds");
+  const [condHistorico,setCondHistorico]=useState(null);
   const STATUS_OPTS=["Todos","Pendente","Em andamento","Concluída"];
 
   const load=useCallback(async function(){
