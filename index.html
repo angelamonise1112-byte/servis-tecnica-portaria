@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.18 PREVENTIVAS HISTÓRICO AGO2026 -->
+<!-- SERVIS v5.19 FIX MODOVIS ESCOPO AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -1908,7 +1908,7 @@ function Demandas({onSave}){
         })
       )
     ),
-    React.createElement(PaginacaoBar,{pagina,totalPag:modoVis==="conds"?totalPagConds:totalPag,total:modoVis==="conds"?condGrupos.length:(filtered||data||[]).length,setPagina}),
+    React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||data||[]).length,setPagina}),
     modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
     editPessoa&&React.createElement(Modal,{title:"Editar Pessoa",onClose:()=>setEditPessoa(null)},
       React.createElement("div",{style:{marginBottom:12}},React.createElement("label",{style:base.lbl},"Nome"),React.createElement("input",{style:base.inp,value:editPessoa.nome,onChange:e=>setEditPessoa(p=>({...p,nome:e.target.value}))})),
@@ -10814,7 +10814,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.18 · ago/2026 · preventivas histórico por condomínio")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.19 · ago/2026 · fix modoVis escopo errado")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative",display:"flex",flexDirection:"column"}},
