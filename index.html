@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.17 USUARIOS FIX SELECT AGO2026 -->
+<!-- SERVIS v5.18 PREVENTIVAS HISTÓRICO AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -1908,7 +1908,7 @@ function Demandas({onSave}){
         })
       )
     ),
-    React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||data||[]).length,setPagina}),
+    React.createElement(PaginacaoBar,{pagina,totalPag:modoVis==="conds"?totalPagConds:totalPag,total:modoVis==="conds"?condGrupos.length:(filtered||data||[]).length,setPagina}),
     modal!==null&&React.createElement(EditModal,{item:modal?.id?modal:null,onClose:()=>setModal(null)}),
     editPessoa&&React.createElement(Modal,{title:"Editar Pessoa",onClose:()=>setEditPessoa(null)},
       React.createElement("div",{style:{marginBottom:12}},React.createElement("label",{style:base.lbl},"Nome"),React.createElement("input",{style:base.inp,value:editPessoa.nome,onChange:e=>setEditPessoa(p=>({...p,nome:e.target.value}))})),
@@ -3454,8 +3454,18 @@ function Preventivas({onSave}){
         React.createElement("div",{style:{display:"flex",gap:8}},
           React.createElement("button",{style:{...btnStyle(C.green,true),fontSize:12,padding:"8px 14px"},
             onClick:exportarPDF},"📄 Exportar PDF"),
-          React.createElement("button",{style:{...btnStyle(C.blue),padding:"8px 14px"},
-            onClick:function(){setModal({});}},"＋ Nova Preventiva")
+          React.createElement("div",{style:{display:"flex",gap:6}},
+            React.createElement("button",{
+              style:{...btnStyle(modoVis==="conds"?C.blue:C.dim,modoVis!=="conds"),fontSize:11,padding:"6px 12px"},
+              onClick:function(){setModoVis("conds");setPagina(1);}
+            },"🏢 Por Condomínio"),
+            React.createElement("button",{
+              style:{...btnStyle(modoVis==="todas"?C.blue:C.dim,modoVis!=="todas"),fontSize:11,padding:"6px 12px"},
+              onClick:function(){setModoVis("todas");setPagina(1);}
+            },"📋 Todas"),
+            React.createElement("button",{style:{...btnStyle(C.blue),padding:"8px 14px"},
+              onClick:function(){setModal({});}},"➕ Nova Preventiva")
+          )
         )
       ),
       // Filtros
@@ -3562,9 +3572,59 @@ function Preventivas({onSave}){
           )
     ),
     React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||data||[]).length,setPagina}),
-    modal!==null&&React.createElement(EditModal,{item:modal&&modal.id?modal:null,onClose:function(){setModal(null);}}),
+    modal!==null&&React.createElement(EditModal,{item:modal&&modal.id&&!modal._novaPreventiva?modal:null,onClose:function(){setModal(null);}}),
     detalhe&&React.createElement(DetalheModal,{item:detalhe,onClose:function(){setDetalhe(null);}}),
-      confirmDel&&React.createElement(Confirm,{msg:"Excluir esta preventiva?",onYes:function(){del(confirmDel);},onNo:function(){setConfirmDel(null);}})
+    confirmDel&&React.createElement(Confirm,{msg:"Excluir esta preventiva? Esta ação não pode ser desfeita.",onYes:function(){del(confirmDel);},onNo:function(){setConfirmDel(null);}}),
+    condHistorico&&React.createElement(Modal,{title:"📋 Histórico — "+condHistorico.cond,onClose:function(){setCondHistorico(null);},width:700},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}},
+        React.createElement("div",{style:{fontSize:12,color:C.muted}},
+          condHistorico.totalPrevs+" preventiva"+(condHistorico.totalPrevs!==1?"s":"")+" · "+condHistorico.concluidas+" concluída"+(condHistorico.concluidas!==1?"s":"")
+        ),
+        React.createElement("button",{style:{...btnStyle(C.green),fontSize:12},onClick:function(){
+          var ult=condHistorico.ultima||{};
+          var copia=Object.assign({},ult,{id:uid(),_novaPreventiva:true,status:"Pendente",primeira_visita:"",retorno:"",devolucao:"",laudo:"",laudo_enviado:"",obs:"",foto_url:null,laudo_url:null});
+          setCondHistorico(null);setModal(copia);
+        }},"➕ Nova Preventiva")
+      ),
+      React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:0,position:"relative",maxHeight:520,overflowY:"auto",paddingRight:4}},
+        React.createElement("div",{style:{position:"absolute",left:22,top:0,bottom:0,width:2,background:C.border,zIndex:0}}),
+        condHistorico.prevs.map(function(p,i){
+          var cor=STATUS_COR[p.status]||C.dim;
+          var dtRef=p.primeira_visita||p.devolucao||p.retorno||"";
+          var isUlt=i===0;
+          return React.createElement("div",{key:p.id,style:{display:"flex",gap:14,alignItems:"flex-start",marginBottom:12,position:"relative",zIndex:1}},
+            React.createElement("div",{style:{width:44,height:44,borderRadius:"50%",background:cor+"22",border:"3px solid "+cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0,marginTop:4,boxShadow:"0 0 0 4px "+C.surface}},
+              isUlt?"🔵":i===condHistorico.prevs.length-1?"⭐":"✅"
+            ),
+            React.createElement("div",{style:{flex:1,background:C.card,border:"1px solid "+(isUlt?cor:C.border),borderRadius:10,padding:"10px 14px",borderLeft:"4px solid "+cor}},
+              React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}},
+                React.createElement("div",null,
+                  React.createElement("span",{style:{background:cor+"22",color:cor,borderRadius:20,padding:"2px 10px",fontSize:10,fontWeight:700}},p.status),
+                  isUlt&&React.createElement("span",{style:{background:C.blue+"22",color:C.blue,borderRadius:20,padding:"2px 10px",fontSize:9,fontWeight:700,marginLeft:4}},"ÚLTIMA")
+                ),
+                React.createElement("span",{style:{fontSize:11,color:C.dim}},fmt(dtRef))
+              ),
+              React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,marginBottom:6}},
+                [{l:"Técnico",v:p.tecnico||"—"},{l:"1ª Visita",v:fmt(p.primeira_visita)||"—"},{l:"Devolução",v:fmt(p.devolucao)||"—"},
+                 {l:"Retorno",v:fmt(p.retorno)||"—"},{l:"Laudo",v:p.laudo_enviado||p.laudo||"—"},{l:"Nº Pedido",v:p.num_pedido||"—"}]
+                .map(function(k,j){
+                  return React.createElement("div",{key:j,style:{fontSize:10}},
+                    React.createElement("span",{style:{color:C.dim}},k.l+": "),
+                    React.createElement("span",{style:{color:C.muted,fontWeight:600}},k.v)
+                  );
+                })
+              ),
+              p.obs&&React.createElement("div",{style:{fontSize:11,color:C.muted,padding:"4px 8px",background:C.bg,borderRadius:4,marginBottom:6}},p.obs),
+              React.createElement("div",{style:{display:"flex",gap:6}},
+                React.createElement("button",{style:iBtn(C.blue),onClick:function(){setCondHistorico(null);setModal(Object.assign({},p));}},"✏️ Editar"),
+                React.createElement("button",{style:iBtn(C.purple),onClick:function(){setCondHistorico(null);setDetalhe(Object.assign({},p));}},"📁 Docs"),
+                React.createElement("button",{style:iBtn(C.red),onClick:function(){if(confirm("Excluir esta preventiva?"))del(p.id);}},"🗑")
+              )
+            )
+          );
+        })
+      )
+    )
   );
 }
 
@@ -10754,7 +10814,7 @@ function App(){
           ),
           React.createElement("button",{onClick:()=>setUsuario(null),style:{background:C.red+"22",border:"1px solid "+C.red+"44",color:C.red,borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}},"Sair")
         ),
-        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.17 · ago/2026 · usuários fix select colunas")
+        React.createElement("div",{style:{fontSize:9,color:C.dim,textAlign:"center",padding:"4px 0 2px",opacity:0.7}},"v5.18 · ago/2026 · preventivas histórico por condomínio")
       )
     ),
     React.createElement("div",{style:{flex:1,overflowY:"auto",position:"relative",display:"flex",flexDirection:"column"}},
