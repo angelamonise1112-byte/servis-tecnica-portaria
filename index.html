@@ -7853,13 +7853,32 @@ function Organograma(){
     }
     function li(cardHtml,children){return "<li>"+cardHtml+(children?"<ul>"+children+"</ul>":"")+"</li>";}
 
+    var LR_HS2="#F58220";
     var AZ="#1a5fa8",VD="#0e7c5a",CI="#0284c7",RX="#7c3aed",LR="#ea580c",AM="#b45309";
     var filLabel="",filBadge=AZ,corpo="";
     var coord="<div style='text-align:center'>"+card("angela",nmAngela,"Coordenadora Administrativa do Setor Técnico",AZ,"COORDENAÇÃO",56)+card("wesley",nmWesley,"Coordenador Técnico",AZ,"COORDENAÇÃO",56)+"</div>";
 
     var coordNode="<div style='display:flex;gap:8px;justify-content:center'>"+card("angela",nmAngela,"Coord. Administrativa",AZ,"COORDENAÇÃO",50)+card("wesley",nmWesley,"Coord. Técnico",AZ,"COORDENAÇÃO",50)+"</div>";
 
-    if(filial==="ceara"){
+    if(filial==="hiseg-ce"){
+      filLabel="Hiseg — CE";filBadge=LR_HS2;
+      var topo="<div style='text-align:center;margin-bottom:4px'>"+card("angela",nmAngela,nmCargoAngela+" "+nmSubAngela,AZ,"COORDENAÇÃO",50)+card("wesley",nmWesley,nmCargoWesley,AZ,"COORDENAÇÃO",50)+"</div>";
+      var ariCard=card("ari",nmAri,nmCargoAri,AZ,"GERÊNCIA",54);
+      // Caio: Francisco/Alexandre → Felipe
+      var tCaio=
+         li(card("hs_francisco",nmHsFrancisco,"Téc. Sênior · NOTURNO",AZ,"NOTURNO",40),li(card("hs_felipe_m",nmHsFelipe,"Técnico Sênior","#475569","TÉCNICO",36)))
+        +li(card("hs_alexandre",nmHsAlexandre,"Téc. Sênior · NOTURNO",AZ,"NOTURNO",40));
+      // Madson: Helton/Davi/Cont1/Cont2 → Witalo/Herrison/Herrison/Luiz
+      var tMadson=
+         li(card("hs_helton",nmHsHelton,"Téc. Sênior · DIURNO",LR_HS2,"DIURNO",40),li(card("hs_witalo",nmHsWitalo,"Técnico Sênior","#475569","TÉCNICO",36)))
+        +li(card("hs_davi",nmHsDavi,"Téc. Sênior · DIURNO",LR_HS2,"DIURNO",40),li(card("hs_herrison",nmHsHerrison,"Técnico Sênior","#475569","TÉCNICO",36)))
+        +li(card("hs_cont1",nmHsCont1,"Téc. Sênior · DIURNO",LR_HS2,"DIURNO",40),li(card("hs_herrison3",nmHsHerrison,"Técnico Sênior","#475569","TÉCNICO",36)))
+        +li(card("hs_cont2",nmHsCont2,"Téc. Sênior · DIURNO",LR_HS2,"DIURNO",40),li(card("hs_luiz",nmHsLuiz,"Auxiliar Técnico","#475569","TÉCNICO",36)));
+      var sups=
+         li(card("hs_caio",nmHsCaio,"Supervisor Técnico Implantação",VD,"SUPERVISÃO"),tCaio)
+        +li(card("hs_madson",nmHsMadson,"Supervisor Técnico",VD,"SUPERVISÃO"),tMadson);
+      corpo=topo+"<div class='tree'><ul>"+li(ariCard,sups)+"</ul></div>";
+    }else if(filial==="ceara"){
       filLabel="Ceará — CE";filBadge=AZ;
       var supsCE=
          li(card("sup1_ce",nmSup1,"Supervisor 1 · Manutenção",VD,"SUPERVISÃO"),li(card("tec_a_ce",nmTecA,"Área P16",CI,"TÉCNICO",40))+li(card("tec_b_ce",nmTecB,"Área P17",CI,"TÉCNICO",40))+li(card("tec_p1_ce",nmPrev1,"Preventiva",RX,"PREVENTIVA",40)))
