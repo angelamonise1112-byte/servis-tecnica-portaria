@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.23 SPRINT2 UNIFICAÇÃO DE ABAS AGO2026 -->
+<!-- SERVIS v5.23 SPRINT2 UNIFICAÇÃO COMPLETA AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -2791,7 +2791,17 @@ function Dashboard({setTab}){
               })
             )
       ),
-      React.createElement(IaDashboard,null)
+      React.createElement(IaDashboard,null),
+      // ── Widget Produtividade Diária ─────────────────────────
+      React.createElement(Card,{style:{marginBottom:16}},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+          React.createElement("div",{style:{fontSize:15,fontWeight:700}},"⚡ Produtividade do Dia"),
+          React.createElement("button",{style:{...iBtn(C.blue),fontSize:11},onClick:function(){window._goTab&&window._goTab("produtividade");}},
+            "📊 Abrir completo"
+          )
+        ),
+        React.createElement(ProdutividadeDiaria,{usuario:window._servisUser})
+      )
     )
   );
 }
@@ -9222,7 +9232,6 @@ function MapaCalor({tecsBanco=TECNICOS}){
 
 const TABS=[
   {id:"dashboard",icon:"🏠",label:"Dashboard",cat:"Principal"},
-  {id:"nova-os",icon:"➕",label:"Nova OS",cat:"Operacional"},
   {id:"os",icon:"📋",label:"Ordens de Serviço",cat:"Operacional"},
   {id:"preventivas",icon:"🛡️",label:"Preventivas",cat:"Operacional"},
   {id:"sla",icon:"⏱",label:"SLA & Operação",cat:"Operacional"},
@@ -9239,7 +9248,6 @@ const TABS=[
   {id:"pedidos",icon:"🛒",label:"Pedidos",cat:"Gestão"},
   {id:"demandas",icon:"📌",label:"Demandas Adm.",badge:"new",cat:"Gestão"},
   {id:"calendario",icon:"📅",label:"Calendário",cat:"Gestão"},
-  {id:"produtividade",icon:"⚡",label:"Produtividade",cat:"Gestão"},
   {id:"parametros",icon:"⚙️",label:"Parâmetros",cat:"Configuração"},
   {id:"auditoria",icon:"🔍",label:"Auditoria",cat:"Configuração"},
 
@@ -10625,15 +10633,20 @@ function AnaliseOS({activeTab}){
 // ── MÓDULO OS COM SUB-ABAS (Lista + Pendências) ───────────────────────────────
 function OSComAbas({tecsBanco,onSave,somenteLeitura,usuario,setTab}){
   const [abaOS,setAbaOS]=useState("lista");
+  const [novaOSModal,setNovaOSModal]=useState(false);
   return React.createElement("div",{style:{display:"flex",flexDirection:"column",height:"100%"}},
-    React.createElement("div",{style:{background:"#0f1520",borderBottom:"1px solid #1e293b",padding:"0 20px",display:"flex",gap:4,flexShrink:0}},
+    React.createElement("div",{style:{background:"#0f1520",borderBottom:"1px solid #1e293b",padding:"0 20px",display:"flex",alignItems:"center",gap:4,flexShrink:0}},
       [{id:"lista",icon:"📋",label:"Ordens de Serviço"},{id:"pendencias",icon:"⚠️",label:"Pendências"}].map(function(a){
         var ativo=abaOS===a.id;
         return React.createElement("button",{key:a.id,
           style:{background:ativo?"#1a5fa8":"transparent",color:ativo?"#fff":"#64748b",border:"none",borderBottom:ativo?"2px solid #3b82f6":"2px solid transparent",padding:"10px 16px",fontSize:12,fontWeight:ativo?700:400,cursor:"pointer",transition:"all .15s"},
           onClick:function(){setAbaOS(a.id);}
         },a.icon+" "+a.label);
-      })
+      }),
+      !somenteLeitura&&React.createElement("button",{
+        style:{marginLeft:"auto",background:"#10b981",color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap"},
+        onClick:function(){setTab&&setTab("nova-os");}
+      },"➕ Nova OS")
     ),
     React.createElement("div",{style:{flex:1,overflow:"auto"}},
       abaOS==="lista"
@@ -10712,6 +10725,8 @@ function App(){
     setBuscandoGlobal(false);
   },[]);
   const [tab,setTab]=useState("dashboard");
+  // Expor setTab globalmente para widgets no Dashboard acessarem
+  React.useEffect(function(){window._goTab=setTab;return function(){delete window._goTab;};},[setTab]);
   const [atCount,setAtCount]=useState(0);
   const [heCount,setHeCount]=useState(0);
   const [osCount,setOsCount]=useState(0);
