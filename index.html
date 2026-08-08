@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.22 AUDITORIA E CORREÇÃO DE BUGS AGO2026 -->
+<!-- SERVIS v5.23 SPRINT2 UNIFICAÇÃO DE ABAS AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -9225,21 +9225,16 @@ const TABS=[
   {id:"nova-os",icon:"➕",label:"Nova OS",cat:"Operacional"},
   {id:"os",icon:"📋",label:"Ordens de Serviço",cat:"Operacional"},
   {id:"preventivas",icon:"🛡️",label:"Preventivas",cat:"Operacional"},
-  {id:"reincidencias",icon:"🔄",label:"Reincidências",cat:"Operacional"},
   {id:"sla",icon:"⏱",label:"SLA & Operação",cat:"Operacional"},
-  {id:"os-pendencia",icon:"⚠️",label:"OS em Pendência",cat:"Operacional"},
   {id:"instalacoes",icon:"🔧",label:"Instalações",cat:"Operacional"},
   {id:"materiais-lancar",icon:"📦",label:"Materiais",cat:"Operacional"},
   {id:"condominios",icon:"🏢",label:"Condomínios",cat:"Operacional"},
-  {id:"particularidades",icon:"🏷️",label:"Particularidades",cat:"Operacional"},
   {id:"reginaldo",icon:"🔩",label:"Serviço Reginaldo",cat:"Operacional"},
-  {id:"tecnicos",icon:"👷",label:"Técnicos",cat:"Equipe"},
-  {id:"atestados",icon:"🏥",label:"Atestados",badge:"at",cat:"Equipe"},
-  {id:"horas-extras",icon:"⏰",label:"Horas Extras",badge:"he",cat:"Equipe"},
-  {id:"ranking",icon:"🏆",label:"Ranking",cat:"Equipe"},
+
+  {id:"equipe",icon:"👥",label:"Equipe",cat:"Equipe"},
   {id:"rastreamento",icon:"📍",label:"Rastreamento",cat:"Equipe"},
   {id:"organograma",icon:"🗂️",label:"Organograma",cat:"Equipe"},
-  {id:"problemas",icon:"📊",label:"Problemas",cat:"Gestão"},
+  {id:"analise-os",icon:"📊",label:"Análise de OS",cat:"Gestão"},
   {id:"mapa-calor",icon:"🗺️",label:"Mapa de Calor",cat:"Gestão"},
   {id:"pedidos",icon:"🛒",label:"Pedidos",cat:"Gestão"},
   {id:"demandas",icon:"📌",label:"Demandas Adm.",badge:"new",cat:"Gestão"},
@@ -9247,7 +9242,7 @@ const TABS=[
   {id:"produtividade",icon:"⚡",label:"Produtividade",cat:"Gestão"},
   {id:"parametros",icon:"⚙️",label:"Parâmetros",cat:"Configuração"},
   {id:"auditoria",icon:"🔍",label:"Auditoria",cat:"Configuração"},
-  {id:"gestao-areas",icon:"🗺️",label:"Gestão de Áreas",cat:"Configuração"},
+
   {id:"usuarios",icon:"👤",label:"Usuários",cat:"Configuração"},
 ];
 const CAT_ORDEM=["Principal","Operacional","Equipe","Gestão","Configuração"];
@@ -10607,6 +10602,90 @@ function AuditoriaIntegridade(){
   );
 }
 
+// ── MÓDULO ANÁLISE DE OS (Problemas + Reincidências unificados) ──────────────
+function AnaliseOS({activeTab}){
+  const [abaAnlise,setAbaAnlise]=useState("problemas");
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",height:"100%"}},
+    // Sub-navbar
+    React.createElement("div",{style:{background:"#0f1520",borderBottom:"1px solid #1e293b",padding:"0 20px",display:"flex",gap:4,flexShrink:0}},
+      [{id:"problemas",icon:"📊",label:"Problemas"},{id:"reincidencias",icon:"🔄",label:"Reincidências"}].map(function(a){
+        var ativo=abaAnlise===a.id;
+        return React.createElement("button",{key:a.id,
+          style:{background:ativo?"#1a5fa8":"transparent",color:ativo?"#fff":"#64748b",border:"none",borderBottom:ativo?"2px solid #3b82f6":"2px solid transparent",padding:"10px 16px",fontSize:12,fontWeight:ativo?700:400,cursor:"pointer",transition:"all .15s"},
+          onClick:function(){setAbaAnlise(a.id);}
+        },a.icon+" "+a.label);
+      })
+    ),
+    React.createElement("div",{style:{flex:1,overflow:"auto"}},
+      abaAnlise==="problemas"?React.createElement(Problemas,{activeTab:abaAnlise}):React.createElement(Reincidencias,{activeTab:abaAnlise})
+    )
+  );
+}
+
+// ── MÓDULO OS COM SUB-ABAS (Lista + Pendências) ───────────────────────────────
+function OSComAbas({tecsBanco,onSave,somenteLeitura,usuario,setTab}){
+  const [abaOS,setAbaOS]=useState("lista");
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",height:"100%"}},
+    React.createElement("div",{style:{background:"#0f1520",borderBottom:"1px solid #1e293b",padding:"0 20px",display:"flex",gap:4,flexShrink:0}},
+      [{id:"lista",icon:"📋",label:"Ordens de Serviço"},{id:"pendencias",icon:"⚠️",label:"Pendências"}].map(function(a){
+        var ativo=abaOS===a.id;
+        return React.createElement("button",{key:a.id,
+          style:{background:ativo?"#1a5fa8":"transparent",color:ativo?"#fff":"#64748b",border:"none",borderBottom:ativo?"2px solid #3b82f6":"2px solid transparent",padding:"10px 16px",fontSize:12,fontWeight:ativo?700:400,cursor:"pointer",transition:"all .15s"},
+          onClick:function(){setAbaOS(a.id);}
+        },a.icon+" "+a.label);
+      })
+    ),
+    React.createElement("div",{style:{flex:1,overflow:"auto"}},
+      abaOS==="lista"
+        ?React.createElement(OSModule,{tecsBanco:tecsBanco,onSave:onSave,somenteLeitura:somenteLeitura,setTab:setTab})
+        :React.createElement(OSPendencia,{tecsBanco:tecsBanco,onSave:onSave})
+    )
+  );
+}
+
+// ── MÓDULO CONDOMÍNIOS COM SUB-ABAS (Cadastro + Particularidades + Áreas) ─────
+function CondominiosComAbas({onSave,usuario}){
+  const [abaCond,setAbaCond]=useState("cadastro");
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",height:"100%"}},
+    React.createElement("div",{style:{background:"#0f1520",borderBottom:"1px solid #1e293b",padding:"0 20px",display:"flex",gap:4,flexShrink:0}},
+      [{id:"cadastro",icon:"🏢",label:"Condomínios"},{id:"particularidades",icon:"🏷️",label:"Particularidades"},{id:"areas",icon:"🗺️",label:"Gestão de Áreas"}].map(function(a){
+        var ativo=abaCond===a.id;
+        return React.createElement("button",{key:a.id,
+          style:{background:ativo?"#1a5fa8":"transparent",color:ativo?"#fff":"#64748b",border:"none",borderBottom:ativo?"2px solid #3b82f6":"2px solid transparent",padding:"10px 16px",fontSize:12,fontWeight:ativo?700:400,cursor:"pointer",transition:"all .15s"},
+          onClick:function(){setAbaCond(a.id);}
+        },a.icon+" "+a.label);
+      })
+    ),
+    React.createElement("div",{style:{flex:1,overflow:"auto"}},
+      abaCond==="cadastro"?React.createElement(Condominios,{onSave:onSave}):
+      abaCond==="particularidades"?React.createElement(Particularidades,{onSave:onSave}):
+      React.createElement(GestaoAreas,{usuario:usuario})
+    )
+  );
+}
+
+// ── MÓDULO EQUIPE (Técnicos + Atestados + Horas Extras + Ranking) ─────────────
+function ModuloEquipe({tecsBanco,onSave,usuario,activeTab}){
+  const [abaEq,setAbaEq]=useState("tecnicos");
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",height:"100%"}},
+    React.createElement("div",{style:{background:"#0f1520",borderBottom:"1px solid #1e293b",padding:"0 20px",display:"flex",gap:4,flexShrink:0,overflowX:"auto"}},
+      [{id:"tecnicos",icon:"👷",label:"Técnicos"},{id:"atestados",icon:"🏥",label:"Atestados"},{id:"horas-extras",icon:"⏰",label:"Horas Extras"},{id:"ranking",icon:"🏆",label:"Ranking"}].map(function(a){
+        var ativo=abaEq===a.id;
+        return React.createElement("button",{key:a.id,
+          style:{background:ativo?"#1a5fa8":"transparent",color:ativo?"#fff":"#64748b",border:"none",borderBottom:ativo?"2px solid #3b82f6":"2px solid transparent",padding:"10px 16px",fontSize:12,fontWeight:ativo?700:400,cursor:"pointer",transition:"all .15s",whiteSpace:"nowrap",flexShrink:0},
+          onClick:function(){setAbaEq(a.id);}
+        },a.icon+" "+a.label);
+      })
+    ),
+    React.createElement("div",{style:{flex:1,overflow:"auto"}},
+      abaEq==="tecnicos"?React.createElement(Tecnicos,{usuarioAtual:usuario,onSave:onSave}):
+      abaEq==="atestados"?React.createElement(Atestados,{tecsBanco:tecsBanco,onSave:onSave}):
+      abaEq==="horas-extras"?React.createElement(HorasExtras,{tecsBanco:tecsBanco,onSave:onSave}):
+      React.createElement(RankingSupervisores,{activeTab:abaEq})
+    )
+  );
+}
+
 function App(){
   const [usuario,setUsuario]=useState(null);
   const ultimaAtividade=React.useRef(Date.now());
@@ -10720,17 +10799,17 @@ function App(){
     switch(tab){
       case"dashboard":return React.createElement(Dashboard,{setTab});
       case"nova-os":return soLeitura?React.createElement("div",{style:{textAlign:"center",padding:60,color:C.dim}},React.createElement("div",{style:{fontSize:40}},"🔒"),React.createElement("div",{style:{color:C.muted,marginTop:12}},"Acesso restrito")):React.createElement(NovaOS,{setTab,onSave:refresh});
-      case"os":return React.createElement(OSModule,{tecsBanco,onSave:refresh,somenteLeitura:soLeitura||isCentral});
+      case"os":return React.createElement(OSComAbas,{tecsBanco,onSave:refresh,somenteLeitura:soLeitura||isCentral,usuario,setTab});
       case"atestados":return React.createElement(Atestados,{tecsBanco});
       case"horas-extras":return React.createElement(HorasExtras,{tecsBanco});
-      case"problemas":return React.createElement(Problemas,{activeTab:tab});
+      case"analise-os":return React.createElement(AnaliseOS,{activeTab:tab});
       case"sla":return React.createElement(SLA,{activeTab:tab});
-      case"reincidencias":return React.createElement(Reincidencias,{activeTab:tab});
+      case"equipe":return React.createElement(ModuloEquipe,{tecsBanco,onSave:refresh,usuario,activeTab:tab});
       case"tecnicos":return React.createElement(Tecnicos,{usuarioAtual:usuario,onSave:refresh});
       case"particularidades":return React.createElement(Particularidades,null);
       case"os-pendencia":return React.createElement(OSPendencia,{tecsBanco,onSave:refresh});
       case"pedidos":return React.createElement(Pedidos,{usuarioAtual:usuario,onSave:refresh});
-      case"condominios":return React.createElement(Condominios,{usuarioAtual:usuario,onSave:refresh});
+      case"condominios":return React.createElement(CondominiosComAbas,{onSave:refresh,usuario});
       case"preventivas":return React.createElement(Preventivas,{activeTab:tab});
       case"reginaldo":return React.createElement(ServicoReginaldo,{onSave:refresh});
       case"demandas":return React.createElement(Demandas,{onSave:refresh});
