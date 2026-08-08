@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.23 SPRINT2 UNIFICAÇÃO COMPLETA AGO2026 -->
+<!-- SERVIS v5.27 HISEG CE SUPERVISORES VERDES AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -7373,6 +7373,7 @@ function OrgFotoCard({fotoKey,nome,cor,size}){
 // ── ORGANOGRAMA ──────────────────────────────────────────────
 function Organograma(){
   var [filial,setFilial]=useState("ceara");
+  var LR_HS="#F58220"; // laranja Hiseg
   var [condominios,setCondominios]=useState([]);
   var [relatorio,setRelatorio]=useState(null);
   var [editMode,setEditMode]=useState(false);
@@ -7412,6 +7413,26 @@ function Organograma(){
   var [nmAngela,setNmAngela]=useName("angela","Ângela Monise");
   var [nmWesley,setNmWesley]=useName("wesley","Wesley");
   // Piauí
+  // Hiseg CE
+  var [nmGiuliano,setNmGiuliano]=useName("giuliano","Giuliano");
+  var [nmAri,setNmAri]=useName("ari","Ari Braz");
+  var [nmCargoAngela,setNmCargoAngela]=useName("hs_cargo_angela","Coordenadora Administrativa");
+  var [nmSubAngela,setNmSubAngela]=useName("hs_sub_angela","do Setor Técnico");
+  var [nmCargoWesley,setNmCargoWesley]=useName("hs_cargo_wesley","Gerente Operacional Regional");
+  var [nmCargoAri,setNmCargoAri]=useName("hs_cargo_ari","Gerente Geral de Operações");
+  var [nmHsCaio,setNmHsCaio]=useName("hs_caio","Caio Felipe");
+  var [nmHsMadson,setNmHsMadson]=useName("hs_madson","Madson Souza");
+  var [nmHsHellen,setNmHsHellen]=useName("hs_hellen","Hellen");
+  var [nmHsFrancisco,setNmHsFrancisco]=useName("hs_francisco","Francisco Germerson");
+  var [nmHsAlexandre,setNmHsAlexandre]=useName("hs_alexandre","Alexandre Santos");
+  var [nmHsHelton,setNmHsHelton]=useName("hs_helton","Helton Jhonn");
+  var [nmHsDavi,setNmHsDavi]=useName("hs_davi","Davi Santos");
+  var [nmHsCont1,setNmHsCont1]=useName("hs_cont1","A Contratar");
+  var [nmHsCont2,setNmHsCont2]=useName("hs_cont2","A Contratar");
+  var [nmHsFelipe,setNmHsFelipe]=useName("hs_felipe","Felipe Miranda");
+  var [nmHsWitalo,setNmHsWitalo]=useName("hs_witalo","Francisco Witalo");
+  var [nmHsHerrison,setNmHsHerrison]=useName("hs_herrison","Herrison Iury");
+  var [nmHsLuiz,setNmHsLuiz]=useName("hs_luiz","Luiz André");
   var [nmCoordPI,setNmCoordPI]=useName("coord_pi","Coordenador Filial PI");
   var [nmSupPI,setNmSupPI]=useName("sup_pi","Supervisor Manut. e Instalação");
   var [nmTecAPI,setNmTecAPI]=useName("tec_a_pi","Técnico P16");
@@ -7885,6 +7906,171 @@ function Organograma(){
     win.document.open();win.document.write(html);win.document.close();
   }
 
+  // ── HISEG CE ─────────────────────────────────────────────────────────────────
+  function OrgHisegCE(){
+    var LR_HS="#F58220"; // laranja Hiseg
+    var AZ_HS="#1A5FA8"; // azul Servis
+    var tracejado="2px dashed "+LR_HS;
+
+    function boxNome(key,nm,setNm,cargo,sub,variante){
+      var borda=variante==="laranja"||variante===true?"2px dashed "+LR_HS:variante==="verde"?"2px solid #10b981":"1px solid #334155";
+      var bg=variante==="laranja"||variante===true?"#fff8f0":variante==="verde"?"#dcfce7":"#f1f5f9";
+      var cor=variante==="laranja"||variante===true?LR_HS:variante==="verde"?"#065f46":"#1e293b";
+      var avatarBg=variante==="laranja"||variante===true?LR_HS:variante==="verde"?"#10b981":AZ_HS;
+      return React.createElement("div",{style:{background:bg,border:borda,borderRadius:10,padding:"12px 16px",minWidth:180,maxWidth:220,textAlign:"center",position:"relative"}},
+        React.createElement("div",{style:{width:36,height:36,borderRadius:"50%",background:avatarBg,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 8px",fontSize:16,color:"#fff"}},"👤"),
+        editMode
+          ?React.createElement("input",{value:nm,onChange:function(e){setNm(e.target.value);},style:{fontWeight:700,fontSize:13,color:cor,background:"#fff",border:"1px solid #94a3b8",borderRadius:4,padding:"2px 6px",width:"100%",textAlign:"center",marginBottom:2}})
+          :React.createElement("div",{style:{fontWeight:700,fontSize:13,color:cor,fontStyle:variante==="laranja"||variante===true?"italic":"normal"}},nm),
+        React.createElement("div",{style:{fontSize:11,color:"#64748b",marginTop:2}},cargo),
+        sub&&React.createElement("div",{style:{fontSize:10,color:"#94a3b8"}},sub)
+      );
+    }
+
+    function tecBox(key,nm,setNm,turno,laranja,sub){
+      var borda=laranja?"2px dashed "+LR_HS:"1px solid #334155";
+      var bg=laranja?"#fff8f0":"#1e293b";
+      var cor=laranja?LR_HS:"#f1f5f9";
+      var turnoCor=turno==="NOTURNO"?AZ_HS:LR_HS;
+      return React.createElement("div",{style:{background:bg,border:borda,borderRadius:10,padding:"10px 14px",minWidth:150,maxWidth:180,textAlign:"center"}},
+        editMode
+          ?React.createElement("input",{value:nm,onChange:function(e){setNm(e.target.value);},style:{fontWeight:700,fontSize:12,color:cor,background:"rgba(255,255,255,0.1)",border:"1px solid #94a3b8",borderRadius:4,padding:"2px 4px",width:"100%",textAlign:"center",marginBottom:2}})
+          :React.createElement("div",{style:{fontWeight:700,fontSize:12,color:laranja?LR_HS:"#f1f5f9",fontStyle:laranja?"italic":"normal"}},nm),
+        React.createElement("div",{style:{fontSize:10,color:"#64748b",margin:"2px 0"}},"Téc. Sênior · 12/36"),
+        sub&&React.createElement("div",{style:{fontSize:10,color:"#64748b"}},sub),
+        turno&&React.createElement("div",{style:{background:turnoCor,color:"#fff",borderRadius:20,padding:"3px 12px",fontSize:10,fontWeight:700,display:"inline-block",marginTop:4}},turno)
+      );
+    }
+
+    function simpleBox(key,nm,setNm,cargo){
+      return React.createElement("div",{style:{background:"#1e293b",border:"1px solid #334155",borderRadius:10,padding:"10px 14px",minWidth:160,maxWidth:200,textAlign:"center"}},
+        editMode
+          ?React.createElement("input",{value:nm,onChange:function(e){setNm(e.target.value);},style:{fontWeight:700,fontSize:12,color:"#f1f5f9",background:"rgba(255,255,255,0.1)",border:"1px solid #94a3b8",borderRadius:4,padding:"2px 4px",width:"100%",textAlign:"center",marginBottom:2}})
+          :React.createElement("div",{style:{fontWeight:700,fontSize:12,color:"#f1f5f9"}},nm),
+        React.createElement("div",{style:{fontSize:10,color:"#64748b",marginTop:2}},cargo)
+      );
+    }
+
+    function linha(){
+      return React.createElement("div",{style:{display:"flex",justifyContent:"center",marginTop:8,marginBottom:0}},
+        React.createElement("div",{style:{width:2,height:28,background:"#475569"}})
+      );
+    }
+
+    function hLine(qtd){
+      return React.createElement("div",{style:{display:"flex",justifyContent:"center"}},
+        React.createElement("div",{style:{height:2,width:Math.max(40,qtd*130)+"px",background:"#475569",margin:"0 auto"}})
+      );
+    }
+
+    function branchLine(left,right){
+      return React.createElement("div",{style:{position:"relative",height:28}},
+        React.createElement("div",{style:{position:"absolute",left:"50%",top:0,width:2,height:28,background:"#475569",transform:"translateX(-50%)"}}),
+        React.createElement("div",{style:{position:"absolute",left:left,right:right,top:14,height:2,background:"#475569"}})
+      );
+    }
+
+    return React.createElement("div",{style:{color:"#f1f5f9",fontFamily:"system-ui,sans-serif"}},
+      // ── Topo: Ângela + Wesley ─────────────────────────────────────────────
+      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:24,marginBottom:0}},
+        React.createElement("div",{style:{background:"#f1f5f9",border:"1px solid #334155",borderRadius:10,padding:"12px 16px",minWidth:180,maxWidth:220,textAlign:"center"}},
+          React.createElement("div",{style:{width:36,height:36,borderRadius:"50%",background:AZ_HS,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 8px",fontSize:16,color:"#fff"}},"👤"),
+          editMode?React.createElement("input",{value:nmAngela,onChange:function(e){setNmAngela(e.target.value);},style:{fontWeight:700,fontSize:13,color:"#1e293b",background:"#fff",border:"1px solid #94a3b8",borderRadius:4,padding:"2px 6px",width:"100%",textAlign:"center",marginBottom:2}}):React.createElement("div",{style:{fontWeight:700,fontSize:13,color:"#1e293b"}},nmAngela),
+          editMode?React.createElement("input",{value:nmCargoAngela,onChange:function(e){setNmCargoAngela(e.target.value);},style:{fontSize:11,color:"#64748b",background:"#fff",border:"1px solid #e2e8f0",borderRadius:4,padding:"1px 4px",width:"100%",textAlign:"center",marginTop:2}}):React.createElement("div",{style:{fontSize:11,color:"#64748b",marginTop:2}},nmCargoAngela),
+          editMode?React.createElement("input",{value:nmSubAngela,onChange:function(e){setNmSubAngela(e.target.value);},style:{fontSize:10,color:"#94a3b8",background:"#fff",border:"1px solid #e2e8f0",borderRadius:4,padding:"1px 4px",width:"100%",textAlign:"center",marginTop:2}}):React.createElement("div",{style:{fontSize:10,color:"#94a3b8"}},nmSubAngela)
+        ),
+        React.createElement("div",{style:{background:"#f1f5f9",border:"1px solid #334155",borderRadius:10,padding:"12px 16px",minWidth:180,maxWidth:220,textAlign:"center"}},
+          React.createElement("div",{style:{width:36,height:36,borderRadius:"50%",background:AZ_HS,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 8px",fontSize:16,color:"#fff"}},"👤"),
+          editMode?React.createElement("input",{value:nmWesley,onChange:function(e){setNmWesley(e.target.value);},style:{fontWeight:700,fontSize:13,color:"#1e293b",background:"#fff",border:"1px solid #94a3b8",borderRadius:4,padding:"2px 6px",width:"100%",textAlign:"center",marginBottom:2}}):React.createElement("div",{style:{fontWeight:700,fontSize:13,color:"#1e293b"}},nmWesley),
+          editMode?React.createElement("input",{value:nmCargoWesley,onChange:function(e){setNmCargoWesley(e.target.value);},style:{fontSize:11,color:"#64748b",background:"#fff",border:"1px solid #e2e8f0",borderRadius:4,padding:"1px 4px",width:"100%",textAlign:"center",marginTop:2}}):React.createElement("div",{style:{fontSize:11,color:"#64748b",marginTop:2}},nmCargoWesley)
+        )
+      ),
+      linha(),
+      // Ari Braz
+      React.createElement("div",{style:{textAlign:"center",marginBottom:0}},
+        React.createElement("div",{style:{background:AZ_HS,color:"#fff",padding:"10px 28px",borderRadius:8,display:"inline-block",fontWeight:800,fontSize:13}},
+          editMode
+            ?React.createElement("input",{value:nmAri,onChange:function(e){setNmAri(e.target.value);},style:{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.5)",borderRadius:4,padding:"2px 8px",color:"#fff",fontWeight:800,fontSize:13,textAlign:"center",width:160}})
+            :nmAri,
+          editMode
+            ?React.createElement("input",{value:nmCargoAri,onChange:function(e){setNmCargoAri(e.target.value);},style:{display:"block",background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:4,padding:"1px 6px",color:"rgba(255,255,255,0.9)",fontSize:10,textAlign:"center",width:"100%",marginTop:4}})
+            :React.createElement("div",{style:{fontSize:10,fontWeight:400,opacity:.8,marginTop:2}},nmCargoAri)
+        )
+      ),
+      // Linha para os 3 supervisores
+      React.createElement("div",{style:{display:"flex",justifyContent:"center",marginTop:0}},
+        React.createElement("div",{style:{width:2,height:24,background:"#475569"}})
+      ),
+      React.createElement("div",{style:{height:2,background:"#475569",width:540,margin:"0 auto"}}),
+      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:0,width:540,margin:"0 auto",marginBottom:0}},
+        React.createElement("div",{style:{flex:1,display:"flex",justifyContent:"flex-start",paddingLeft:60}}),
+        React.createElement("div",{style:{flex:1,display:"flex",justifyContent:"center"}}),
+        React.createElement("div",{style:{flex:1,display:"flex",justifyContent:"flex-end",paddingRight:60}})
+      ),
+      // 3 colunas de supervisores
+      React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:20,alignItems:"flex-start",marginTop:0}},
+        // Col 1: Caio Felipe
+        React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:0}},
+          React.createElement("div",{style:{width:2,height:24,background:"#475569"}}),
+          boxNome("hs_caio",nmHsCaio,setNmHsCaio,"Supervisor Técnico Implantação",null,"verde"),
+          React.createElement("div",{style:{width:2,height:20,background:"#475569"}}),
+          React.createElement("div",{style:{height:2,background:"#475569",width:340,margin:"0 auto"}}),
+          React.createElement("div",{style:{display:"flex",gap:16,justifyContent:"center",marginTop:0}},
+            React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center"}},
+              React.createElement("div",{style:{width:2,height:20,background:"#475569"}}),
+              tecBox("hs_francisco",nmHsFrancisco,setNmHsFrancisco,"NOTURNO",false)
+            ),
+            React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center"}},
+              React.createElement("div",{style:{width:2,height:20,background:"#475569"}}),
+              React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center"}},
+                tecBox("hs_alexandre",nmHsAlexandre,setNmHsAlexandre,"NOTURNO",false),
+                React.createElement("div",{style:{width:2,height:20,background:"#475569"}}),
+                simpleBox("hs_felipe",nmHsFelipe,setNmHsFelipe,"Técnico Sênior")
+              )
+            )
+          )
+        ),
+        // Col 2: Madson Souza — agora com 4 subordinados
+        React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:0}},
+          React.createElement("div",{style:{width:2,height:24,background:"#475569"}}),
+          boxNome("hs_madson",nmHsMadson,setNmHsMadson,"Supervisor Técnico",null,"verde"),
+          React.createElement("div",{style:{width:2,height:20,background:"#475569"}}),
+          React.createElement("div",{style:{height:2,background:"#475569",width:680,margin:"0 auto"}}),
+          React.createElement("div",{style:{display:"flex",gap:16,justifyContent:"center",marginTop:0}},
+            // Helton Jhonn → Witalo
+            React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center"}},
+              React.createElement("div",{style:{width:2,height:20,background:"#475569"}}),
+              tecBox("hs_helton",nmHsHelton,setNmHsHelton,"DIURNO",false),
+              React.createElement("div",{style:{width:2,height:20,background:"#475569"}}),
+              simpleBox("hs_witalo",nmHsWitalo,setNmHsWitalo,"Técnico Sênior")
+            ),
+            // Davi Santos → Herrison Iury
+            React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center"}},
+              React.createElement("div",{style:{width:2,height:20,background:"#475569"}}),
+              tecBox("hs_davi",nmHsDavi,setNmHsDavi,"DIURNO",false),
+              React.createElement("div",{style:{width:2,height:20,background:"#475569"}}),
+              simpleBox("hs_herrison",nmHsHerrison,setNmHsHerrison,"Técnico Sênior")
+            ),
+            // A Contratar 1 → Herrison Iury 2
+            React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center"}},
+              React.createElement("div",{style:{width:2,height:20,background:"#475569"}}),
+              tecBox("hs_cont1",nmHsCont1,setNmHsCont1,"DIURNO",false),
+              React.createElement("div",{style:{width:2,height:20,background:"#475569"}}),
+              simpleBox("hs_herrison2",nmHsHerrison,setNmHsHerrison,"Técnico Sênior")
+            ),
+            // A Contratar 2 → Luiz André
+            React.createElement("div",{style:{display:"flex",flexDirection:"column",alignItems:"center"}},
+              React.createElement("div",{style:{width:2,height:20,background:"#475569"}}),
+              tecBox("hs_cont2",nmHsCont2,setNmHsCont2,"DIURNO",false),
+              React.createElement("div",{style:{width:2,height:20,background:"#475569"}}),
+              simpleBox("hs_luiz",nmHsLuiz,setNmHsLuiz,"Auxiliar Técnico")
+            )
+          )
+        )
+      )
+    );
+  }
+
   return React.createElement("div",{style:{background:"#0a0f1e",minHeight:"100vh",padding:"28px 16px",fontFamily:"system-ui,sans-serif"}},
     React.createElement("div",{style:{textAlign:"center",marginBottom:28}},
       React.createElement("div",{style:{fontSize:22,fontWeight:900,color:"#f1f5f9",letterSpacing:2,textTransform:"uppercase"}},"Organograma Corporativo"),
@@ -7892,6 +8078,7 @@ function Organograma(){
       // Botões filial e relatório
       React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:8,flexWrap:"wrap"}},
         React.createElement("button",{style:{...btnStyle(C.blue,filial!=="ceara"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("ceara");}},"🏖️ Ceará"),
+        React.createElement("button",{style:{...btnStyle(LR_HS,filial!=="hiseg-ce"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("hiseg-ce");}},"🔒 Hiseg CE"),
         React.createElement("button",{style:{...btnStyle(amarelo.border,filial!=="piaui"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("piaui");}},"🌵 Piauí"),
         React.createElement("button",{style:{...btnStyle("#10b981",filial!=="maranhao"),fontSize:13,padding:"8px 24px"},onClick:function(){setFilial("maranhao");}},"🌊 Maranhão"),
         React.createElement("button",{style:{...btnStyle(C.orange,true),fontSize:13,padding:"8px 24px"},onClick:gerarRelatorio},"📄 Relatório de Áreas"),
@@ -7906,7 +8093,7 @@ function Organograma(){
       )
     ),
     React.createElement("div",{style:{maxWidth:1100,margin:"0 auto"}},
-      filial==="ceara"?OrgCeara():filial==="piaui"?OrgPiaui():OrgMaranhao(),
+      filial==="ceara"?OrgCeara():filial==="hiseg-ce"?OrgHisegCE():filial==="piaui"?OrgPiaui():OrgMaranhao(),
       React.createElement("div",{style:{display:"flex",gap:16,justifyContent:"center",flexWrap:"wrap",marginTop:28,paddingTop:16,borderTop:"1px solid #1e293b"}},
         [[azul.border,"Coordenação"],[verde.border,"Supervisão"],[ciano.border,"Área (clicável)"],[roxo.border,"Preventiva"],[cinza.border,"Terceirizado"],[laranja.border,"Plantonistas"],[amarelo.border,"Coord. Filial"]].map(function(item,i){
           return React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#64748b"}},
