@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.20 PREVENTIVAS FIX STATUS_COR AGO2026 -->
+<!-- SERVIS v5.21 SPRINT1 BUGS CRÍTICOS AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -470,7 +470,7 @@ function HorasExtras({tecsBanco=TECNICOS,onSave}){
 
   const load=useCallback(async()=>{
     setLoading(true);
-    const{data:rows}=await sb.from("horas_extras").select("*").order("data",{ascending:false});
+    const{data:rows}=await sb.from("horas_extras").select("id,tec,mat,data,h_ini,h_fim,total_h,tipo,status,justificativa,resp,obs").order("data",{ascending:false});
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
@@ -682,7 +682,7 @@ function Atestados({tecsBanco=TECNICOS,onSave}){
   const [pagina,setPagina]=useState(1);
   const load=useCallback(async()=>{
     setLoading(true);
-    const{data:rows}=await sb.from("atestados").select("*").order("data",{ascending:false});
+    const{data:rows}=await sb.from("atestados").select("id,tec,mat,data,dias,retorno,motivo,status,resp,obs").order("data",{ascending:false});
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
@@ -818,7 +818,7 @@ function NovaOS({setTab,onSave}){
   const [tecsBanco,setTecsBanco]=useState([]);
 
   useEffect(function(){
-    sb.from("areas_responsaveis").select("*").order("area")
+    sb.from("areas_responsaveis").select("id,area,tecnico,condominios").order("area")
       .then(function(r){setAreasDB(r.data||[]);});
     sb.from("condominios").select("nome,tecnico,area_tecnico").order("nome",{ascending:true})
       .then(function(r){
@@ -1123,7 +1123,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
   }
   const reincMap=useMemo(function(){
     var m={};var lim=new Date();lim.setDate(lim.getDate()-60);var limStr=lim.toISOString().slice(0,10);
-    (data||[]).forEach(function(o){if(o.cond&&o.prob&&(o.data||"")>=limStr){var k=o.cond+"||"+o.prob;m[k]=(m[k]||0)+1;}});
+    (data||[]).forEach(function(o){if(o.cond&&o.prob&&(o.data||"")>=limStr){var k=o.cond+"||"+o.prob;m[k]=(m[k]||0)+1;}},[data]);
     return m;
   },[data]);
   function calcRiscoOS(d,hoje){
@@ -1142,7 +1142,7 @@ function OSModule({tecsBanco=TECNICOS,onSave,somenteLeitura=false}){
     return [].concat(filtered).map(function(d){return {d:d,r:calcRiscoOS(d,hoje).score};}).sort(function(a,b){
       if(b.r!==a.r)return b.r-a.r;
       return (b.d.data||"").localeCompare(a.d.data||"");
-    }).map(function(x){return x.d;});
+    }).map(function(x){return x.d;},[filtered,ordenarPor]);
   },[filtered,ordenarPor,reincMap]);
 
   const totalPags=Math.ceil(filtered.length/POR_PAG);
@@ -1779,7 +1779,7 @@ function Demandas({onSave}){
   const [busca,setBusca]=useState("");
   const load=useCallback(async()=>{
     setLoading(true);
-    const{data:rows}=await sb.from("demandas").select("*").neq("resp","Reginaldo").order("prazo",{ascending:true});
+    const{data:rows}=await sb.from("demandas").select("id,titulo,descricao,status,prazo,prioridade,resp,obs,criado_em").neq("resp","Reginaldo").order("prazo",{ascending:true});
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
@@ -1882,7 +1882,7 @@ function Demandas({onSave}){
               React.createElement("div",{style:{display:"flex",gap:4}},
                 React.createElement("button",{style:iBtn(C.blue),onClick:()=>setModal(d)},"✏️"),
                 React.createElement("button",{style:iBtn(C.purple),title:"Cronograma de Obra",onClick:function(){
-                  var salvo=cronogramasSalvos.find(function(x){return x.cond===d.cond;});
+                  var salvo=cronogramasSalvos.find(function(x){return matchCond(x.cond,d.cond);});
                   if(salvo){
                     var tarefasSalvas;
                     try{tarefasSalvas=JSON.parse(salvo.tarefas);}catch(e){tarefasSalvas=[];}
@@ -2856,7 +2856,7 @@ function Preventivas({onSave}){
         return String(base).slice(0,7)===filtMesConc;
       })();
       return mb&&ms&&mc;
-    });
+    },[data,busca,filtStatus,filtMesConc]);
   },[data,busca,filtStatus,filtMesConc]);
   const paginados=(filtered||[]).slice((pagina-1)*POR_PAG,pagina*POR_PAG);
   const totalPag=Math.ceil((filtered||[]).length/POR_PAG);
@@ -2929,7 +2929,7 @@ function Preventivas({onSave}){
     var value=props.value;var onChange=props.onChange;
     var portas=useMemo(function(){
       if(value){try{return JSON.parse(value);}catch(e){}}
-      return Array.from({length:8},function(_,i){return{porta:i+1,equipamento:"",status:"OK",obs:""};});
+      return Array.from({length:8},function(_,i){return{porta:i+1,equipamento:"",status:"OK",obs:""};},[value]);
     },[value]);
     function atualizar(idx,campo,val){
       var novas=portas.map(function(p,i){return i===idx?Object.assign({},p,{[campo]:val}):p;});
@@ -3021,7 +3021,7 @@ function Preventivas({onSave}){
       if(!condQ)return CONDS.slice(0,8);
       return CONDS.filter(function(c){return c.toLowerCase().includes(condQ.toLowerCase());}).slice(0,10);
     },[condQ]);
-    function upd(k){return function(e){setF(function(p){var n=Object.assign({},p);n[k]=e.target.value;return n;});};}
+    function upd(k){return function(e){setF(function(p){var n=Object.assign({},p);n[k]=e.target.value;return n;},[condQ]);};}
     function selCond(c){setF(function(p){return Object.assign({},p,{cond:c});});setCondQ(c);setShowDrop(false);}
     function doSave(){if(!f.cond){setSaveErr("Selecione o condomínio");return;}save(Object.assign({},f,{id:f.id||uid()}));}
 
@@ -3724,7 +3724,7 @@ function Condominios({onSave}){
     const [f,setF]=useState(item||{nome:"",endereco:"",tecnico:"",area_tecnico:"",obs:""});
     const [areasDB,setAreasDB]=useState([]);
     useEffect(function(){
-      sb.from("areas_responsaveis").select("*").order("area")
+      sb.from("areas_responsaveis").select("id,area,tecnico,condominios").order("area")
         .then(function(r){setAreasDB(r.data||[]);});
     },[]);
     const upd=k=>e=>setF(p=>({...p,[k]:e.target.value}));
@@ -3988,7 +3988,7 @@ function Tecnicos({onSave}){
   const stColors={"Online":C.green,"Campo":C.yellow,"Offline":C.dim};
   const load=useCallback(async()=>{
     setLoading(true);
-    const{data:rows}=await sb.from("tecnicos").select("*").order("nome",{ascending:true});
+    const{data:rows}=await sb.from("tecnicos").select("id,nome,mat,tipo,status,telefone,email,area").order("nome",{ascending:true});
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
@@ -4172,7 +4172,7 @@ function OSPendencia({tecsBanco=TECNICOS,onSave}){
 
   const load=useCallback(async()=>{
     setLoading(true);
-    const{data:rows}=await sb.from("os_pendencia").select("*").order("prazo",{ascending:true});
+    const{data:rows}=await sb.from("os_pendencia").select("id,num_os,cond,tec,status,motivo,responsavel,data,data_pendencia,prazo,obs").order("prazo",{ascending:true});
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
@@ -4460,7 +4460,7 @@ function Pedidos({usuarioAtual}){
 
   const load=useCallback(async()=>{
     setLoading(true);
-    const{data:rows}=await sb.from("pedidos").select("*").order("data",{ascending:false});
+    const{data:rows}=await sb.from("pedidos").select("id,num,data,cond,tecnico,item,qtd,status,obs,prioridade,valor").order("data",{ascending:false});
     setData(rows||[]);setLoading(false);
   },[]);
   useEffect(()=>{load();},[load]);
@@ -4490,7 +4490,7 @@ function Pedidos({usuarioAtual}){
       const logEntries=[];
       Object.keys(campos).forEach(k=>{
         const va=String(antes[k]||"");const vd=String(item[k]||"");
-        if(va!==vd)logEntries.push({id:uid(),pedido_id:item.id,campo:campos[k],valor_antes:va,valor_depois:vd,usuario:usuarioAtual?.nome||"sistema"});
+        if(va!==vd)logEntries.push({id:uid(),pedido_id:item.id,campo:campos[k],valor_antes:va,valor_depois:vd,usuario:usuarioAtual?.nome||"sistema"},[data,filtStatus,filtMes,filtAno,busca]);
       });
       if(logEntries.length>0)await sb.from("pedidos_log").insert(logEntries);
       await sb.from("pedidos").update(item).eq("id",item.id);
@@ -4732,7 +4732,7 @@ function Usuarios({usuarioAtual}){
       var mn=!filtNivel||u.nivel===filtNivel;
       var ms=!filtStatus||(filtStatus==="ativo"?u.ativo===true:u.ativo===false);
       return mb&&mn&&ms;
-    });
+    },[users,busca,filtNivel,filtStatus,sortBy,sortDir]);
     r.sort(function(a,b){
       var va=a[sortBy]||"";var vb=b[sortBy]||"";
       if(sortBy==="ativo"){va=a.ativo?1:0;vb=b.ativo?1:0;}
@@ -5182,7 +5182,7 @@ function Reincidencias(){
       const matchAno=ano===filtAno;
       const matchMes=!filtMes||mes===filtMes;
       return matchAno&&matchMes;
-    });
+    },[data,filtAno,filtMes]);
     // Agrupar por condomínio + problema (normalizado)
     const map={};
     osFiltradas.forEach(os=>{
@@ -5428,12 +5428,12 @@ function SLA(){
       const matchAno=!filtAno||p[0]===filtAno;
       const matchMes=!filtMes||p[1]===filtMes;
       return matchFiltro&&matchBusca&&matchTec&&matchAno&&matchMes;
-    });
+    },[data]);
   },[osComSLA,filtro,busca,filtTec,filtAno,filtMes]);
 
   // Estatísticas
   const aVencer=useMemo(function(){
-    var abertas=(osComSLA||[]).filter(function(o){return o&&o.status==="Aberto";});
+    var abertas=(osComSLA||[]).filter(function(o){return o&&o.status==="Aberto";},[osComSLA]);
     // urgência: vencidas primeiro (horasRestantes 0), depois menor tempo restante
     return [].concat(abertas).sort(function(a,b){
       var av=a.vencido?-1:0, bv=b.vencido?-1:0;
@@ -5469,7 +5469,7 @@ function SLA(){
           if(!meses[mes])meses[mes]={dentro:0,total:0};
           meses[mes].total++;
           if(o.horasUteis<=48)meses[mes].dentro++;
-        });
+        },[osComSLA]);
         return Object.entries(meses).sort(function(a,b){return a[0]<b[0]?-1:1;}).slice(-6).map(function(e){
           return{mes:e[0],pct:e[1].total>0?Math.round(e[1].dentro/e[1].total*100):0,total:e[1].total};
         });
@@ -6384,14 +6384,14 @@ function Instalacoes({onSave}){
   const load=useCallback(async()=>{
     setLoading(true);
     try{sb.from("cronogramas_obra").select("*").order("criado_em",{ascending:false}).then(function(res){if(res&&res.data)setCronogramasSalvos(res.data);});}catch(e){}
-    const{data:rows}=await sb.from("instalacoes").select("*").order("data_inicio",{ascending:false});
+    const{data:rows}=await sb.from("instalacoes").select("id,cond,tec,status,data_inicio,data_retirada_material,data_inicio_obra,data_reuniao_alinhamento,data_entrega_dispositivo,data_checklist,data_entrega_portaria,num_pedido,equipamentos,obs,foto_url").order("data_inicio",{ascending:false});
     setData(rows||[]);setLoading(false);
   },[]);
 
   // Lista final p/ o seletor: banco + nomes já usados em instalações (sem duplicar)
   const condosOpcoes=useMemo(function(){
     var set={};
-    (condosDB||[]).forEach(function(n){if(n)set[n]=true;});
+    (condosDB||[]).forEach(function(n){if(n)set[n]=true;},[condosDB,data]);
     (data||[]).forEach(function(d){if(d&&d.cond)set[d.cond]=true;});
     return Object.keys(set).sort(function(a,b){return a.localeCompare(b,"pt");});
   },[condosDB,data]);
@@ -6418,7 +6418,7 @@ function Instalacoes({onSave}){
 
   const salvarCronograma=async function(cr){
     if(!cr.cond){alert("Selecione o condomínio antes de salvar o cronograma.");return;}
-    var existente=cronogramasSalvos.find(function(x){return x.cond===cr.cond;});
+    var existente=cronogramasSalvos.find(function(x){return matchCond(x.cond,cr.cond);});
     var registro={cond:cr.cond,sindico:cr.sindico||"",supervisor:cr.supervisor||"",inicio:cr.inicio||"",tarefas:JSON.stringify(cr.tarefas||[]),criado_em:new Date().toISOString()};
     var res;
     if(existente){
@@ -6809,7 +6809,7 @@ function RankingSupervisores(){
       if(!d.data)return false;
       var p=d.data.slice(0,10).split("-");
       return parseInt(p[1])===mesNum&&parseInt(p[0])===anoNum;
-    });
+    },[os,preventivas,instalacoes,tecnicos,condominios,mesSel,anoSel]);
 
     return supervisores.map(function(sup){
       // ── MANUTENÇÃO ──────────────────────────────────────────
@@ -7238,7 +7238,7 @@ function Problemas(){
       if(!d.data)return false;
       const[ano,mes]=d.data.split("-");
       return (!mesSel||mes===mesSel)&&(!anoSel||ano===anoSel);
-    });
+    },[os,mesSel,anoSel]);
   },[os,mesSel,anoSel]);
 
   const anos=useMemo(()=>[...new Set(os.map(d=>d.data?.slice(0,4)).filter(Boolean))].sort().reverse(),[os]);
@@ -7253,7 +7253,7 @@ function Problemas(){
       if(d.status==="Aberto")map[k].abertas++;
       if(d.cond)map[k].conds.add(d.cond);
       if(d.tec)map[k].tecs.add(d.tec);
-    });
+    },[filtered]);
     return Object.values(map).sort((a,b)=>b.total-a.total).slice(0,20).map(d=>({...d,conds:d.conds.size,tecs:d.tecs.size}));
   },[filtered]);
 
@@ -7265,7 +7265,7 @@ function Problemas(){
       if(!map[k])map[k]={cond:k,total:0,abertas:0};
       map[k].total++;
       if(d.status==="Aberto")map[k].abertas++;
-    });
+    },[filtered]);
     return Object.values(map).sort((a,b)=>b.total-a.total).slice(0,10);
   },[filtered]);
 
@@ -7434,7 +7434,7 @@ function Organograma(){
       var a=c.area_tecnico||"Sem área";
       if(!map[a])map[a]=[];
       map[a].push(c);
-    });
+    },[condominios]);
     return map;
   },[condominios]);
 
@@ -8054,7 +8054,7 @@ function GestaoAreas({usuario}){
   const load=useCallback(async function(){
     setLoading(true);
     var[rA,rT,rL]=await Promise.all([
-      sb.from("areas_responsaveis").select("*").order("area"),
+      sb.from("areas_responsaveis").select("id,area,tecnico,condominios").order("area"),
       sb.from("tecnicos").select("nome,mat").order("nome"),
       sb.from("areas_audit_log").select("*").order("data_hora",{ascending:false}).limit(50),
     ]);
@@ -8707,7 +8707,7 @@ function MapaCalor({tecsBanco=TECNICOS}){
   // ── Stats por técnico ────────────────────────────────────────
   var statsPorTec=useMemo(function(){
     var m={};
-    AREAS.forEach(function(a){m[a]={conds:0,os:0,prevs:0,tec:a};});
+    AREAS.forEach(function(a){m[a]={conds:0,os:0,prevs:0,tec:a};},[conds,osData,prevData]);
     conds.forEach(function(c){if(c.area_tecnico&&m[c.area_tecnico])m[c.area_tecnico].conds++;});
     osData.filter(function(o){return o.status==="Aberto";}).forEach(function(o){
       var c=findCond(conds,o.cond);
@@ -8726,7 +8726,7 @@ function MapaCalor({tecsBanco=TECNICOS}){
       if(filtBusca&&!(c.nome||"").toLowerCase().includes(filtBusca.toLowerCase())&&
          !(c.endereco||"").toLowerCase().includes(filtBusca.toLowerCase()))return false;
       return true;
-    });
+    },[conds,filtTec,filtBusca]);
   },[conds,filtTec,filtBusca]);
 
   // ── Geocodificação via Nominatim ──────────────────────────────
@@ -9266,7 +9266,7 @@ function MateriaisLancar({usuario,onSave}){
 
   const load=useCallback(function(){
     setLoading(true);
-    sb.from("materiais_lancar").select("*").order("criado_em",{ascending:false}).then(function(res){
+    sb.from("materiais_lancar").select("id,cond,item,qtd,status,obs,criado_em,tecnico").order("criado_em",{ascending:false}).then(function(res){
       if(res&&res.error)console.error("materiais_lancar:",res.error.message);
       setData((res&&res.data)||[]);setLoading(false);
     });
@@ -10247,13 +10247,13 @@ function RankingAtestados({tecsBanco=TECNICOS,data:dataProp}){
     filtrados.forEach(function(d){
       if(!mp[d.tec])mp[d.tec]={nome:d.tec,qt:0,dias:0};
       mp[d.tec].qt++;mp[d.tec].dias+=(parseInt(d.dias)||0);
-    });
+    },[filtrados]);
     return Object.values(mp).sort(function(a,b){return b.qt-a.qt||b.dias-a.dias;});
   },[filtrados]);
 
   // ── Ranking anual (ignora filtro de mês) ──
   const rankAno=useMemo(()=>{
-    var filtAno=data.filter(function(d){return !tecSel||d.tec===tecSel;});
+    var filtAno=data.filter(function(d){return !tecSel||d.tec===tecSel;},[data,tecSel,anoSel]);
     var mp={};
     filtAno.forEach(function(d){
       if(!mp[d.tec])mp[d.tec]={nome:d.tec,qt:0,dias:0};
@@ -10270,7 +10270,7 @@ function RankingAtestados({tecsBanco=TECNICOS,data:dataProp}){
     for(var m=1;m<=12;m++){mp[String(m).padStart(2,"0")]=0;mpDias[String(m).padStart(2,"0")]=0;}
     data.filter(function(d){return !tecSel||d.tec===tecSel;}).forEach(function(d){
       var m=(d.data||"").slice(5,7);if(m&&mp[m]!==undefined){mp[m]++;mpDias[m]+=(parseInt(d.dias)||0);}
-    });
+    },[data,tecSel]);
     return Object.keys(mp).map(function(m,i){return{mes:MESES_ABR[i],at:mp[m],dias:mpDias[m]};});
   },[data,tecSel]);
 
