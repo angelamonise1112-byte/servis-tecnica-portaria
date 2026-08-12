@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.27 HISEG CE SUPERVISORES VERDES AGO2026 -->
+<!-- SERVIS v5.27 CENTRAL INTELIGÊNCIA CORRIGIDA AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -8585,15 +8585,19 @@ function IaDashboard(){
     var anoAtual=String(hoje.getFullYear());
     var mesAtual=String(hoje.getMonth()+1).padStart(2,"0");
     try{
-      var [rosRes,prevRes,tecRes,condRes,heRes,atRes]=await Promise.all([
+      var [rosRes,prevRes,tecRes,condRes,heRes,atRes,pendRes,matsRes,instRes]=await Promise.all([
         sb.from("os").select("num,data,status,cond,tec,prob,pri,data_fechamento").gte("data",anoAtual+"-01-01").order("data",{ascending:false}),
         sb.from("preventivas").select("id,cond,status,tecnico,primeira_visita,retorno"),
         sb.from("tecnicos").select("nome,status"),
         sb.from("condominios").select("nome,tecnico,area_tecnico"),
-        sb.from("horas_extras").select("tec,status,total_h"),
-        sb.from("atestados").select("tec,status,retorno")
+        sb.from("horas_extras").select("tec,status,total_h,data"),
+        sb.from("atestados").select("tec,status,retorno"),
+        sb.from("os_pendencia").select("status,data,data_pendencia,tec,motivo").limit(500),
+        sb.from("materiais_lancar").select("material,valor_total,condominio,criado_em").limit(500),
+        sb.from("instalacoes").select("status,data_inicio,cond").limit(200)
       ]);
       var os=rosRes.data||[],prevs=prevRes.data||[],tecs=tecRes.data||[],conds=condRes.data||[],hes=heRes.data||[],ats=atRes.data||[];
+      var pend=pendRes.data||[],mats=matsRes.data||[],insts=instRes.data||[];
       var osAb=os.filter(function(o){return o.status==="Aberto";});
       var osFech=os.filter(function(o){return o.status!=="Aberto";});
       var osMes=os.filter(function(o){return (o.data||"").slice(5,7)===mesAtual;});
@@ -8630,7 +8634,7 @@ function IaDashboard(){
       // Horas extras
       var heMes=hes.filter(function(h){return h.data&&String(h.data).slice(0,7)===anoAtual+"-"+mesAtual;});
       var heTotalH=heMes.reduce(function(s,h){return s+(parseFloat(h.total_h)||0);},0);
-      var hePorTec=topMapArr(heMes,"tecnico",8).map(function(e){return e[0];});
+      var hePorTec=topMapArr(heMes,"tec",8).map(function(e){return e[0];});
       // OS paradas (abertas há muito tempo)
       var osParadas=osAb.filter(function(o){return o.data&&(function(){var d=Math.floor((hoje-new Date(String(o.data).slice(0,10)+"T12:00:00"))/86400000);return d>15;})();}).length;
       // Detecção de aumento de chamados: este mês vs mês anterior por condomínio
