@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.27 CENTRAL INTELIGÊNCIA MOTOR LOCAL AGO2026 -->
+<!-- SERVIS v5.27 PRODUTIVIDADE RELATO DO TÉCNICO AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -10288,7 +10288,7 @@ function ProdutividadeDiaria({usuario}){
 
     // OS fechadas hoje (data_fechamento = hoje)
     var [rFech]=await Promise.all([
-      sb.from("os").select("num,cond,tec,data_fechamento,prob").eq("data_fechamento",filtData),
+      sb.from("os").select("num,cond,tec,data_fechamento,prob,relato,descricao").eq("data_fechamento",filtData),
     ]);
     var fechHoje=rFech.data||[];
 
@@ -10546,8 +10546,16 @@ function ProdutividadeDiaria({usuario}){
               tecSel===t.id&&t.osFech.length>0&&React.createElement("div",{style:{marginTop:10,paddingTop:10,borderTop:"1px solid "+C.border}},
                 React.createElement("div",{style:{fontSize:10,color:C.muted,marginBottom:6,fontWeight:600}},"OS concluídas hoje:"),
                 t.osFech.map(function(o){
-                  return React.createElement("div",{key:o.num,style:{fontSize:10,color:C.text,padding:"3px 0",borderBottom:"1px solid "+C.border+"22"}},
-                    React.createElement("span",{style:{color:C.cyan,fontWeight:700}},"#"+o.num)," — "+o.cond
+                  var relato=o.relato||o.descricao||"";
+                  return React.createElement("div",{key:o.num,style:{fontSize:10,color:C.text,padding:"5px 0",borderBottom:"1px solid "+C.border+"22"}},
+                    React.createElement("div",null,
+                      React.createElement("span",{style:{color:C.cyan,fontWeight:700}},"#"+o.num),
+                      React.createElement("span",{style:{color:C.muted}}," — "+o.cond),
+                      o.prob&&React.createElement("span",{style:{color:C.dim}}," · "+o.prob)
+                    ),
+                    relato&&React.createElement("div",{style:{color:C.dim,fontSize:9,marginTop:2,fontStyle:"italic",paddingLeft:4}},
+                      "↳ "+relato.slice(0,120)+(relato.length>120?"...":"")
+                    )
                   );
                 })
               )
@@ -10583,13 +10591,18 @@ function ProdutividadeDiaria({usuario}){
         React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.muted,letterSpacing:1,textTransform:"uppercase",marginBottom:12}},"✅ OS Concluídas Hoje ("+d.osFechadasHoje+")"),
         React.createElement(Card,null,
           React.createElement(Table,{
-            cols:["Nº OS","Condomínio","Técnico","Problema"],
+            cols:["Nº OS","Condomínio","Técnico","Problema","Relato do Técnico"],
             rows:d.fechHoje.map(function(o){
+              var relato=o.relato||o.descricao||"";
               return [
                 React.createElement("span",{style:{color:C.cyan,fontWeight:700,fontSize:11}},o.num),
                 React.createElement("span",{style:{fontSize:11}},o.cond),
                 React.createElement("span",{style:{fontSize:11}},o.tec||"—"),
                 React.createElement("span",{style:{fontSize:11}},o.prob||"—"),
+                relato
+                  ?React.createElement("span",{style:{fontSize:11,color:C.muted,fontStyle:"italic"}},
+                      relato.length>80?relato.slice(0,80)+"...":relato)
+                  :React.createElement("span",{style:{color:C.dim,fontSize:11}},"—"),
               ];
             })
           })
