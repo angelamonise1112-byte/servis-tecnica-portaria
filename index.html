@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.27 PRODUTIVIDADE RELATO DO TÉCNICO AGO2026 -->
+<!-- SERVIS v5.27 USUARIOS MODAL FIX AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -3583,7 +3583,7 @@ function Preventivas({onSave}){
           )
     ),
     React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||data||[]).length,setPagina}),
-    modal!==null&&React.createElement(EditModal,{item:modal&&modal.id&&!modal._novaPreventiva?modal:null,onClose:function(){setModal(null);}}),
+    modal!==null&&React.createElement(EditModal,{key:"usuarios-edit-modal",item:modal&&modal.id?modal:null,onClose:function(){setModal(null);}}),
     detalhe&&React.createElement(DetalheModal,{item:detalhe,onClose:function(){setDetalhe(null);}}),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir esta preventiva? Esta ação não pode ser desfeita.",onYes:function(){del(confirmDel);},onNo:function(){setConfirmDel(null);}}),
     condHistorico&&React.createElement(Modal,{title:"📋 Histórico — "+condHistorico.cond,onClose:function(){setCondHistorico(null);},width:700},
@@ -4700,6 +4700,193 @@ function Pedidos({usuarioAtual}){
 }
 
 // ── USUÁRIOS ──────────────────────────────────────────────────
+
+// ── Modais globais de Usuários (fora do componente para evitar remontagem) ──
+function UsuariosEditModal({item,onClose,onSaved}){
+  var isNovo=!item||!item.id;
+  var [f,setF]=useState(item||{nome:"",email:"",telefone:"",cargo:"",filial:"",nivel:"tecnico",ativo:true,primeiro_acesso:true,foto_url:"",senha:""});
+  var [senhaConf,setSenhaConf]=useState("");
+  var [showPass,setShowPass]=useState(false);
+  var [err,setErr]=useState("");
+  var [saving,setSaving]=useState(false);
+  var [abaSel,setAbaSel]=useState("dados");
+  var [perms,setPerms]=useState(function(){try{return JSON.parse(item&&item.permissoes?item.permissoes:"{}");}catch(e){return{};}});
+  var upd=function(k){return function(e){setF(function(p){var n={...p};n[k]=e.target.value;return n;});};};
+  var updBool=function(k){return function(e){setF(function(p){var n={...p};n[k]=e.target.checked;return n;});};};
+
+  var save=async function(){
+    setErr("");
+    if(!f.nome.trim()){setErr("Informe o nome.");return;}
+    if(isNovo&&!f.senha){setErr("Informe uma senha.");return;}
+    if(f.senha){var ve=servisValidarSenha(f.senha);if(ve){setErr(ve);return;}}
+    if(f.senha&&f.senha!==senhaConf){setErr("As senhas não coincidem.");return;}
+    setSaving(true);
+    var payload={nome:f.nome.trim(),nivel:f.nivel,ativo:f.ativo,primeiro_acesso:f.primeiro_acesso,foto_url:f.foto_url||null};
+    // Adicionar campos extras apenas se o banco os suportar (evita erro de coluna inexistente)
+    if(f.cargo!==undefined)payload.cargo=f.cargo||null;
+    if(f.filial!==undefined)payload.filial=f.filial||null;
+    if(f.email!==undefined)payload.email=f.email||null;
+    if(f.telefone!==undefined)payload.telefone=f.telefone||null;
+    try{payload.permissoes=JSON.stringify(perms);}catch(e){}
+    if(f.senha)payload.senha=await servisHashSenha(f.senha);
+    var res;
+    if(isNovo){payload.id="usr_"+Date.now();res=await sb.from("usuarios").insert(payload);}
+    else{res=await sb.from("usuarios").update(payload).eq("id",f.id||item.id);}
+    if(res&&res.error){setErr("Erro: "+res.error.message);setSaving(false);return;}
+    setSaving(false);onClose();load();
+    setSavingMsg(isNovo?"✅ Usuário criado!":"✅ Usuário atualizado!");
+    setTimeout(function(){setSavingMsg("");},3000);
+  };
+
+  var ni=NIVEL_INFO[f.nivel]||NIVEL_INFO.visualizador;
+  var ABAS=[{id:"dados",l:"👤 Dados"},{id:"acesso",l:"🔐 Acesso"},{id:"perms",l:"🧩 Permissões"}];
+
+  return React.createElement(Modal,{title:isNovo?"+ Novo Usuário":"✏️ Editar Usuário",onClose,width:560},
+    // Avatar + nome no topo
+    React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12,marginBottom:16,padding:"12px 14px",background:C.bg,borderRadius:10}},
+      f.foto_url
+        ?React.createElement("img",{src:f.foto_url,style:{width:48,height:48,borderRadius:"50%",objectFit:"cover",border:"2px solid "+ni.cor}})
+        :React.createElement("div",{style:{width:48,height:48,borderRadius:"50%",background:ni.cor+"33",border:"2px solid "+ni.cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}},ni.icon),
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontWeight:700,fontSize:14}},f.nome||"Novo Usuário"),
+        React.createElement("div",{style:{fontSize:11,color:ni.cor,fontWeight:600}},ni.label),
+        React.createElement("div",{style:{fontSize:10,color:C.dim}},ni.desc)
+      )
+    ),
+    // Abas internas
+    React.createElement("div",{style:{display:"flex",gap:4,marginBottom:14,borderBottom:"1px solid "+C.border,paddingBottom:8}},
+      ABAS.map(function(a){return React.createElement("button",{key:a.id,style:{...btnStyle(C.blue,abaSel!==a.id),fontSize:11,padding:"5px 12px"},onClick:function(){setAbaSel(a.id);}},a.l);})
+    ),
+    // Aba Dados
+    abaSel==="dados"&&React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
+      React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Nome completo *"),React.createElement("input",{style:base.inp,value:f.nome,onChange:upd("nome"),placeholder:"Nome completo"})),
+      React.createElement("div",null,React.createElement("label",{style:base.lbl},"E-mail"),React.createElement("input",{style:base.inp,value:f.email||"",onChange:upd("email"),placeholder:"email@servis.com.br",type:"email"})),
+      React.createElement("div",null,React.createElement("label",{style:base.lbl},"Telefone"),React.createElement("input",{style:base.inp,value:f.telefone||"",onChange:upd("telefone"),placeholder:"(85) 9 0000-0000"})),
+      React.createElement("div",null,React.createElement("label",{style:base.lbl},"Cargo"),React.createElement("input",{style:base.inp,value:f.cargo||"",onChange:upd("cargo"),placeholder:"Ex: Técnico de Campo"})),
+      React.createElement("div",null,React.createElement("label",{style:base.lbl},"Filial"),
+        React.createElement("select",{style:base.sel,value:f.filial||"",onChange:upd("filial")},
+          React.createElement("option",{value:""},"Selecione..."),
+          ["CE","BA","MA","PI","AM"].map(function(f2){return React.createElement("option",{key:f2,value:f2},f2);})
+        )
+      ),
+      React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"URL da Foto (opcional)"),React.createElement("input",{style:base.inp,value:f.foto_url||"",onChange:upd("foto_url"),placeholder:"https://..."}))
+    ),
+    // Aba Acesso
+    abaSel==="acesso"&&React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
+      React.createElement("div",{style:{gridColumn:"1/-1"}},
+        React.createElement("label",{style:base.lbl},"Nível de Acesso"),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginTop:4}},
+          NIVEIS.map(function(n){
+            var ni2=NIVEL_INFO[n];var ativo=f.nivel===n;
+            return React.createElement("div",{key:n,style:{border:"2px solid "+(ativo?ni2.cor:C.border),borderRadius:8,padding:"8px 4px",textAlign:"center",cursor:"pointer",background:ativo?ni2.cor+"22":"transparent"},onClick:function(){setF(function(p){return{...p,nivel:n};});}},
+              React.createElement("div",{style:{fontSize:16}},ni2.icon),
+              React.createElement("div",{style:{fontSize:9,fontWeight:700,color:ativo?ni2.cor:C.dim,marginTop:3}},ni2.label)
+            );
+          })
+        )
+      ),
+      React.createElement("div",null,React.createElement("label",{style:base.lbl},(isNovo?"Senha *":"Nova senha (deixe em branco para manter)")),
+        React.createElement("div",{style:{position:"relative"}},
+          React.createElement("input",{style:{...base.inp,paddingRight:32},type:showPass?"text":"password",value:f.senha||"",onChange:upd("senha"),placeholder:isNovo?"Senha":"Nova senha"}),
+          React.createElement("span",{style:{position:"absolute",right:8,top:10,cursor:"pointer",fontSize:14,color:C.muted},onClick:function(){setShowPass(function(v){return !v;})}},showPass?"🙈":"👁")
+        ),
+        f.senha&&React.createElement("div",{style:{fontSize:10,marginTop:4,color:servisValidarSenha(f.senha)?C.orange:C.green}},servisValidarSenha(f.senha)||"✓ Senha forte")
+      ),
+      React.createElement("div",null,React.createElement("label",{style:base.lbl},"Confirmar senha"),React.createElement("input",{style:{...base.inp,borderColor:f.senha&&senhaConf&&f.senha!==senhaConf?C.red:C.border},type:"password",value:senhaConf,onChange:function(e){setSenhaConf(e.target.value);},placeholder:"Confirme a senha"})),
+      React.createElement("div",{style:{gridColumn:"1/-1",display:"flex",gap:16,marginTop:4}},
+        React.createElement("label",{style:{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12}},React.createElement("input",{type:"checkbox",checked:!!f.ativo,onChange:updBool("ativo")}),"Usuário ativo"),
+        React.createElement("label",{style:{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12}},React.createElement("input",{type:"checkbox",checked:!!f.primeiro_acesso,onChange:updBool("primeiro_acesso")}),"Forçar troca de senha no login")
+      )
+    ),
+    // Aba Permissões
+    abaSel==="perms"&&React.createElement("div",null,
+      React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:12}},"Permissões específicas por módulo (complementam o nível de acesso):"),
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}},
+        MODULOS.map(function(mod){
+          var chave=mod.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z_]/g,"");
+          var val=perms[chave];
+          return React.createElement("div",{key:mod,style:{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.bg,borderRadius:6,padding:"6px 10px",border:"1px solid "+C.border}},
+            React.createElement("span",{style:{fontSize:12}},mod),
+            React.createElement("select",{style:{...base.sel,width:90,fontSize:11,padding:"2px 6px"},value:val===true?"1":val===false?"0":"",onChange:function(e){setPerms(function(p){var n={...p};var v=e.target.value;if(v==="")delete n[chave];else n[chave]=v==="1";return n;});}},
+              React.createElement("option",{value:""},"Padrão"),
+              React.createElement("option",{value:"1"},"✅ Liberar"),
+              React.createElement("option",{value:"0"},"🚫 Bloquear")
+            )
+          );
+        })
+      )
+    ),
+    // Erro e botões
+    err&&React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:6,padding:"8px 12px",color:C.red,fontSize:12,marginTop:12}},err),
+    React.createElement("div",{style:{display:"flex",justifyContent:"flex-end",gap:8,marginTop:16}},
+      React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+      React.createElement("button",{style:{...btnStyle(C.green),opacity:saving?0.6:1},disabled:saving,onClick:save},saving?"Salvando...":"💾 Salvar")
+    )
+  );
+};
+
+// ── Modal Alterar Senha ──────────────────────────────────────
+
+function UsuariosSenhaModal({user,onClose}){
+  var [nova,setNova]=useState("");var [conf,setConf]=useState("");var [err,setErr]=useState("");var [ok,setOk]=useState(false);
+  var salvar=async function(){
+    var ve=servisValidarSenha(nova);if(ve){setErr(ve);return;}
+    if(nova!==conf){setErr("As senhas não coincidem.");return;}
+    var h=await servisHashSenha(nova);
+    var res=await sb.from("usuarios").update({senha:h,primeiro_acesso:false}).eq("id",user.id);
+    if(res&&res.error){setErr("Erro: "+res.error.message);return;}
+    setOk(true);setTimeout(onClose,1500);
+  };
+  return React.createElement(Modal,{title:"🔑 Alterar Senha — "+user.nome,onClose,width:400},
+    ok?React.createElement("div",{style:{textAlign:"center",padding:24,color:C.green,fontSize:14}},"✅ Senha alterada com sucesso!"):
+    React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:10}},
+      React.createElement("div",null,React.createElement("label",{style:base.lbl},"Nova senha"),React.createElement("input",{style:base.inp,type:"password",value:nova,onChange:function(e){setNova(e.target.value);}}),
+        nova&&React.createElement("div",{style:{fontSize:10,marginTop:4,color:servisValidarSenha(nova)?C.orange:C.green}},servisValidarSenha(nova)||"✓ Senha forte")
+      ),
+      React.createElement("div",null,React.createElement("label",{style:base.lbl},"Confirmar nova senha"),React.createElement("input",{style:base.inp,type:"password",value:conf,onChange:function(e){setConf(e.target.value);}})),
+      err&&React.createElement("div",{style:{color:C.red,fontSize:12}},err),
+      React.createElement("div",{style:{display:"flex",justifyContent:"flex-end",gap:8}},
+        React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
+        React.createElement("button",{style:btnStyle(C.green),onClick:salvar},"💾 Salvar")
+      )
+    )
+  );
+};
+
+// ── Card de usuário ──────────────────────────────────────────
+
+function UsuariosHistoricoModal({user,onClose}){
+  var [logs,setLogs]=useState([]);var [loadH,setLoadH]=useState(true);
+  useEffect(function(){
+    sb.from("auditoria_log").select("*").eq("usuario",user.nome).order("criado_em",{ascending:false}).limit(50)
+      .then(function(r){setLogs(r.data||[]);setLoadH(false);});
+  },[]);
+  return React.createElement(Modal,{title:"📋 Histórico — "+user.nome,onClose,width:600},
+    loadH?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
+    logs.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim,fontSize:12}},"Nenhum registro encontrado."):
+    React.createElement("div",{style:{maxHeight:400,overflowY:"auto"}},
+      React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:11}},
+        React.createElement("thead",null,React.createElement("tr",null,
+          ["Data/Hora","Ação","Tabela","Registro"].map(function(h){
+            return React.createElement("th",{key:h,style:{textAlign:"left",padding:"6px 8px",color:C.dim,fontSize:10,fontWeight:700,borderBottom:"1px solid "+C.border}},h);
+          })
+        )),
+        React.createElement("tbody",null,
+          logs.map(function(l,i){
+            return React.createElement("tr",{key:i,style:{background:i%2===0?"transparent":C.bg+"44"}},
+              React.createElement("td",{style:{padding:"6px 8px",color:C.muted}},String(l.criado_em||"").slice(0,16).replace("T"," ")),
+              React.createElement("td",{style:{padding:"6px 8px",color:C.blue}},l.acao||"—"),
+              React.createElement("td",{style:{padding:"6px 8px",color:C.dim}},l.tabela||"—"),
+              React.createElement("td",{style:{padding:"6px 8px",color:C.muted}},String(l.registro||"").slice(0,30))
+            );
+          })
+        )
+      )
+    )
+  );
+}
+
+
 function Usuarios({usuarioAtual}){
   const NIVEIS=["admin","gestor","tecnico","central","visualizador"];
   const NIVEL_INFO={
@@ -4803,157 +4990,8 @@ function Usuarios({usuarioAtual}){
   };
 
   // ── Modal de Edição / Criação ─────────────────────────────────
-  const EditModal=function({item,onClose}){
-    var isNovo=!item||!item.id;
-    var [f,setF]=useState(item||{nome:"",email:"",telefone:"",cargo:"",filial:"",nivel:"tecnico",ativo:true,primeiro_acesso:true,foto_url:"",senha:""});
-    var [senhaConf,setSenhaConf]=useState("");
-    var [showPass,setShowPass]=useState(false);
-    var [err,setErr]=useState("");
-    var [saving,setSaving]=useState(false);
-    var [abaSel,setAbaSel]=useState("dados");
-    var [perms,setPerms]=useState(function(){try{return JSON.parse(item&&item.permissoes?item.permissoes:"{}");}catch(e){return{};}});
-    var upd=function(k){return function(e){setF(function(p){var n={...p};n[k]=e.target.value;return n;});};};
-    var updBool=function(k){return function(e){setF(function(p){var n={...p};n[k]=e.target.checked;return n;});};};
-
-    var save=async function(){
-      setErr("");
-      if(!f.nome.trim()){setErr("Informe o nome.");return;}
-      if(isNovo&&!f.senha){setErr("Informe uma senha.");return;}
-      if(f.senha){var ve=servisValidarSenha(f.senha);if(ve){setErr(ve);return;}}
-      if(f.senha&&f.senha!==senhaConf){setErr("As senhas não coincidem.");return;}
-      setSaving(true);
-      var payload={nome:f.nome.trim(),nivel:f.nivel,ativo:f.ativo,primeiro_acesso:f.primeiro_acesso,foto_url:f.foto_url||null};
-      // Adicionar campos extras apenas se o banco os suportar (evita erro de coluna inexistente)
-      if(f.cargo!==undefined)payload.cargo=f.cargo||null;
-      if(f.filial!==undefined)payload.filial=f.filial||null;
-      if(f.email!==undefined)payload.email=f.email||null;
-      if(f.telefone!==undefined)payload.telefone=f.telefone||null;
-      try{payload.permissoes=JSON.stringify(perms);}catch(e){}
-      if(f.senha)payload.senha=await servisHashSenha(f.senha);
-      var res;
-      if(isNovo){payload.id="usr_"+Date.now();res=await sb.from("usuarios").insert(payload);}
-      else{res=await sb.from("usuarios").update(payload).eq("id",f.id||item.id);}
-      if(res&&res.error){setErr("Erro: "+res.error.message);setSaving(false);return;}
-      setSaving(false);onClose();load();
-      setSavingMsg(isNovo?"✅ Usuário criado!":"✅ Usuário atualizado!");
-      setTimeout(function(){setSavingMsg("");},3000);
-    };
-
-    var ni=NIVEL_INFO[f.nivel]||NIVEL_INFO.visualizador;
-    var ABAS=[{id:"dados",l:"👤 Dados"},{id:"acesso",l:"🔐 Acesso"},{id:"perms",l:"🧩 Permissões"}];
-
-    return React.createElement(Modal,{title:isNovo?"+ Novo Usuário":"✏️ Editar Usuário",onClose,width:560},
-      // Avatar + nome no topo
-      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12,marginBottom:16,padding:"12px 14px",background:C.bg,borderRadius:10}},
-        f.foto_url
-          ?React.createElement("img",{src:f.foto_url,style:{width:48,height:48,borderRadius:"50%",objectFit:"cover",border:"2px solid "+ni.cor}})
-          :React.createElement("div",{style:{width:48,height:48,borderRadius:"50%",background:ni.cor+"33",border:"2px solid "+ni.cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}},ni.icon),
-        React.createElement("div",null,
-          React.createElement("div",{style:{fontWeight:700,fontSize:14}},f.nome||"Novo Usuário"),
-          React.createElement("div",{style:{fontSize:11,color:ni.cor,fontWeight:600}},ni.label),
-          React.createElement("div",{style:{fontSize:10,color:C.dim}},ni.desc)
-        )
-      ),
-      // Abas internas
-      React.createElement("div",{style:{display:"flex",gap:4,marginBottom:14,borderBottom:"1px solid "+C.border,paddingBottom:8}},
-        ABAS.map(function(a){return React.createElement("button",{key:a.id,style:{...btnStyle(C.blue,abaSel!==a.id),fontSize:11,padding:"5px 12px"},onClick:function(){setAbaSel(a.id);}},a.l);})
-      ),
-      // Aba Dados
-      abaSel==="dados"&&React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
-        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"Nome completo *"),React.createElement("input",{style:base.inp,value:f.nome,onChange:upd("nome"),placeholder:"Nome completo"})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"E-mail"),React.createElement("input",{style:base.inp,value:f.email||"",onChange:upd("email"),placeholder:"email@servis.com.br",type:"email"})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Telefone"),React.createElement("input",{style:base.inp,value:f.telefone||"",onChange:upd("telefone"),placeholder:"(85) 9 0000-0000"})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Cargo"),React.createElement("input",{style:base.inp,value:f.cargo||"",onChange:upd("cargo"),placeholder:"Ex: Técnico de Campo"})),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Filial"),
-          React.createElement("select",{style:base.sel,value:f.filial||"",onChange:upd("filial")},
-            React.createElement("option",{value:""},"Selecione..."),
-            ["CE","BA","MA","PI","AM"].map(function(f2){return React.createElement("option",{key:f2,value:f2},f2);})
-          )
-        ),
-        React.createElement("div",{style:{gridColumn:"1/-1"}},React.createElement("label",{style:base.lbl},"URL da Foto (opcional)"),React.createElement("input",{style:base.inp,value:f.foto_url||"",onChange:upd("foto_url"),placeholder:"https://..."}))
-      ),
-      // Aba Acesso
-      abaSel==="acesso"&&React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
-        React.createElement("div",{style:{gridColumn:"1/-1"}},
-          React.createElement("label",{style:base.lbl},"Nível de Acesso"),
-          React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginTop:4}},
-            NIVEIS.map(function(n){
-              var ni2=NIVEL_INFO[n];var ativo=f.nivel===n;
-              return React.createElement("div",{key:n,style:{border:"2px solid "+(ativo?ni2.cor:C.border),borderRadius:8,padding:"8px 4px",textAlign:"center",cursor:"pointer",background:ativo?ni2.cor+"22":"transparent"},onClick:function(){setF(function(p){return{...p,nivel:n};});}},
-                React.createElement("div",{style:{fontSize:16}},ni2.icon),
-                React.createElement("div",{style:{fontSize:9,fontWeight:700,color:ativo?ni2.cor:C.dim,marginTop:3}},ni2.label)
-              );
-            })
-          )
-        ),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},(isNovo?"Senha *":"Nova senha (deixe em branco para manter)")),
-          React.createElement("div",{style:{position:"relative"}},
-            React.createElement("input",{style:{...base.inp,paddingRight:32},type:showPass?"text":"password",value:f.senha||"",onChange:upd("senha"),placeholder:isNovo?"Senha":"Nova senha"}),
-            React.createElement("span",{style:{position:"absolute",right:8,top:10,cursor:"pointer",fontSize:14,color:C.muted},onClick:function(){setShowPass(function(v){return !v;})}},showPass?"🙈":"👁")
-          ),
-          f.senha&&React.createElement("div",{style:{fontSize:10,marginTop:4,color:servisValidarSenha(f.senha)?C.orange:C.green}},servisValidarSenha(f.senha)||"✓ Senha forte")
-        ),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Confirmar senha"),React.createElement("input",{style:{...base.inp,borderColor:f.senha&&senhaConf&&f.senha!==senhaConf?C.red:C.border},type:"password",value:senhaConf,onChange:function(e){setSenhaConf(e.target.value);},placeholder:"Confirme a senha"})),
-        React.createElement("div",{style:{gridColumn:"1/-1",display:"flex",gap:16,marginTop:4}},
-          React.createElement("label",{style:{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12}},React.createElement("input",{type:"checkbox",checked:!!f.ativo,onChange:updBool("ativo")}),"Usuário ativo"),
-          React.createElement("label",{style:{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12}},React.createElement("input",{type:"checkbox",checked:!!f.primeiro_acesso,onChange:updBool("primeiro_acesso")}),"Forçar troca de senha no login")
-        )
-      ),
-      // Aba Permissões
-      abaSel==="perms"&&React.createElement("div",null,
-        React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:12}},"Permissões específicas por módulo (complementam o nível de acesso):"),
-        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}},
-          MODULOS.map(function(mod){
-            var chave=mod.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z_]/g,"");
-            var val=perms[chave];
-            return React.createElement("div",{key:mod,style:{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.bg,borderRadius:6,padding:"6px 10px",border:"1px solid "+C.border}},
-              React.createElement("span",{style:{fontSize:12}},mod),
-              React.createElement("select",{style:{...base.sel,width:90,fontSize:11,padding:"2px 6px"},value:val===true?"1":val===false?"0":"",onChange:function(e){setPerms(function(p){var n={...p};var v=e.target.value;if(v==="")delete n[chave];else n[chave]=v==="1";return n;});}},
-                React.createElement("option",{value:""},"Padrão"),
-                React.createElement("option",{value:"1"},"✅ Liberar"),
-                React.createElement("option",{value:"0"},"🚫 Bloquear")
-              )
-            );
-          })
-        )
-      ),
-      // Erro e botões
-      err&&React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:6,padding:"8px 12px",color:C.red,fontSize:12,marginTop:12}},err),
-      React.createElement("div",{style:{display:"flex",justifyContent:"flex-end",gap:8,marginTop:16}},
-        React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
-        React.createElement("button",{style:{...btnStyle(C.green),opacity:saving?0.6:1},disabled:saving,onClick:save},saving?"Salvando...":"💾 Salvar")
-      )
-    );
-  };
-
-  // ── Modal Alterar Senha ──────────────────────────────────────
-  const SenhaModal=function({user,onClose}){
-    var [nova,setNova]=useState("");var [conf,setConf]=useState("");var [err,setErr]=useState("");var [ok,setOk]=useState(false);
-    var salvar=async function(){
-      var ve=servisValidarSenha(nova);if(ve){setErr(ve);return;}
-      if(nova!==conf){setErr("As senhas não coincidem.");return;}
-      var h=await servisHashSenha(nova);
-      var res=await sb.from("usuarios").update({senha:h,primeiro_acesso:false}).eq("id",user.id);
-      if(res&&res.error){setErr("Erro: "+res.error.message);return;}
-      setOk(true);setTimeout(onClose,1500);
-    };
-    return React.createElement(Modal,{title:"🔑 Alterar Senha — "+user.nome,onClose,width:400},
-      ok?React.createElement("div",{style:{textAlign:"center",padding:24,color:C.green,fontSize:14}},"✅ Senha alterada com sucesso!"):
-      React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:10}},
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Nova senha"),React.createElement("input",{style:base.inp,type:"password",value:nova,onChange:function(e){setNova(e.target.value);}}),
-          nova&&React.createElement("div",{style:{fontSize:10,marginTop:4,color:servisValidarSenha(nova)?C.orange:C.green}},servisValidarSenha(nova)||"✓ Senha forte")
-        ),
-        React.createElement("div",null,React.createElement("label",{style:base.lbl},"Confirmar nova senha"),React.createElement("input",{style:base.inp,type:"password",value:conf,onChange:function(e){setConf(e.target.value);}})),
-        err&&React.createElement("div",{style:{color:C.red,fontSize:12}},err),
-        React.createElement("div",{style:{display:"flex",justifyContent:"flex-end",gap:8}},
-          React.createElement("button",{style:btnStyle(C.dim,true),onClick:onClose},"Cancelar"),
-          React.createElement("button",{style:btnStyle(C.green),onClick:salvar},"💾 Salvar")
-        )
-      )
-    );
-  };
-
-  // ── Card de usuário ──────────────────────────────────────────
+  // EditModal → função global UsuariosEditModal
+  // SenhaModal → função global UsuariosSenhaModal
   function UserCard({u}){
     var ni=NIVEL_INFO[u.nivel]||NIVEL_INFO.visualizador;
     var sel=selecionados.includes(u.id);
@@ -5010,37 +5048,7 @@ function Usuarios({usuarioAtual}){
   }
 
   // ── Modal Histórico ──────────────────────────────────────────
-  function HistoricoModal({user,onClose}){
-    var [logs,setLogs]=useState([]);var [loadH,setLoadH]=useState(true);
-    useEffect(function(){
-      sb.from("auditoria_log").select("*").eq("usuario",user.nome).order("criado_em",{ascending:false}).limit(50)
-        .then(function(r){setLogs(r.data||[]);setLoadH(false);});
-    },[]);
-    return React.createElement(Modal,{title:"📋 Histórico — "+user.nome,onClose,width:600},
-      loadH?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.muted}},"Carregando..."):
-      logs.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,color:C.dim,fontSize:12}},"Nenhum registro encontrado."):
-      React.createElement("div",{style:{maxHeight:400,overflowY:"auto"}},
-        React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:11}},
-          React.createElement("thead",null,React.createElement("tr",null,
-            ["Data/Hora","Ação","Tabela","Registro"].map(function(h){
-              return React.createElement("th",{key:h,style:{textAlign:"left",padding:"6px 8px",color:C.dim,fontSize:10,fontWeight:700,borderBottom:"1px solid "+C.border}},h);
-            })
-          )),
-          React.createElement("tbody",null,
-            logs.map(function(l,i){
-              return React.createElement("tr",{key:i,style:{background:i%2===0?"transparent":C.bg+"44"}},
-                React.createElement("td",{style:{padding:"6px 8px",color:C.muted}},String(l.criado_em||"").slice(0,16).replace("T"," ")),
-                React.createElement("td",{style:{padding:"6px 8px",color:C.blue}},l.acao||"—"),
-                React.createElement("td",{style:{padding:"6px 8px",color:C.dim}},l.tabela||"—"),
-                React.createElement("td",{style:{padding:"6px 8px",color:C.muted}},String(l.registro||"").slice(0,30))
-              );
-            })
-          )
-        )
-      )
-    );
-  }
-
+  // HistoricoModal → função global UsuariosHistoricoModal
   // ── Sorter helper ─────────────────────────────────────────────
   function SortBtn({campo,label}){
     var ativo=sortBy===campo;
