@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.27 USUARIOS MODAL FIX AGO2026 -->
+<!-- SERVIS v5.27 USUARIOS FIX DEFINITIVO AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -3583,7 +3583,7 @@ function Preventivas({onSave}){
           )
     ),
     React.createElement(PaginacaoBar,{pagina,totalPag,total:(filtered||data||[]).length,setPagina}),
-    modal!==null&&React.createElement(EditModal,{key:"usuarios-edit-modal",item:modal&&modal.id?modal:null,onClose:function(){setModal(null);}}),
+    modal!==null&&React.createElement(EditModal,{item:modal&&modal.id&&!modal._novaPreventiva?modal:null,onClose:function(){setModal(null);}}),
     detalhe&&React.createElement(DetalheModal,{item:detalhe,onClose:function(){setDetalhe(null);}}),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir esta preventiva? Esta ação não pode ser desfeita.",onYes:function(){del(confirmDel);},onNo:function(){setConfirmDel(null);}}),
     condHistorico&&React.createElement(Modal,{title:"📋 Histórico — "+condHistorico.cond,onClose:function(){setCondHistorico(null);},width:700},
@@ -4701,7 +4701,7 @@ function Pedidos({usuarioAtual}){
 
 // ── USUÁRIOS ──────────────────────────────────────────────────
 
-// ── Modais globais de Usuários (fora do componente para evitar remontagem) ──
+// ── MÓDULO USUÁRIOS — Componentes globais ─────────────────────────
 function UsuariosEditModal({item,onClose,onSaved}){
   var isNovo=!item||!item.id;
   var [f,setF]=useState(item||{nome:"",email:"",telefone:"",cargo:"",filial:"",nivel:"tecnico",ativo:true,primeiro_acesso:true,foto_url:"",senha:""});
@@ -4823,9 +4823,7 @@ function UsuariosEditModal({item,onClose,onSaved}){
       React.createElement("button",{style:{...btnStyle(C.green),opacity:saving?0.6:1},disabled:saving,onClick:save},saving?"Salvando...":"💾 Salvar")
     )
   );
-};
-
-// ── Modal Alterar Senha ──────────────────────────────────────
+}
 
 function UsuariosSenhaModal({user,onClose}){
   var [nova,setNova]=useState("");var [conf,setConf]=useState("");var [err,setErr]=useState("");var [ok,setOk]=useState(false);
@@ -4851,11 +4849,10 @@ function UsuariosSenhaModal({user,onClose}){
       )
     )
   );
-};
+}
 
-// ── Card de usuário ──────────────────────────────────────────
-
-function UsuariosHistoricoModal({user,onClose}){
+// ── Modal Histórico ──────────────────────────────────────────
+function HistoricoModal({user,onClose}){
   var [logs,setLogs]=useState([]);var [loadH,setLoadH]=useState(true);
   useEffect(function(){
     sb.from("auditoria_log").select("*").eq("usuario",user.nome).order("criado_em",{ascending:false}).limit(50)
@@ -4886,7 +4883,115 @@ function UsuariosHistoricoModal({user,onClose}){
   );
 }
 
+// Alias para compatibilidade
+var UsuariosHistoricoModal=HistoricoModal;
 
+
+// ── Card de usuário ──────────────────────────────────────────
+function UserCard({u}){
+  var ni=NIVEL_INFO[u.nivel]||NIVEL_INFO.visualizador;
+  var sel=selecionados.includes(u.id);
+  var menuOpen=menuAberto===u.id;
+  var dtCriado=(u.criado_em||"").slice(0,10);
+  var dtAcesso=(u.ultimo_acesso||"").slice(0,10);
+  return React.createElement("div",{style:{background:C.card,borderRadius:12,border:"2px solid "+(sel?C.blue:C.border),padding:"14px 14px 12px",display:"flex",flexDirection:"column",gap:8,position:"relative",transition:"border-color .15s"}},
+    // Checkbox de seleção
+    isAdmin&&React.createElement("input",{type:"checkbox",checked:sel,style:{position:"absolute",top:10,left:10,cursor:"pointer"},onChange:function(){setSelecionados(function(p){return sel?p.filter(function(x){return x!==u.id;}):[...p,u.id];});}}),
+    // Avatar + nome
+    React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,paddingLeft:isAdmin?20:0}},
+      u.foto_url
+        ?React.createElement("img",{src:u.foto_url,style:{width:40,height:40,borderRadius:"50%",objectFit:"cover",border:"2px solid "+ni.cor,flexShrink:0}})
+        :React.createElement("div",{style:{width:40,height:40,borderRadius:"50%",background:ni.cor+"33",border:"2px solid "+ni.cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}},ni.icon),
+      React.createElement("div",{style:{flex:1,minWidth:0}},
+        React.createElement("div",{style:{fontSize:13,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},u.nome),
+        u.cargo&&React.createElement("div",{style:{fontSize:10,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},u.cargo)
+      ),
+      // Menu ⋮
+      React.createElement("div",{style:{position:"relative"}},
+        React.createElement("button",{style:{...iBtn(C.dim),fontSize:16,padding:"2px 6px"},onClick:function(e){e.stopPropagation();setMenuAberto(menuOpen?null:u.id);}},
+          "⋮"
+        ),
+        menuOpen&&React.createElement("div",{style:{position:"absolute",right:0,top:28,background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:4,zIndex:100,minWidth:180,boxShadow:"0 4px 16px rgba(0,0,0,.3)"}},
+          [
+            {l:"✏️ Editar",a:function(){setModal(u);setMenuAberto(null);}},
+            {l:"🔑 Alterar senha",a:function(){setSenhaModal(u);setMenuAberto(null);}},
+            {l:u.ativo?"🚫 Desativar":"✅ Ativar",a:function(){toggleAtivo(u);setMenuAberto(null);}},
+            {l:"📋 Histórico",a:function(){setHistoricoUser(u);setMenuAberto(null);}},
+            {l:"🗑 Excluir",a:function(){setConfirmDel(u.id);setMenuAberto(null);},danger:true},
+          ].map(function(item,i){
+            return React.createElement("button",{key:i,style:{display:"block",width:"100%",textAlign:"left",padding:"7px 12px",fontSize:12,background:"transparent",border:"none",color:item.danger?C.red:C.muted,cursor:"pointer",borderRadius:4},
+              onClick:item.a,
+              onMouseEnter:function(e){e.target.style.background=item.danger?C.red+"11":C.blue+"11";},
+              onMouseLeave:function(e){e.target.style.background="transparent";}
+            },item.l);
+          })
+        )
+      )
+    ),
+    // Badges nivel + status
+    React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},
+      React.createElement("span",{style:{background:ni.cor+"22",color:ni.cor,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:10,border:"1px solid "+ni.cor+"44"}},ni.label),
+      React.createElement("span",{style:{background:u.ativo?C.green+"22":C.dim+"22",color:u.ativo?C.green:C.dim,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:10}},u.ativo?"ATIVO":"INATIVO"),
+      u.filial&&React.createElement("span",{style:{background:C.blue+"22",color:C.blue,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:10}},u.filial),
+      u.primeiro_acesso&&React.createElement("span",{style:{background:C.yellow+"22",color:C.yellow,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:10}},"1º acesso")
+    ),
+    // Datas
+    React.createElement("div",{style:{display:"flex",gap:8,fontSize:9,color:C.dim,borderTop:"1px solid "+C.border+"88",paddingTop:6}},
+      dtAcesso&&React.createElement("span",null,"🕐 "+dtAcesso),
+      dtCriado&&React.createElement("span",null,"📅 "+dtCriado)
+    )
+  );
+}
+
+
+
+// ── UserCard global de Usuários ──────────────────────────────────
+function UsuariosUserCard({u,isAdmin,selecionados,setSelecionados,menuAberto,setMenuAberto,setModal,setSenhaModal,setHistoricoUser,setConfirmDel,toggleAtivo,NIVEL_INFO,C,iBtn}){
+  var ni=NIVEL_INFO[u.nivel]||NIVEL_INFO.visualizador;
+  var sel=selecionados.includes(u.id);
+  var menuOpen=menuAberto===u.id;
+  var dtCriado=(u.criado_em||"").slice(0,10);
+  var dtAcesso=(u.ultimo_acesso||"").slice(0,10);
+  return React.createElement("div",{style:{background:C.card,borderRadius:12,border:"2px solid "+(sel?C.blue:C.border),padding:"14px 14px 12px",display:"flex",flexDirection:"column",gap:8,position:"relative",transition:"border-color .15s"}},
+    isAdmin&&React.createElement("input",{type:"checkbox",checked:sel,style:{position:"absolute",top:10,left:10,cursor:"pointer"},onChange:function(){setSelecionados(function(p){return sel?p.filter(function(x){return x!==u.id;}):[...p,u.id];});}}),
+    React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,paddingLeft:isAdmin?20:0}},
+      u.foto_url
+        ?React.createElement("img",{src:u.foto_url,style:{width:40,height:40,borderRadius:"50%",objectFit:"cover",border:"2px solid "+ni.cor,flexShrink:0}})
+        :React.createElement("div",{style:{width:40,height:40,borderRadius:"50%",background:ni.cor+"33",border:"2px solid "+ni.cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}},ni.icon),
+      React.createElement("div",{style:{flex:1,minWidth:0}},
+        React.createElement("div",{style:{fontSize:13,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},u.nome),
+        u.cargo&&React.createElement("div",{style:{fontSize:10,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},u.cargo)
+      ),
+      React.createElement("div",{style:{position:"relative"}},
+        React.createElement("button",{style:{...iBtn(C.dim),fontSize:16,padding:"2px 6px"},onClick:function(e){e.stopPropagation();setMenuAberto(menuOpen?null:u.id);}},"⋮"),
+        menuOpen&&React.createElement("div",{style:{position:"absolute",right:0,top:28,background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:4,zIndex:100,minWidth:180,boxShadow:"0 4px 16px rgba(0,0,0,.3)"}},
+          [{l:"✏️ Editar",a:function(){setModal(u);setMenuAberto(null);}},
+           {l:"🔑 Alterar senha",a:function(){setSenhaModal(u);setMenuAberto(null);}},
+           {l:u.ativo?"🚫 Desativar":"✅ Ativar",a:function(){toggleAtivo(u);setMenuAberto(null);}},
+           {l:"📋 Histórico",a:function(){setHistoricoUser(u);setMenuAberto(null);}},
+           {l:"🗑 Excluir",a:function(){setConfirmDel(u.id);setMenuAberto(null);},danger:true},
+          ].map(function(item,i){
+            return React.createElement("button",{key:i,style:{display:"block",width:"100%",textAlign:"left",padding:"7px 12px",fontSize:12,background:"transparent",border:"none",color:item.danger?C.red:C.muted,cursor:"pointer",borderRadius:4},
+              onClick:item.a,
+              onMouseEnter:function(e){e.target.style.background=item.danger?C.red+"11":C.blue+"11";},
+              onMouseLeave:function(e){e.target.style.background="transparent";}
+            },item.l);
+          })
+        )
+      )
+    ),
+    React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},
+      React.createElement("span",{style:{background:ni.cor+"22",color:ni.cor,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:10,border:"1px solid "+ni.cor+"44"}},ni.label),
+      React.createElement("span",{style:{background:u.ativo?C.green+"22":C.dim+"22",color:u.ativo?C.green:C.dim,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:10}},u.ativo?"ATIVO":"INATIVO"),
+      u.filial&&React.createElement("span",{style:{background:C.blue+"22",color:C.blue,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:10}},u.filial),
+      u.primeiro_acesso&&React.createElement("span",{style:{background:C.yellow+"22",color:C.yellow,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:10}},"1º acesso")
+    ),
+    React.createElement("div",{style:{display:"flex",gap:8,fontSize:9,color:C.dim,borderTop:"1px solid "+C.border+"88",paddingTop:6}},
+      dtAcesso&&React.createElement("span",null,"🕐 "+dtAcesso),
+      dtCriado&&React.createElement("span",null,"📅 "+dtCriado)
+    )
+  );
+}
 function Usuarios({usuarioAtual}){
   const NIVEIS=["admin","gestor","tecnico","central","visualizador"];
   const NIVEL_INFO={
@@ -4990,65 +5095,11 @@ function Usuarios({usuarioAtual}){
   };
 
   // ── Modal de Edição / Criação ─────────────────────────────────
-  // EditModal → função global UsuariosEditModal
-  // SenhaModal → função global UsuariosSenhaModal
-  function UserCard({u}){
-    var ni=NIVEL_INFO[u.nivel]||NIVEL_INFO.visualizador;
-    var sel=selecionados.includes(u.id);
-    var menuOpen=menuAberto===u.id;
-    var dtCriado=(u.criado_em||"").slice(0,10);
-    var dtAcesso=(u.ultimo_acesso||"").slice(0,10);
-    return React.createElement("div",{style:{background:C.card,borderRadius:12,border:"2px solid "+(sel?C.blue:C.border),padding:"14px 14px 12px",display:"flex",flexDirection:"column",gap:8,position:"relative",transition:"border-color .15s"}},
-      // Checkbox de seleção
-      isAdmin&&React.createElement("input",{type:"checkbox",checked:sel,style:{position:"absolute",top:10,left:10,cursor:"pointer"},onChange:function(){setSelecionados(function(p){return sel?p.filter(function(x){return x!==u.id;}):[...p,u.id];});}}),
-      // Avatar + nome
-      React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,paddingLeft:isAdmin?20:0}},
-        u.foto_url
-          ?React.createElement("img",{src:u.foto_url,style:{width:40,height:40,borderRadius:"50%",objectFit:"cover",border:"2px solid "+ni.cor,flexShrink:0}})
-          :React.createElement("div",{style:{width:40,height:40,borderRadius:"50%",background:ni.cor+"33",border:"2px solid "+ni.cor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}},ni.icon),
-        React.createElement("div",{style:{flex:1,minWidth:0}},
-          React.createElement("div",{style:{fontSize:13,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},u.nome),
-          u.cargo&&React.createElement("div",{style:{fontSize:10,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},u.cargo)
-        ),
-        // Menu ⋮
-        React.createElement("div",{style:{position:"relative"}},
-          React.createElement("button",{style:{...iBtn(C.dim),fontSize:16,padding:"2px 6px"},onClick:function(e){e.stopPropagation();setMenuAberto(menuOpen?null:u.id);}},
-            "⋮"
-          ),
-          menuOpen&&React.createElement("div",{style:{position:"absolute",right:0,top:28,background:C.surface,border:"1px solid "+C.border,borderRadius:8,padding:4,zIndex:100,minWidth:180,boxShadow:"0 4px 16px rgba(0,0,0,.3)"}},
-            [
-              {l:"✏️ Editar",a:function(){setModal(u);setMenuAberto(null);}},
-              {l:"🔑 Alterar senha",a:function(){setSenhaModal(u);setMenuAberto(null);}},
-              {l:u.ativo?"🚫 Desativar":"✅ Ativar",a:function(){toggleAtivo(u);setMenuAberto(null);}},
-              {l:"📋 Histórico",a:function(){setHistoricoUser(u);setMenuAberto(null);}},
-              {l:"🗑 Excluir",a:function(){setConfirmDel(u.id);setMenuAberto(null);},danger:true},
-            ].map(function(item,i){
-              return React.createElement("button",{key:i,style:{display:"block",width:"100%",textAlign:"left",padding:"7px 12px",fontSize:12,background:"transparent",border:"none",color:item.danger?C.red:C.muted,cursor:"pointer",borderRadius:4},
-                onClick:item.a,
-                onMouseEnter:function(e){e.target.style.background=item.danger?C.red+"11":C.blue+"11";},
-                onMouseLeave:function(e){e.target.style.background="transparent";}
-              },item.l);
-            })
-          )
-        )
-      ),
-      // Badges nivel + status
-      React.createElement("div",{style:{display:"flex",gap:4,flexWrap:"wrap"}},
-        React.createElement("span",{style:{background:ni.cor+"22",color:ni.cor,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:10,border:"1px solid "+ni.cor+"44"}},ni.label),
-        React.createElement("span",{style:{background:u.ativo?C.green+"22":C.dim+"22",color:u.ativo?C.green:C.dim,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:10}},u.ativo?"ATIVO":"INATIVO"),
-        u.filial&&React.createElement("span",{style:{background:C.blue+"22",color:C.blue,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:10}},u.filial),
-        u.primeiro_acesso&&React.createElement("span",{style:{background:C.yellow+"22",color:C.yellow,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:10}},"1º acesso")
-      ),
-      // Datas
-      React.createElement("div",{style:{display:"flex",gap:8,fontSize:9,color:C.dim,borderTop:"1px solid "+C.border+"88",paddingTop:6}},
-        dtAcesso&&React.createElement("span",null,"🕐 "+dtAcesso),
-        dtCriado&&React.createElement("span",null,"📅 "+dtCriado)
-      )
-    );
-  }
-
-  // ── Modal Histórico ──────────────────────────────────────────
-  // HistoricoModal → função global UsuariosHistoricoModal
+  // EditModal → ver função global acima
+  // ── Modal Alterar Senha ──────────────────────────────────────
+  // SenhaModal → ver função global acima
+  // UserCard → ver função global acima
+  // HistoricoModal → ver função global acima
   // ── Sorter helper ─────────────────────────────────────────────
   function SortBtn({campo,label}){
     var ativo=sortBy===campo;
@@ -5114,7 +5165,7 @@ function Usuarios({usuarioAtual}){
       React.createElement("div",null,
         // Grid de cards
         React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(210px,1fr))",gap:10,marginBottom:16}},
-          paginados.map(function(u){return React.createElement(UserCard,{key:u.id,u});})
+          paginados.map(function(u){return React.createElement(UsuariosUserCard,{key:u.id,u,isAdmin,selecionados,setSelecionados,menuAberto,setMenuAberto,setModal,setSenhaModal,setHistoricoUser,setConfirmDel,toggleAtivo,NIVEL_INFO,C,iBtn});})
         ),
         // Paginação
         filtered.length>itensPag&&React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}},
@@ -5133,9 +5184,9 @@ function Usuarios({usuarioAtual}){
       )
     ),
     // Modais
-    modal!==null&&React.createElement(EditModal,{item:modal&&modal.id?modal:null,onClose:function(){setModal(null);}}),
-    senhaModal&&React.createElement(SenhaModal,{user:senhaModal,onClose:function(){setSenhaModal(null);}}),
-    historicoUser&&React.createElement(HistoricoModal,{user:historicoUser,onClose:function(){setHistoricoUser(null);}}),
+    modal!==null&&React.createElement(UsuariosEditModal,{key:"u-edit",item:modal&&modal.id?modal:null,onClose:function(){setModal(null);},onSaved:function(msg){setSavingMsg(msg);setTimeout(function(){setSavingMsg("");},3000);load();}}),
+    senhaModal&&React.createElement(UsuariosSenhaModal,{key:"u-senha",user:senhaModal,onClose:function(){setSenhaModal(null);}}),
+    historicoUser&&React.createElement(UsuariosHistoricoModal,{key:"u-hist",user:historicoUser,onClose:function(){setHistoricoUser(null);}}),
     confirmDel&&React.createElement(Confirm,{msg:"Excluir este usuário? Esta ação não pode ser desfeita.",onYes:function(){del(confirmDel);},onNo:function(){setConfirmDel(null);}})
   );
 }
