@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.27 USUARIOS FIX DEFINITIVO AGO2026 -->
+<!-- SERVIS v5.27 USUARIOS NIVEL_INFO GLOBAL AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -4701,6 +4701,18 @@ function Pedidos({usuarioAtual}){
 
 // ── USUÁRIOS ──────────────────────────────────────────────────
 
+// ── Constantes globais do módulo Usuários ──────────────────────
+const NIVEIS_USUARIOS=["admin","gestor","tecnico","central","visualizador"];
+const NIVEL_INFO={
+  admin:   {label:"Administrador",desc:"Acesso total ao sistema",cor:C.red,   icon:"🔴"},
+  gestor:  {label:"Gestor",       desc:"Gestão operacional",     cor:C.orange,icon:"🟠"},
+  tecnico: {label:"Técnico",      desc:"OS, preventivas e campo",cor:C.blue,  icon:"🔵"},
+  central: {label:"Central",      desc:"Monitoramento/chamados", cor:C.purple,icon:"🟣"},
+  visualizador:{label:"Visualizador",desc:"Somente leitura",     cor:C.dim,   icon:"⚪"},
+};
+const NIVEIS_LABEL={admin:"Administrador",gestor:"Gestor",tecnico:"Técnico",central:"Central",visualizador:"Visualizador"};
+const MODULOS_USUARIOS=["Dashboard","Condomínios","OS","Preventivas","Técnicos","Ranking","Mapa de Calor","Relatórios","Materiais","Usuários","Configurações"];
+
 // ── MÓDULO USUÁRIOS — Componentes globais ─────────────────────────
 function UsuariosEditModal({item,onClose,onSaved}){
   var isNovo=!item||!item.id;
@@ -4776,7 +4788,7 @@ function UsuariosEditModal({item,onClose,onSaved}){
       React.createElement("div",{style:{gridColumn:"1/-1"}},
         React.createElement("label",{style:base.lbl},"Nível de Acesso"),
         React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginTop:4}},
-          NIVEIS.map(function(n){
+          NIVEIS_USUARIOS.map(function(n){
             var ni2=NIVEL_INFO[n];var ativo=f.nivel===n;
             return React.createElement("div",{key:n,style:{border:"2px solid "+(ativo?ni2.cor:C.border),borderRadius:8,padding:"8px 4px",textAlign:"center",cursor:"pointer",background:ativo?ni2.cor+"22":"transparent"},onClick:function(){setF(function(p){return{...p,nivel:n};});}},
               React.createElement("div",{style:{fontSize:16}},ni2.icon),
@@ -4802,7 +4814,7 @@ function UsuariosEditModal({item,onClose,onSaved}){
     abaSel==="perms"&&React.createElement("div",null,
       React.createElement("div",{style:{fontSize:11,color:C.muted,marginBottom:12}},"Permissões específicas por módulo (complementam o nível de acesso):"),
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}},
-        MODULOS.map(function(mod){
+        MODULOS_USUARIOS.map(function(mod){
           var chave=mod.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z_]/g,"");
           var val=perms[chave];
           return React.createElement("div",{key:mod,style:{display:"flex",justifyContent:"space-between",alignItems:"center",background:C.bg,borderRadius:6,padding:"6px 10px",border:"1px solid "+C.border}},
@@ -4993,16 +5005,7 @@ function UsuariosUserCard({u,isAdmin,selecionados,setSelecionados,menuAberto,set
   );
 }
 function Usuarios({usuarioAtual}){
-  const NIVEIS=["admin","gestor","tecnico","central","visualizador"];
-  const NIVEL_INFO={
-    admin:   {label:"Administrador",desc:"Acesso total ao sistema",cor:C.red,   icon:"🔴"},
-    gestor:  {label:"Gestor",       desc:"Gestão operacional",     cor:C.orange,icon:"🟠"},
-    tecnico: {label:"Técnico",      desc:"OS, preventivas e campo",cor:C.blue,  icon:"🔵"},
-    central: {label:"Central",      desc:"Monitoramento/chamados", cor:C.purple,icon:"🟣"},
-    visualizador:{label:"Visualizador",desc:"Somente leitura",     cor:C.dim,   icon:"⚪"},
-  };
-  const NIVEIS_LABEL={admin:"Administrador",gestor:"Gestor",tecnico:"Técnico",central:"Central",visualizador:"Visualizador"};
-  const MODULOS=["Dashboard","Condomínios","OS","Preventivas","Técnicos","Ranking","Mapa de Calor","Relatórios","Materiais","Usuários","Configurações"];
+  // NIVEL_INFO, NIVEIS, MODULOS declarados no escopo global acima
 
   const [users,setUsers]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -5061,7 +5064,7 @@ function Usuarios({usuarioAtual}){
     ativos:users.filter(function(u){return u.ativo;}).length,
     inativos:users.filter(function(u){return !u.ativo;}).length,
   };
-  NIVEIS.forEach(function(n){kpis[n]=users.filter(function(u){return u.nivel===n;}).length;});
+  NIVEIS_USUARIOS.forEach(function(n){kpis[n]=users.filter(function(u){return u.nivel===n;}).length;});
 
   // ── Ações ────────────────────────────────────────────────────
   const del=async function(id){
@@ -5138,7 +5141,7 @@ function Usuarios({usuarioAtual}){
         React.createElement("input",{style:{...base.inp,width:200,fontSize:11},placeholder:"🔍 Buscar nome, email, cargo...",value:busca,onChange:function(e){setBusca(e.target.value);}}),
         React.createElement("select",{style:{...base.sel,width:130,fontSize:11},value:filtNivel,onChange:function(e){setFiltNivel(e.target.value);}},
           React.createElement("option",{value:""},"Todos os níveis"),
-          NIVEIS.map(function(n){return React.createElement("option",{key:n,value:n},NIVEL_INFO[n].label);})
+          NIVEIS_USUARIOS.map(function(n){return React.createElement("option",{key:n,value:n},NIVEL_INFO[n].label);})
         ),
         React.createElement("select",{style:{...base.sel,width:110,fontSize:11},value:filtStatus,onChange:function(e){setFiltStatus(e.target.value);}},
           React.createElement("option",{value:""},"Todos"),React.createElement("option",{value:"ativo"},"Ativos"),React.createElement("option",{value:"inativo"},"Inativos")
