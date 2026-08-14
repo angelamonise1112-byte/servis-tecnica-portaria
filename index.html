@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<!-- SERVIS v5.27 USUARIOS NIVEL_INFO GLOBAL AGO2026 -->
+<!-- SERVIS v5.27 USUARIOS SAVE CORRIGIDO AGO2026 -->
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Servis Técnica Analytics</title>
@@ -4745,9 +4745,8 @@ function UsuariosEditModal({item,onClose,onSaved}){
     if(isNovo){payload.id="usr_"+Date.now();res=await sb.from("usuarios").insert(payload);}
     else{res=await sb.from("usuarios").update(payload).eq("id",f.id||item.id);}
     if(res&&res.error){setErr("Erro: "+res.error.message);setSaving(false);return;}
-    setSaving(false);onClose();load();
-    setSavingMsg(isNovo?"✅ Usuário criado!":"✅ Usuário atualizado!");
-    setTimeout(function(){setSavingMsg("");},3000);
+    setSaving(false);onClose();
+    if(onSaved)onSaved(isNovo?"✅ Usuário criado!":"✅ Usuário atualizado!");
   };
 
   var ni=NIVEL_INFO[f.nivel]||NIVEL_INFO.visualizador;
